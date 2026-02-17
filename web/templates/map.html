@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block page_title %}Map{% endblock %}
+
+{% block topbar %}{% endblock %}
+
+{% block content %}
+<div class="iframe-wrap" style="margin:-24px;height:calc(100vh - 0px);">
+    <div class="iframe-toolbar">
+        <span id="map-aircraft">Loading map...</span>
+        <a href="/tar1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
+    </div>
+    <iframe src="/tar1090/" style="flex:1;"></iframe>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function updateMapInfo() {
+    try {
+        const r = await fetch('/api/aircraft');
+        const d = await r.json();
+        document.getElementById('map-aircraft').textContent =
+            (d.total || 0) + ' aircraft tracked (' + (d.with_position || 0) + ' with position)';
+    } catch(e) {}
+}
+updateMapInfo();
+setInterval(updateMapInfo, 15000);
+</script>
+{% endblock %}

@@ -1,0 +1,175 @@
+services:
+
+  # Beast Connection Proxy — tracks feeders, classifies VPN/public, forwards to readsb
+  beast-proxy:
+    build:
+      context: ./beast-proxy
+      dockerfile: Dockerfile
+    container_name: taknet-beast-proxy
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/Los_Angeles}
+      - READSB_HOST=readsb
+      - READSB_PORT=30006
+      - DB_PATH=/data/aggregator.db
+      - TAILSCALE_ENABLED=${TAILSCALE_ENABLED:-true}
+      - TAILSCALE_CIDR=${TAILSCALE_CIDR:-100.64.0.0/10}
+      - NETBIRD_ENABLED=${NETBIRD_ENABLED:-false}
+      - NETBIRD_API_URL=${NETBIRD_API_URL:-http://localhost:33073}
+      - NETBIRD_API_TOKEN=${NETBIRD_API_TOKEN:-}
+      - NETBIRD_CIDR=${NETBIRD_CIDR:-100.64.0.0/10}
+      - GEOIP_ENABLED=${GEOIP_ENABLED:-false}
+    ports:
+      - "${BEAST_PORT:-30005}:30005/tcp"
+    volumes:
+      - db-data:/data
+      - ./beast-proxy/GeoLite2-City.mmdb:/app/GeoLite2-City.mmdb:ro
+      - /var/run/tailscale:/var/run/tailscale:ro
+    networks:
+      - taknet-internal
+    depends_on:
+      readsb:
+        condition: service_healthy
+
+  # Readsb — net-only ADS-B aggregator
+  readsb:
+    image: ghcr.io/sdr-enthusiasts/docker-readsb-protobuf:latest
+    container_name: taknet-readsb
+    restart: unless-stopped
+    hostname: taknet-aggregator
+    environment:
+      - TZ=${TZ:-America/Los_Angeles}
+      - READSB_NET_ENABLE=true
+      - READSB_NET_ONLY=true
+      - READSB_NET_BEAST_INPUT_PORT=30006
+      - READSB_NET_SBS_OUTPUT_PORT=30003
+      - READSB_NET_BEAST_OUTPUT_PORT=30005
+      - READSB_NET_RECEIVER_ID=true
+      - READSB_STATS_EVERY=60
+      - READSB_MAX_RANGE=500
+      - READSB_JSON_INTERVAL=1.0
+      - READSB_LAT=${SITE_LAT:-33.8753}
+      - READSB_LON=${SITE_LON:--117.5664}
+    ports:
+      - "${SBS_PORT:-30003}:30003/tcp"
+    volumes:
+      - readsb-run:/run/readsb
+    networks:
+      - taknet-internal
+    tmpfs:
+      - /tmp:size=64m
+    healthcheck:
+      test: ["CMD", "test", "-f", "/run/readsb/aircraft.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # MLAT Server
+  mlat-server:
+    image: ghcr.io/wiedehopf/mlat-server:latest
+    container_name: taknet-mlat
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/Los_Angeles}
+    ports:
+      - "${MLAT_PORT:-30007}:30007/tcp"
+    networks:
+      - taknet-internal
+    depends_on:
+      readsb:
+        condition: service_healthy
+
+  # tar1090 + graphs1090
+  tar1090:
+    image: ghcr.io/sdr-enthusiasts/docker-tar1090:latest
+    container_name: taknet-tar1090
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/Los_Angeles}
+      - BEASTHOST=readsb
+      - BEASTPORT=30005
+      - LAT=${SITE_LAT:-33.8753}
+      - LONG=${SITE_LON:--117.5664}
+      - TAR1090_DEFAULTCENTERLAT=${SITE_LAT:-33.8753}
+      - TAR1090_DEFAULTCENTERLON=${SITE_LON:--117.5664}
+      - TAR1090_DEFAULTZOOM=9
+      - TAR1090_PAGETITLE=${SITE_NAME:-TAKNET-PS Aggregator}
+      - TAR1090_ENABLE_AC_DB=true
+      - GRAPHS1090_DARKMODE=true
+      - TAR1090_USEROUTEAPI=true
+      - UPDATE_TAR1090=false
+    volumes:
+      - tar1090-data:/var/lib/tar1090
+      - graphs1090-data:/var/lib/collectd
+      - readsb-run:/run/readsb:ro
+    networks:
+      - taknet-internal
+    depends_on:
+      readsb:
+        condition: service_healthy
+
+  # Flask Dashboard
+  dashboard:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: taknet-dashboard
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/Los_Angeles}
+      - READSB_HOST=readsb
+      - TAR1090_HOST=tar1090
+      - SITE_NAME=${SITE_NAME:-TAKNET-PS Aggregator}
+      - SITE_LAT=${SITE_LAT:-33.8753}
+      - SITE_LON=${SITE_LON:--117.5664}
+      - SITE_ALT_FT=${SITE_ALT_FT:-738}
+      - DB_PATH=/data/aggregator.db
+      - TAILSCALE_ENABLED=${TAILSCALE_ENABLED:-true}
+      - NETBIRD_ENABLED=${NETBIRD_ENABLED:-false}
+      - NETBIRD_API_URL=${NETBIRD_API_URL:-http://localhost:33073}
+      - NETBIRD_API_TOKEN=${NETBIRD_API_TOKEN:-}
+    volumes:
+      - db-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/tailscale:/var/run/tailscale:ro
+    networks:
+      - taknet-internal
+    depends_on:
+      readsb:
+        condition: service_healthy
+      tar1090:
+        condition: service_started
+      beast-proxy:
+        condition: service_started
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: taknet-nginx
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - taknet-internal
+    depends_on:
+      - dashboard
+      - tar1090
+
+volumes:
+  db-data:
+    name: taknet-db-data
+  readsb-run:
+    name: taknet-readsb-run
+  tar1090-data:
+    name: taknet-tar1090-data
+  graphs1090-data:
+    name: taknet-graphs1090-data
+
+networks:
+  taknet-internal:
+    name: taknet-internal
+    driver: bridge

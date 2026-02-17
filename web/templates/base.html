@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ site_name }}{% endblock %}</title>
+    <style>
+        :root {
+            --bg-primary: #0f1923;
+            --bg-secondary: #1a2634;
+            --bg-card: #1e2d3d;
+            --bg-card-hover: #243447;
+            --bg-input: #162029;
+            --border: #2a3a4a;
+            --text-primary: #e8edf2;
+            --text-secondary: #8899aa;
+            --text-muted: #5a6a7a;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --green: #22c55e;
+            --green-bg: rgba(34,197,94,0.12);
+            --yellow: #eab308;
+            --yellow-bg: rgba(234,179,8,0.12);
+            --red: #ef4444;
+            --red-bg: rgba(239,68,68,0.12);
+            --cyan: #06b6d4;
+            --purple: #a855f7;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        /* ── Sidebar ────────────────────────────────────────── */
+        .sidebar {
+            width: 240px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            transition: transform 0.2s;
+        }
+        .sidebar-header {
+            padding: 20px 16px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-header h1 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.5px;
+        }
+        .sidebar-header .version {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+        .nav-section {
+            margin-bottom: 8px;
+        }
+        .nav-section-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            padding: 8px 12px 4px;
+            font-weight: 600;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .nav-item:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+        .nav-item.active {
+            background: var(--accent);
+            color: #fff;
+        }
+        .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+        .nav-item.active svg { opacity: 1; }
+
+        /* ── Main Content ───────────────────────────────────── */
+        .main {
+            flex: 1;
+            margin-left: 240px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .topbar {
+            height: 56px;
+            padding: 0 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-secondary);
+        }
+        .topbar h2 { font-size: 16px; font-weight: 600; }
+        .topbar-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-secondary); }
+
+        .content {
+            flex: 1;
+            padding: 24px;
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        .mobile-toggle {
+            display: none;
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 200;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--accent);
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        /* ── Cards ──────────────────────────────────────────── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .card-header h3 { font-size: 14px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-grid {
+            display: grid;
+            gap: 16px;
+        }
+        .card-grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .stat-card:hover { background: var(--bg-card-hover); border-color: var(--accent); }
+        .stat-card .label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; line-height: 1.1; }
+        .stat-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ── Badges ─────────────────────────────────────────── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .badge-live { background: var(--green-bg); color: var(--green); }
+        .badge-stale { background: var(--yellow-bg); color: var(--yellow); }
+        .badge-offline { background: var(--red-bg); color: var(--red); }
+        .badge-vpn { background: rgba(6,182,212,0.12); color: var(--cyan); }
+        .badge-public { background: rgba(168,85,247,0.12); color: var(--purple); }
+        .badge-tailscale { background: rgba(6,182,212,0.12); color: var(--cyan); }
+        .badge-netbird { background: rgba(168,85,247,0.12); color: var(--purple); }
+
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+
+        /* ── Tables ─────────────────────────────────────────── */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        tr:hover td { background: var(--bg-card-hover); color: var(--text-primary); }
+        tr.clickable { cursor: pointer; }
+
+        /* ── Buttons ────────────────────────────────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn:hover { background: var(--bg-card-hover); border-color: var(--accent); }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-danger { border-color: var(--red); color: var(--red); }
+        .btn-danger:hover { background: var(--red-bg); }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        /* ── Forms ──────────────────────────────────────────── */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .form-control:focus { outline: none; border-color: var(--accent); }
+        textarea.form-control { resize: vertical; min-height: 80px; }
+        select.form-control { cursor: pointer; }
+
+        /* ── Progress bars ──────────────────────────────────── */
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-input);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+        .progress-bar .fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .progress-bar .fill-green { background: var(--green); }
+        .progress-bar .fill-yellow { background: var(--yellow); }
+        .progress-bar .fill-red { background: var(--red); }
+
+        /* ── Activity list ──────────────────────────────────── */
+        .activity-list { list-style: none; }
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .activity-item:last-child { border: none; }
+        .activity-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-top: 5px;
+            flex-shrink: 0;
+        }
+        .activity-time { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+
+        /* ── Modal ──────────────────────────────────────────── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 500;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 { font-size: 15px; font-weight: 600; }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; padding: 4px; }
+
+        /* ── Iframe pages ───────────────────────────────────── */
+        .iframe-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .iframe-toolbar {
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .iframe-wrap iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+        }
+
+        /* ── Responsive ─────────────────────────────────────── */
+        @media (max-width: 1024px) {
+            .card-grid-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .main { margin-left: 0; }
+            .mobile-toggle { display: block; }
+            .card-grid-4, .card-grid-3, .card-grid-2 { grid-template-columns: 1fr; }
+            .content { padding: 16px; }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1>TAKNET-PS</h1>
+            <div class="version">Aggregator v{{ version }}</div>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-section">
+                <a href="/" class="nav-item {% if request.path == '/' or request.path == '/dashboard' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    Dashboard
+                </a>
+            </div>
+            <div class="nav-section">
+                <div class="nav-section-label">Data</div>
+                <a href="/inputs/feeders" class="nav-item {% if request.path.startswith('/inputs') %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                    Feeders
+                </a>
+                <a href="/map" class="nav-item {% if request.path == '/map' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                    Map
+                </a>
+                <a href="/stats" class="nav-item {% if request.path == '/stats' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    Statistics
+                </a>
+                <a href="/outputs" class="nav-item {% if request.path == '/outputs' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                    Outputs
+                </a>
+            </div>
+            <div class="nav-section">
+                <div class="nav-section-label">System</div>
+                <a href="/config/vpn" class="nav-item {% if request.path == '/config/vpn' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                    VPN
+                </a>
+                <a href="/config/services" class="nav-item {% if request.path == '/config/services' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    Services
+                </a>
+                <a href="/config/updates" class="nav-item {% if request.path == '/config/updates' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Updates
+                </a>
+                <a href="/about" class="nav-item {% if request.path == '/about' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    About
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main">
+        {% block topbar %}
+        <div class="topbar">
+            <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+            <div class="topbar-right">
+                <span id="topbar-aircraft">— aircraft</span>
+                <span id="topbar-feeders">— feeders</span>
+            </div>
+        </div>
+        {% endblock %}
+
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+
+    <script>
+        // Global: update topbar stats
+        async function updateTopbar() {
+            try {
+                const r = await fetch('/api/status');
+                const d = await r.json();
+                document.getElementById('topbar-aircraft').textContent = (d.aircraft || 0) + ' aircraft';
+                document.getElementById('topbar-feeders').textContent = (d.feeders?.active || 0) + ' feeders';
+            } catch(e) {}
+        }
+        updateTopbar();
+        setInterval(updateTopbar, 15000);
+
+        // Helper: format duration
+        function fmtDuration(seconds) {
+            if (!seconds || seconds < 0) return '—';
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            if (d > 0) return d + 'd ' + h + 'h';
+            if (h > 0) return h + 'h ' + m + 'm';
+            return m + 'm';
+        }
+
+        // Helper: format bytes
+        function fmtBytes(bytes) {
+            if (!bytes) return '0 B';
+            const units = ['B','KB','MB','GB','TB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+            return bytes.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+        }
+
+        // Helper: format timestamp
+        function fmtTime(ts) {
+            if (!ts) return '—';
+            try {
+                const d = new Date(ts + (ts.includes('Z') ? '' : 'Z'));
+                return d.toLocaleString();
+            } catch(e) { return ts; }
+        }
+
+        // Helper: relative time
+        function fmtAgo(ts) {
+            if (!ts) return '';
+            try {
+                const d = new Date(ts + (ts.includes('Z') ? '' : 'Z'));
+                const diff = (Date.now() - d.getTime()) / 1000;
+                if (diff < 60) return 'just now';
+                if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+                if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+                return Math.floor(diff/86400) + 'd ago';
+            } catch(e) { return ''; }
+        }
+
+        // Helper: status badge HTML
+        function statusBadge(status) {
+            const cls = status === 'active' ? 'badge-live' : status === 'stale' ? 'badge-stale' : 'badge-offline';
+            const dot = status === 'active' ? '<span class="pulse">●</span> ' : '';
+            return '<span class="badge ' + cls + '">' + dot + status + '</span>';
+        }
+
+        // Helper: connection type badge
+        function typeBadge(type) {
+            return '<span class="badge badge-' + type + '">' + type + '</span>';
+        }
+
+        // Helper: progress bar color
+        function progressColor(pct) {
+            if (pct > 85) return 'fill-red';
+            if (pct > 65) return 'fill-yellow';
+            return 'fill-green';
+        }
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

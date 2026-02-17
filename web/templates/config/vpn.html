@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block page_title %}VPN Status{% endblock %}
+
+{% block content %}
+<div id="vpn-content">
+    <div style="color:var(--text-muted);padding:40px;text-align:center;">Loading VPN status...</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadVPN() {
+    try {
+        const r = await fetch('/api/vpn/status');
+        const d = await r.json();
+        let html = '';
+
+        // Tailscale section
+        const ts = d.tailscale || {};
+        html += '<div class="card" style="margin-bottom:16px;">';
+        html += '<div class="card-header"><h3>Tailscale</h3>';
+        if (ts.enabled) {
+            const stateColor = ts.state === 'running' ? 'var(--green)' : 'var(--yellow)';
+            html += '<span class="badge" style="background:rgba(34,197,94,0.12);color:' + stateColor + '">' + (ts.state || 'unknown') + '</span>';
+        } else {
+            html += '<span class="badge badge-offline">Disabled</span>';
+        }
+        html += '</div>';
+
+        if (ts.enabled && ts.state === 'running') {
+            html += '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;margin-bottom:16px;">';
+            html += '<span style="color:var(--text-muted)">Hostname</span><span>' + (ts.self_hostname || '—') + '</span>';
+            html += '<span style="color:var(--text-muted)">Tailnet</span><span>' + (ts.tailnet_name || '—') + '</span>';
+            html += '<span style="color:var(--text-muted)">IPs</span><span style="font-family:monospace;font-size:12px;">' + (ts.self_ips || []).join(', ') + '</span>';
+            html += '<span style="color:var(--text-muted)">Peers</span><span>' + (ts.peers_online || 0) + ' online / ' + (ts.peers_total || 0) + ' total</span>';
+            html += '</div>';
+
+            if (ts.peers && ts.peers.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Hostname</th><th>IPs</th><th>OS</th><th>Status</th></tr></thead><tbody>';
+                ts.peers.forEach(p => {
+                    const badge = p.online ? '<span class="badge badge-live">Online</span>' : '<span class="badge badge-offline">Offline</span>';
+                    html += '<tr><td style="font-weight:500;color:var(--text-primary)">' + p.hostname + '</td>';
+                    html += '<td style="font-family:monospace;font-size:12px;">' + (p.ips || []).join(', ') + '</td>';
+                    html += '<td>' + (p.os || '—') + '</td>';
+                    html += '<td>' + badge + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        } else if (ts.enabled) {
+            html += '<div style="color:var(--text-muted);font-size:13px;">Tailscale is enabled but not reachable from this container. Verify the Tailscale socket is mounted.</div>';
+        } else {
+            html += '<div style="color:var(--text-muted);font-size:13px;">Tailscale integration is disabled. Set TAILSCALE_ENABLED=true in .env to enable.</div>';
+        }
+        html += '</div>';
+
+        // NetBird section
+        const nb = d.netbird || {};
+        html += '<div class="card">';
+        html += '<div class="card-header"><h3>NetBird</h3>';
+        if (nb.enabled) {
+            const nbState = nb.state === 'running' ? 'var(--green)' : 'var(--yellow)';
+            html += '<span class="badge" style="background:rgba(168,85,247,0.12);color:' + nbState + '">' + (nb.state || 'unknown') + '</span>';
+        } else {
+            html += '<span class="badge badge-offline">Disabled</span>';
+        }
+        html += '</div>';
+
+        if (nb.enabled && nb.state === 'running') {
+            html += '<div style="font-size:13px;margin-bottom:12px;color:var(--text-secondary)">' +
+                     (nb.peers_online || 0) + ' online / ' + (nb.peers_total || 0) + ' total peers</div>';
+
+            if (nb.peers && nb.peers.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Hostname</th><th>IP</th><th>OS</th><th>Status</th></tr></thead><tbody>';
+                nb.peers.forEach(p => {
+                    const badge = p.connected ? '<span class="badge badge-live">Connected</span>' : '<span class="badge badge-offline">Offline</span>';
+                    html += '<tr><td style="font-weight:500;color:var(--text-primary)">' + p.hostname + '</td>';
+                    html += '<td style="font-family:monospace;font-size:12px;">' + (p.ip || '—') + '</td>';
+                    html += '<td>' + (p.os || '—') + '</td>';
+                    html += '<td>' + badge + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        } else if (nb.enabled && nb.state === 'no_token') {
+            html += '<div style="color:var(--text-muted);font-size:13px;">NetBird is enabled but no API token is configured. Set NETBIRD_API_TOKEN in .env.</div>';
+        } else if (nb.enabled) {
+            html += '<div style="color:var(--text-muted);font-size:13px;">NetBird API is not reachable. Check that NetBird is running and the API URL is correct.</div>';
+        } else {
+            html += '<div style="color:var(--text-muted);font-size:13px;">NetBird integration is disabled. Set NETBIRD_ENABLED=true in .env to enable.</div>';
+        }
+        html += '</div>';
+
+        document.getElementById('vpn-content').innerHTML = html;
+    } catch(e) {
+        document.getElementById('vpn-content').innerHTML =
+            '<div class="card"><div style="color:var(--red);padding:20px;">Error loading VPN status: ' + e + '</div></div>';
+    }
+}
+loadVPN();
+setInterval(loadVPN, 30000);
+</script>
+{% endblock %}

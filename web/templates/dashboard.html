@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stat Cards -->
+<div class="card-grid card-grid-4" id="stat-cards">
+    <a href="/inputs/feeders" class="stat-card">
+        <div class="label">Feeders</div>
+        <div class="value" id="stat-feeders">—</div>
+        <div class="sub" id="stat-feeders-sub"></div>
+    </a>
+    <a href="/map" class="stat-card">
+        <div class="label">Aircraft Tracked</div>
+        <div class="value" id="stat-aircraft">—</div>
+        <div class="sub" id="stat-aircraft-sub"></div>
+    </a>
+    <a href="/config/services" class="stat-card">
+        <div class="label">Uptime</div>
+        <div class="value" id="stat-uptime">—</div>
+        <div class="sub" id="stat-uptime-sub">system</div>
+    </a>
+    <a href="/outputs" class="stat-card">
+        <div class="label">Outputs</div>
+        <div class="value">0</div>
+        <div class="sub">coming soon</div>
+    </a>
+</div>
+
+<!-- Second Row: Breakdown + System Health -->
+<div class="card-grid card-grid-2" style="margin-top:16px;">
+    <div class="card">
+        <div class="card-header"><h3>Feeder Breakdown</h3></div>
+        <div id="feeder-breakdown">Loading...</div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>System Health</h3></div>
+        <div id="system-health">Loading...</div>
+    </div>
+</div>
+
+<!-- Activity Log -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>Recent Activity</h3></div>
+    <ul class="activity-list" id="activity-log">
+        <li class="activity-item"><span style="color:var(--text-muted)">Loading...</span></li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadDashboard() {
+    try {
+        const r = await fetch('/api/status');
+        const d = await r.json();
+
+        // Stat cards
+        const fs = d.feeders || {};
+        document.getElementById('stat-feeders').textContent = (fs.active || 0);
+        document.getElementById('stat-feeders-sub').textContent =
+            (fs.active || 0) + ' active / ' + (fs.total || 0) + ' total';
+
+        const ac = d.aircraft || {};
+        if (typeof ac === 'object') {
+            document.getElementById('stat-aircraft').textContent = ac.total || 0;
+            document.getElementById('stat-aircraft-sub').textContent =
+                (ac.with_position || 0) + ' with position';
+        } else {
+            document.getElementById('stat-aircraft').textContent = ac;
+        }
+
+        const sys = d.system || {};
+        document.getElementById('stat-uptime').textContent = fmtDuration(sys.uptime_seconds);
+        document.getElementById('stat-uptime-sub').textContent = 'app: ' + fmtDuration(sys.app_uptime_seconds);
+
+        // Feeder breakdown
+        const breakdown = fs.breakdown || [];
+        let bhtml = '';
+        if (breakdown.length === 0) {
+            bhtml = '<div style="color:var(--text-muted);font-size:13px;">No feeders connected yet</div>';
+        } else {
+            breakdown.forEach(b => {
+                bhtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">';
+                bhtml += '<span>' + typeBadge(b.conn_type) + '</span>';
+                bhtml += '<span style="font-size:13px;color:var(--text-secondary)">' + (b.active_count||0) + ' active / ' + b.count + ' total</span>';
+                bhtml += '</div>';
+            });
+        }
+        document.getElementById('feeder-breakdown').innerHTML = bhtml;
+
+        // System health
+        const mem = sys.memory || {};
+        const disk = sys.disk || {};
+        let shtml = '';
+        shtml += '<div style="margin-bottom:12px;">';
+        shtml += '<div style="display:flex;justify-content:space-between;font-size:13px;"><span>CPU</span><span>' + (sys.cpu_percent||0) + '%</span></div>';
+        shtml += '<div class="progress-bar"><div class="fill ' + progressColor(sys.cpu_percent||0) + '" style="width:' + (sys.cpu_percent||0) + '%"></div></div>';
+        shtml += '</div>';
+        shtml += '<div style="margin-bottom:12px;">';
+        shtml += '<div style="display:flex;justify-content:space-between;font-size:13px;"><span>Memory</span><span>' + (mem.used_gb||0) + ' / ' + (mem.total_gb||0) + ' GB</span></div>';
+        shtml += '<div class="progress-bar"><div class="fill ' + progressColor(mem.percent||0) + '" style="width:' + (mem.percent||0) + '%"></div></div>';
+        shtml += '</div>';
+        shtml += '<div>';
+        shtml += '<div style="display:flex;justify-content:space-between;font-size:13px;"><span>Disk</span><span>' + (disk.used_gb||0) + ' / ' + (disk.total_gb||0) + ' GB</span></div>';
+        shtml += '<div class="progress-bar"><div class="fill ' + progressColor(disk.percent||0) + '" style="width:' + (disk.percent||0) + '%"></div></div>';
+        shtml += '</div>';
+        document.getElementById('system-health').innerHTML = shtml;
+
+        // Activity log
+        const activity = d.activity || [];
+        let ahtml = '';
+        if (activity.length === 0) {
+            ahtml = '<li class="activity-item"><span style="color:var(--text-muted)">No recent activity</span></li>';
+        } else {
+            activity.forEach(a => {
+                const color = a.event_type === 'feeder_connected' ? 'var(--green)' :
+                              a.event_type === 'feeder_disconnected' ? 'var(--red)' : 'var(--yellow)';
+                ahtml += '<li class="activity-item">';
+                ahtml += '<span class="activity-dot" style="background:' + color + '"></span>';
+                ahtml += '<div style="flex:1;">';
+                ahtml += '<div style="color:var(--text-primary)">' + (a.message || a.event_type) + '</div>';
+                if (a.feeder_name) ahtml += '<div style="font-size:11px;color:var(--text-muted)">' + a.feeder_name + '</div>';
+                ahtml += '</div>';
+                ahtml += '<span class="activity-time">' + fmtAgo(a.timestamp) + '</span>';
+                ahtml += '</li>';
+            });
+        }
+        document.getElementById('activity-log').innerHTML = ahtml;
+
+    } catch(e) {
+        console.error('Dashboard load error:', e);
+    }
+}
+loadDashboard();
+setInterval(loadDashboard, 15000);
+</script>
+{% endblock %}

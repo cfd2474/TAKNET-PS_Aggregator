@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block page_title %}Services{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Docker Containers</h3>
+        <button class="btn btn-sm" onclick="loadContainers()">Refresh</button>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Image</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th style="text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="container-table">
+                <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Logs Modal -->
+<div class="modal-overlay" id="logs-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="logs-title">Container Logs</h3>
+            <button class="modal-close" onclick="closeLogs()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <pre id="logs-content" style="font-size:11px;font-family:monospace;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow-y:auto;background:var(--bg-primary);padding:12px;border-radius:6px;">Loading...</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadContainers() {
+    try {
+        const r = await fetch('/api/docker/containers');
+        const d = await r.json();
+        const containers = d.containers || [];
+        const tbody = document.getElementById('container-table');
+
+        if (containers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:40px;">No TAKNET containers found. Is Docker accessible?</td></tr>';
+            return;
+        }
+
+        let html = '';
+        containers.forEach(c => {
+            const statusBadge = c.status === 'running'
+                ? '<span class="badge badge-live">Running</span>'
+                : '<span class="badge badge-offline">' + c.status + '</span>';
+
+            html += '<tr>';
+            html += '<td style="font-weight:500;color:var(--text-primary)">' + c.short_name + '</td>';
+            html += '<td style="font-size:12px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + c.image + '</td>';
+            html += '<td>' + statusBadge + '</td>';
+            html += '<td style="font-size:12px;">' + fmtTime(c.started_at) + '</td>';
+            html += '<td style="text-align:right;">';
+            html += '<button class="btn btn-sm" onclick="showLogs(\'' + c.name + '\')">Logs</button> ';
+            html += '<button class="btn btn-sm" onclick="restartContainer(\'' + c.name + '\')">Restart</button>';
+            html += '</td>';
+            html += '</tr>';
+        });
+        tbody.innerHTML = html;
+    } catch(e) {
+        console.error('Load containers error:', e);
+    }
+}
+
+async function restartContainer(name) {
+    if (!confirm('Restart ' + name + '?')) return;
+    try {
+        const r = await fetch('/api/docker/containers/' + name + '/restart', { method: 'POST' });
+        const d = await r.json();
+        alert(d.message || 'Done');
+        loadContainers();
+    } catch(e) { alert('Error: ' + e); }
+}
+
+async function showLogs(name) {
+    document.getElementById('logs-title').textContent = name + ' — Logs';
+    document.getElementById('logs-content').textContent = 'Loading...';
+    document.getElementById('logs-modal').classList.add('show');
+
+    try {
+        const r = await fetch('/api/docker/containers/' + name + '/logs?tail=200');
+        const d = await r.json();
+        document.getElementById('logs-content').textContent = d.logs || 'No logs available';
+        // Scroll to bottom
+        const el = document.getElementById('logs-content');
+        el.scrollTop = el.scrollHeight;
+    } catch(e) {
+        document.getElementById('logs-content').textContent = 'Error: ' + e;
+    }
+}
+
+function closeLogs() {
+    document.getElementById('logs-modal').classList.remove('show');
+}
+
+// Close modal on overlay click
+document.getElementById('logs-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeLogs();
+});
+
+loadContainers();
+setInterval(loadContainers, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block page_title %}About{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:700px;">
+    <h3 style="font-size:20px;margin-bottom:16px;">{{ site_name }}</h3>
+    <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;margin-bottom:20px;">
+        TAKNET-PS Aggregator is a distributed ADS-B aircraft tracking aggregation system designed
+        for multi-agency public safety deployments. It collects, deduplicates, and visualizes
+        aircraft surveillance data from a network of Raspberry Pi-based feeders.
+    </p>
+
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;margin-bottom:24px;">
+        <span style="color:var(--text-muted)">Version</span>
+        <span style="font-weight:500">v{{ version }}</span>
+        <span style="color:var(--text-muted)">Architecture</span>
+        <span>Docker Compose (6 containers)</span>
+        <span style="color:var(--text-muted)">VPN Support</span>
+        <span>Tailscale, NetBird, Public IP</span>
+    </div>
+
+    <div class="card-header"><h3>Components</h3></div>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;">
+        <span style="color:var(--cyan);font-weight:500">beast-proxy</span>
+        <span style="color:var(--text-secondary)">Custom TCP proxy for feeder tracking and classification</span>
+        <span style="color:var(--cyan);font-weight:500">readsb</span>
+        <span style="color:var(--text-secondary)">ADS-B data aggregation engine (net-only mode)</span>
+        <span style="color:var(--cyan);font-weight:500">tar1090</span>
+        <span style="color:var(--text-secondary)">Aircraft map visualization</span>
+        <span style="color:var(--cyan);font-weight:500">graphs1090</span>
+        <span style="color:var(--text-secondary)">Performance statistics and graphs</span>
+        <span style="color:var(--cyan);font-weight:500">mlat-server</span>
+        <span style="color:var(--text-secondary)">Multilateration positioning</span>
+        <span style="color:var(--cyan);font-weight:500">dashboard</span>
+        <span style="color:var(--text-secondary)">Flask web interface and API</span>
+        <span style="color:var(--cyan);font-weight:500">nginx</span>
+        <span style="color:var(--text-secondary)">Reverse proxy and routing</span>
+    </div>
+</div>
+{% endblock %}

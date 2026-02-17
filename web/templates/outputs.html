@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block page_title %}Outputs{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center;padding:60px 20px;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" style="width:64px;height:64px;margin:0 auto 16px;">
+        <polyline points="17 1 21 5 17 9"/>
+        <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+        <polyline points="7 23 3 19 7 15"/>
+        <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+    </svg>
+    <h3 style="font-size:18px;margin-bottom:8px;">Outgoing Feed Management</h3>
+    <p style="color:var(--text-secondary);font-size:14px;max-width:400px;margin:0 auto 24px;">
+        Configure data sharing to external services from here. This feature is planned for a future release.
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:24px;">
+        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">FlightAware</span>
+        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">adsb.fi</span>
+        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">adsb.lol</span>
+        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">airplanes.live</span>
+        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">ADSBCot / TAK</span>
+    </div>
+    <button class="btn" disabled style="opacity:0.5;">Add Output (Coming Soon)</button>
+</div>
+{% endblock %}

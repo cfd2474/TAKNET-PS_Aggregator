@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block page_title %}Updates{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:600px;">
+    <div class="card-header"><h3>Version Information</h3></div>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;">
+        <span style="color:var(--text-muted)">Installed</span>
+        <span style="font-weight:600;color:var(--text-primary)">v{{ version }}</span>
+        <span style="color:var(--text-muted)">Latest</span>
+        <span id="latest-version" style="color:var(--text-secondary)">Checking...</span>
+    </div>
+    <div style="margin-top:20px;" id="update-actions">
+        <button class="btn" onclick="checkUpdate()">Check for Updates</button>
+    </div>
+    <div id="update-notes" style="margin-top:16px;display:none;">
+        <div class="card-header"><h3>Release Notes</h3></div>
+        <div id="release-notes" style="font-size:13px;color:var(--text-secondary);line-height:1.6;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const currentVersion = '{{ version }}';
+
+async function checkUpdate() {
+    document.getElementById('latest-version').textContent = 'Checking...';
+    // Placeholder — in production this would check GitHub releases API
+    document.getElementById('latest-version').innerHTML =
+        '<span style="color:var(--green)">v' + currentVersion + ' (up to date)</span>';
+}
+checkUpdate();
+</script>
+{% endblock %}

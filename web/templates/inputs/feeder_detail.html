@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block page_title %}Feeder: {{ feeder.name or 'Unknown' }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+    <a href="/inputs/feeders" style="font-size:13px;color:var(--text-muted);">&larr; Back to Feeders</a>
+</div>
+
+<div class="card-grid card-grid-2">
+    <!-- Connection Info -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Connection Info</h3>
+            <span id="feeder-status">{{ feeder.status }}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
+            <span style="color:var(--text-muted)">Name</span>
+            <span id="fd-name" style="color:var(--text-primary);font-weight:500">{{ feeder.name or '—' }}</span>
+            <span style="color:var(--text-muted)">Type</span>
+            <span id="fd-type"></span>
+            <span style="color:var(--text-muted)">IP Address</span>
+            <span style="font-family:monospace;">{{ feeder.ip_address or '—' }}</span>
+            {% if feeder.hostname %}
+            <span style="color:var(--text-muted)">Hostname</span>
+            <span>{{ feeder.hostname }}</span>
+            {% endif %}
+            {% if feeder.location %}
+            <span style="color:var(--text-muted)">Location</span>
+            <span>{{ feeder.location }}</span>
+            {% endif %}
+            <span style="color:var(--text-muted)">First Seen</span>
+            <span id="fd-first-seen">{{ feeder.first_seen }}</span>
+            <span style="color:var(--text-muted)">Last Seen</span>
+            <span id="fd-last-seen">{{ feeder.last_seen }}</span>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="card">
+        <div class="card-header"><h3>Statistics</h3></div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
+            <span style="color:var(--text-muted)">Messages</span>
+            <span style="color:var(--text-primary);font-weight:500">{{ '{:,}'.format(feeder.messages_received or 0) }}</span>
+            <span style="color:var(--text-muted)">Data Received</span>
+            <span id="fd-bytes">{{ feeder.bytes_received or 0 }}</span>
+            <span style="color:var(--text-muted)">Positions</span>
+            <span>{{ '{:,}'.format(feeder.positions_received or 0) }}</span>
+            <span style="color:var(--text-muted)">MLAT</span>
+            <span>{{ 'Enabled' if feeder.mlat_enabled else 'Disabled' }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Form -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>Edit Feeder</h3></div>
+    <form id="edit-form" onsubmit="saveFeeder(event)">
+        <div class="card-grid card-grid-2">
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" class="form-control" name="name" value="{{ feeder.name or '' }}">
+            </div>
+            <div class="form-group">
+                <label>tar1090 URL</label>
+                <input type="text" class="form-control" name="tar1090_url" value="{{ feeder.tar1090_url or '' }}" placeholder="http://...">
+            </div>
+            <div class="form-group">
+                <label>graphs1090 URL</label>
+                <input type="text" class="form-control" name="graphs1090_url" value="{{ feeder.graphs1090_url or '' }}" placeholder="http://...">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Notes</label>
+            <textarea class="form-control" name="notes">{{ feeder.notes or '' }}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="deleteFeeder()">Delete Feeder</button>
+        </div>
+    </form>
+</div>
+
+<!-- Connection History -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>Connection History</h3></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Connected</th>
+                    <th>Disconnected</th>
+                    <th>Duration</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody id="conn-history">
+                <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const feederId = {{ feeder.id }};
+
+// Set type badge
+document.getElementById('fd-type').innerHTML = typeBadge('{{ feeder.conn_type }}');
+document.getElementById('feeder-status').innerHTML = statusBadge('{{ feeder.status }}');
+document.getElementById('fd-bytes').textContent = fmtBytes({{ feeder.bytes_received or 0 }});
+
+// Load connection history
+async function loadHistory() {
+    try {
+        const r = await fetch('/api/feeders/' + feederId + '/connections');
+        const d = await r.json();
+        const conns = d.connections || [];
+        const tbody = document.getElementById('conn-history');
+
+        if (conns.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No connection history</td></tr>';
+            return;
+        }
+
+        let html = '';
+        conns.forEach(c => {
+            html += '<tr>';
+            html += '<td>' + fmtTime(c.connected_at) + '</td>';
+            html += '<td>' + (c.disconnected_at ? fmtTime(c.disconnected_at) : '<span class="badge badge-live">Active</span>') + '</td>';
+            html += '<td>' + (c.duration_seconds ? fmtDuration(c.duration_seconds) : '—') + '</td>';
+            html += '<td>' + fmtBytes(c.bytes_transferred) + '</td>';
+            html += '</tr>';
+        });
+        tbody.innerHTML = html;
+    } catch(e) {
+        console.error('Load history error:', e);
+    }
+}
+
+async function saveFeeder(e) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const data = {};
+    form.forEach((v,k) => { data[k] = v; });
+
+    try {
+        const r = await fetch('/api/feeders/' + feederId, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (r.ok) {
+            document.getElementById('fd-name').textContent = data.name || '—';
+            alert('Saved!');
+        } else {
+            alert('Save failed');
+        }
+    } catch(e) { alert('Error: ' + e); }
+}
+
+async function deleteFeeder() {
+    if (!confirm('Delete this feeder? This cannot be undone.')) return;
+    try {
+        await fetch('/api/feeders/' + feederId, { method: 'DELETE' });
+        location.href = '/inputs/feeders';
+    } catch(e) { alert('Error: ' + e); }
+}
+
+loadHistory();
+</script>
+{% endblock %}
