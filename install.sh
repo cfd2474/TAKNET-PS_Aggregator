@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.0 — Installer
+# TAKNET-PS Aggregator v1.0.2 — Installer
 # Target: Rocky Linux 8.x / 9.x
 # =============================================================================
 set -e
@@ -8,7 +8,7 @@ set -e
 INSTALL_DIR="/opt/taknet-aggregator"
 DATA_DIR="/var/lib/taknet-aggregator"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.0.0")
+VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.0.2")
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -85,16 +85,18 @@ if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld;
     # Source .env for ports
     source "$INSTALL_DIR/.env"
     WEB=${WEB_PORT:-8080}
-    BEAST=${BEAST_PORT:-30005}
+    BEAST=${BEAST_PORT:-30004}
     SBS=${SBS_PORT:-30003}
-    MLAT=${MLAT_PORT:-30007}
+    MLAT_IN=${MLAT_IN_PORT:-30105}
+    MLAT_RESULTS=${MLAT_RESULTS_PORT:-39001}
 
     firewall-cmd --permanent --add-port=${WEB}/tcp 2>/dev/null || true
     firewall-cmd --permanent --add-port=${BEAST}/tcp 2>/dev/null || true
     firewall-cmd --permanent --add-port=${SBS}/tcp 2>/dev/null || true
-    firewall-cmd --permanent --add-port=${MLAT}/tcp 2>/dev/null || true
+    firewall-cmd --permanent --add-port=${MLAT_IN}/tcp 2>/dev/null || true
+    firewall-cmd --permanent --add-port=${MLAT_RESULTS}/tcp 2>/dev/null || true
     firewall-cmd --reload 2>/dev/null || true
-    ok "Firewall rules added (ports: ${WEB}, ${BEAST}, ${SBS}, ${MLAT})"
+    ok "Firewall rules added (ports: ${WEB}, ${BEAST}, ${SBS}, ${MLAT_IN}, ${MLAT_RESULTS})"
 else
     warn "firewalld not active — configure your firewall manually"
 fi
@@ -135,11 +137,11 @@ case "${1:-help}" in
         docker compose up -d --build --force-recreate
         ;;
     cutover)
-        echo "Switching to production ports (80, 30005)..."
+        echo "Switching to production ports (80, 30004)..."
         sed -i 's/^WEB_PORT=.*/WEB_PORT=80/' .env
-        sed -i 's/^BEAST_PORT=.*/BEAST_PORT=30005/' .env
+        sed -i 's/^BEAST_PORT=.*/BEAST_PORT=30004/' .env
         docker compose up -d --build
-        echo "Cutover complete. Dashboard on port 80, Beast on port 30005."
+        echo "Cutover complete. Dashboard on port 80, Beast on port 30004."
         ;;
     help|*)
         echo "Usage: taknet-agg <command> [args]"
@@ -152,7 +154,7 @@ case "${1:-help}" in
         echo "  logs       Show logs (optional: service name)"
         echo "  update     Pull latest and restart"
         echo "  rebuild    Force rebuild all containers"
-        echo "  cutover    Switch to production ports (80/30005)"
+        echo "  cutover    Switch to production ports (80/30004)"
         ;;
 esac
 CLIEOF
@@ -170,11 +172,11 @@ echo -e "  ${GREEN}Installation Complete!${NC}"
 echo "=========================================="
 echo ""
 echo "  Dashboard:  http://$(hostname -I | awk '{print $1}'):$(grep WEB_PORT .env | cut -d= -f2 || echo 8080)"
-echo "  Beast Port: $(grep BEAST_PORT .env | cut -d= -f2 || echo 30005)"
+echo "  Beast Port: $(grep BEAST_PORT .env | cut -d= -f2 || echo 30004)"
 echo ""
 echo "  CLI:        taknet-agg status"
 echo "  Config:     $INSTALL_DIR/.env"
 echo "  Data:       $DATA_DIR/"
 echo ""
-echo "  Point feeders to $(hostname -I | awk '{print $1}'):$(grep BEAST_PORT .env | cut -d= -f2 || echo 30005)"
+echo "  Point feeders to $(hostname -I | awk '{print $1}'):$(grep BEAST_PORT .env | cut -d= -f2 || echo 30004)"
 echo ""

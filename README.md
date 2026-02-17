@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.0
+# TAKNET-PS Aggregator v1.0.2
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -33,9 +33,9 @@ TAKNET-PS Aggregator replaces a bare-metal readsb/tar1090 installation with a fu
 
 **Key capabilities:**
 
-- Aggregate Beast protocol data from 20-30+ feeders simultaneously
+- Aggregate Beast reduce plus data from 20-30+ feeders simultaneously
 - Automatically classify feeders as Tailscale, NetBird, or public IP
-- Resolve feeder hostnames via VPN APIs (Tailscale socket, NetBird management)
+- Resolve feeder hostnames via VPN APIs (Tailscale socket on host, NetBird management)
 - Track per-feeder connection history, byte counts, and message stats in SQLite
 - Display aggregated aircraft on a tar1090 map with graphs1090 statistics
 - Provide Docker container management (restart, logs) from the web UI
@@ -46,31 +46,31 @@ TAKNET-PS Aggregator replaces a bare-metal readsb/tar1090 installation with a fu
 
 ## Architecture
 
-Six Docker containers in one compose stack on a shared bridge network (`taknet-internal`):
+Six Docker containers in one compose stack on a shared bridge network (`taknet-internal`). Tailscale runs directly on the host and its socket is mounted into containers for peer resolution.
 
-| Container | Image | Internal Port | Purpose |
-|-----------|-------|---------------|---------|
-| `beast-proxy` | Custom (Python 3.11) | 30005/tcp | Intercepts feeder connections, classifies VPN/public, logs to SQLite, forwards Beast data to readsb |
-| `readsb` | ghcr.io/sdr-enthusiasts/docker-readsb-protobuf | 30006/tcp (Beast in), 30005/tcp (Beast out), 30003/tcp (SBS out) | ADS-B aggregation engine running in net-only mode (no SDR hardware) |
-| `mlat-server` | ghcr.io/wiedehopf/mlat-server | 30007/tcp | Multilateration — calculates positions from multiple feeder timing data |
-| `tar1090` | ghcr.io/sdr-enthusiasts/docker-tar1090 | 80 (internal) | Aircraft map visualization and graphs1090 performance statistics |
-| `dashboard` | Custom (Flask/Gunicorn) | 5000 (internal) | Web UI, REST API, background scheduler for feeder status updates |
-| `nginx` | nginx:alpine | 80 (internal) → WEB_PORT (external) | Reverse proxy routing all web traffic to dashboard, tar1090, and graphs1090 |
+| Container | Image | Exposed Port(s) | Purpose |
+|-----------|-------|------------------|---------|
+| `beast-proxy` | Custom (Python 3.11) | 30004/tcp | Intercepts Beast reduce plus from feeders, classifies VPN/public, logs to SQLite, forwards to readsb |
+| `readsb` | ghcr.io/sdr-enthusiasts/docker-readsb-protobuf | 30003/tcp (SBS out) | ADS-B aggregation engine in net-only mode (no SDR hardware) |
+| `mlat-server` | ghcr.io/wiedehopf/mlat-server | 30105/tcp (in), 39001/tcp (results) | Multilateration — calculates positions from multiple feeder timing data |
+| `tar1090` | ghcr.io/sdr-enthusiasts/docker-tar1090 | *(internal only)* | Aircraft map visualization and graphs1090 performance statistics |
+| `dashboard` | Custom (Flask/Gunicorn) | *(internal only)* | Web UI, REST API, background scheduler for feeder status updates |
+| `nginx` | nginx:alpine | WEB_PORT (default 8080) | Reverse proxy routing all web traffic to dashboard, tar1090, and graphs1090 |
 
 ```
-Feeders (Pi) ──Beast TCP──▶ beast-proxy:30005 ──▶ readsb:30006 ──▶ tar1090:80
-                               │                       │                │
-                     ┌─────────┤                       │                │
-                     │         │                       │                │
-                     ▼         ▼                       ▼                ▼
-              SQLite DB   VPN Resolver           aircraft.json     map + graphs
-              - feeders   - Tailscale                  │
-              - connections - NetBird                   │
-              - activity    - GeoIP                    │
-                     │                                 │
-                     │ shared volume                   │ shared volume
-                     ▼                                 ▼
-              dashboard:5000 ◄──── nginx:80 ◄──── Browser
+                               Tailscale (on host)
+                                     │
+Feeders (Pi) ──Beast 30004──▶ beast-proxy ──▶ readsb:30006 ──▶ tar1090
+                │                    │              │                │
+                │                    │ SQLite       │ aircraft.json  │
+                │                    ▼              ▼                ▼
+                │             /data/aggregator.db  /run/readsb/   map + graphs
+                │                    │
+                │                    │ shared volume
+                │                    ▼
+                │             dashboard:5000 ◀── nginx:8080 ◀── Browser
+                │
+                └──MLAT 30105──▶ mlat-server ──results 39001──▶ Feeders
 ```
 
 **Shared volumes:**
@@ -85,10 +85,11 @@ Feeders (Pi) ──Beast TCP──▶ beast-proxy:30005 ──▶ readsb:30006 �
 ## Prerequisites
 
 - **OS:** Rocky Linux 8.x or 9.x (CentOS Stream, AlmaLinux, or RHEL also work)
-- **Hardware:** 2+ CPU cores, 4GB+ RAM, 20GB+ disk (production recommendation: 8 cores, 31GB RAM for 30+ feeders)
-- **Network:** Public IP with ports open for Beast input and web access
+- **Hardware:** 2+ CPU cores, 4GB+ RAM, 20GB+ disk (production: 8 cores, 31GB RAM for 30+ feeders)
+- **Network:** Public IP with ports open for Beast/MLAT input and web access
 - **Docker:** Installed automatically by `install.sh` if not present
-- **VPN (optional):** Tailscale and/or NetBird running on the host for feeder connectivity
+- **Tailscale:** Already running on the host — used for feeder VPN connectivity
+- **NetBird (optional):** Future VPN, can run alongside Tailscale during migration
 
 ---
 
@@ -107,7 +108,7 @@ sudo bash install.sh
 ### From tar.gz Package
 
 ```bash
-tar xzf taknet-aggregator-v1.0.0.tar.gz
+tar xzf taknet-aggregator-v1.0.2.tar.gz
 cd taknet-aggregator
 cp .env.example .env
 nano .env
@@ -120,7 +121,7 @@ sudo bash install.sh
 2. Installs system dependencies (`curl`, `jq`)
 3. Copies files to `/opt/taknet-aggregator/`
 4. Creates `.env` from `.env.example` if it doesn't exist
-5. Configures firewalld rules for all required ports
+5. Configures firewalld rules for all required ports (30004, 30105, 39001, 30003, 8080)
 6. Installs the `taknet-agg` CLI tool to `/usr/local/bin/`
 7. Runs `docker compose up -d --build` to build and start all containers
 
@@ -146,11 +147,14 @@ All configuration is in `/opt/taknet-aggregator/.env`. Changes require a restart
 
 ### Aggregator Ports
 
+Feeders send Beast reduce plus on port 30004, MLAT data on port 30105, and receive MLAT results on port 39001.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BEAST_PORT` | `30005` | Beast TCP input port — feeders connect here. Use `30105` during parallel operation. |
+| `BEAST_PORT` | `30004` | Beast reduce plus input — feeders connect here. |
 | `SBS_PORT` | `30003` | SBS (BaseStation) output for downstream consumers. |
-| `MLAT_PORT` | `30007` | MLAT server input port. |
+| `MLAT_IN_PORT` | `30105` | MLAT data input from feeders. |
+| `MLAT_RESULTS_PORT` | `39001` | MLAT calculated position results back to feeders. |
 
 ### Site Information
 
@@ -162,15 +166,17 @@ All configuration is in `/opt/taknet-aggregator/.env`. Changes require a restart
 | `SITE_ALT_FT` | `738` | Site altitude in feet. |
 | `TZ` | `America/Los_Angeles` | Timezone for all containers. |
 
-### VPN — Tailscale
+### VPN — Tailscale (on host)
+
+Tailscale runs directly on the host. Its daemon socket is mounted read-only into the beast-proxy and dashboard containers for peer resolution.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TAILSCALE_ENABLED` | `true` | Enable Tailscale peer detection and hostname resolution. |
-| `TAILSCALE_API_SOCKET` | `/var/run/tailscale/tailscaled.sock` | Path to Tailscale daemon socket (mounted read-only into containers). |
+| `TAILSCALE_API_SOCKET` | `/var/run/tailscale/tailscaled.sock` | Path to Tailscale daemon socket on the host. |
 | `TAILSCALE_CIDR` | `100.64.0.0/10` | CIDR range used by Tailscale. Connections from this range are classified as Tailscale. |
 
-### VPN — NetBird
+### VPN — NetBird (optional)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -204,7 +210,7 @@ taknet-agg <command> [args]
 | `logs` | Tail logs from all services. Filter by name: `taknet-agg logs beast-proxy` |
 | `update` | Pull latest images and rebuild (`docker compose pull && up -d --build`) |
 | `rebuild` | Force recreate all containers from scratch |
-| `cutover` | Switch `.env` to production ports (WEB_PORT=80, BEAST_PORT=30005) and restart |
+| `cutover` | Switch `.env` to production ports (WEB_PORT=80, BEAST_PORT=30004) and restart |
 
 ---
 
@@ -236,7 +242,7 @@ Placeholder page for future data sharing to FlightAware, adsb.fi, adsb.lol, airp
 
 ### VPN (`/config/vpn`)
 
-Live status display for both VPN providers. Shows Tailscale self-node info (hostname, tailnet, IPs), online/total peer counts, and a peer table with hostname, IPs, OS, and online status. Same layout for NetBird. Each section shows appropriate messages when disabled, unreachable, or missing API tokens.
+Live status display for both VPN providers. Shows Tailscale self-node info (hostname, tailnet, IPs) read from the host's Tailscale socket, online/total peer counts, and a peer table with hostname, IPs, OS, and online status. Same layout for NetBird when enabled. Each section shows appropriate messages when disabled, unreachable, or missing API tokens.
 
 ### Services (`/config/services`)
 
@@ -254,9 +260,11 @@ Project description, version, architecture summary, and component list with desc
 
 ## VPN Support
 
-The aggregator supports three simultaneous connection types. When a feeder connects to the Beast proxy on port 30005, the proxy classifies the source IP:
+The aggregator supports three simultaneous connection types. Tailscale is the primary VPN and runs on the host — not inside Docker.
 
-1. **Tailscale** — IP falls within `TAILSCALE_CIDR` and is confirmed via the Tailscale daemon socket API (`/var/run/tailscale/tailscaled.sock`). Hostname is resolved from `tailscale status --json`.
+When a feeder connects to the beast-proxy on port 30004, the proxy classifies the source IP:
+
+1. **Tailscale** — IP falls within `TAILSCALE_CIDR` and is confirmed via the Tailscale daemon socket API at `/var/run/tailscale/tailscaled.sock` (mounted from the host). Hostname is resolved from the local API's status endpoint.
 
 2. **NetBird** — IP falls within `NETBIRD_CIDR` and is confirmed via the NetBird management API. Hostname is resolved from the `/api/peers` endpoint.
 
@@ -266,18 +274,18 @@ When both VPNs use overlapping CIDR ranges (both default to `100.64.0.0/10`), th
 
 ### Tailscale Socket Access
 
-The Tailscale daemon socket at `/var/run/tailscale/tailscaled.sock` is mounted read-only into the `beast-proxy` and `dashboard` containers. This allows them to query peer status without needing the `tailscale` CLI binary inside the container.
+Tailscale runs on the host. The daemon socket at `/var/run/tailscale/tailscaled.sock` is mounted read-only into the `beast-proxy` and `dashboard` containers via Docker volume bind. This lets them query Tailscale peer status and resolve hostnames without needing the `tailscale` CLI binary or Tailscale running inside any container.
 
 ### Dual VPN Migration
 
 This architecture supports a gradual migration from Tailscale to NetBird:
 
-1. Start with `TAILSCALE_ENABLED=true`, `NETBIRD_ENABLED=false`
-2. Install NetBird on the aggregator, set `NETBIRD_ENABLED=true` and provide the API token
+1. Start with `TAILSCALE_ENABLED=true`, `NETBIRD_ENABLED=false` (current state)
+2. Install NetBird on the host, set `NETBIRD_ENABLED=true` and provide the API token
 3. Migrate feeders one at a time from Tailscale to NetBird
 4. Once all feeders are on NetBird, set `TAILSCALE_ENABLED=false`
 
-Both VPNs work simultaneously — feeders on either VPN appear correctly in the dashboard.
+Both VPNs work simultaneously — feeders on either VPN appear correctly classified in the dashboard.
 
 ---
 
@@ -287,15 +295,19 @@ This system is designed to run alongside an existing bare-metal aggregator with 
 
 ### Parallel Phase
 
+The old bare-metal aggregator currently listens on port 30004 (Beast) and port 80 (web). During parallel operation, temporarily use different ports:
+
 1. Set non-conflicting ports in `.env`:
-   - `WEB_PORT=8080` (old system on 80)
-   - `BEAST_PORT=30105` (old system on 30005)
+   ```
+   WEB_PORT=8080
+   BEAST_PORT=30014       # Temporary — avoids conflict with old system on 30004
+   ```
 
 2. Install and start: `sudo bash install.sh`
 
-3. Point 1-2 test feeders at the new Beast port (VPS_IP:30105)
+3. Point 1-2 test feeders at the new Beast port (`<VPS_IP>:30014`)
 
-4. Verify at `http://VPS_IP:8080` — dashboard, map, and feeder tracking should all work
+4. Verify at `http://<VPS_IP>:8080` — dashboard, map, and feeder tracking should all work
 
 5. Leave both systems running. Existing feeders stay on the old aggregator.
 
@@ -311,24 +323,35 @@ sudo systemctl stop readsb tar1090 lighttpd
 taknet-agg cutover
 
 # Verify
-curl http://VPS_IP        # Dashboard on port 80
-curl http://VPS_IP:30005  # Beast accepting connections
+curl http://<VPS_IP>              # Dashboard on port 80
+nc -zv <VPS_IP> 30004            # Beast accepting connections
+nc -zv <VPS_IP> 30105            # MLAT accepting connections
 ```
 
-All feeders pointing at VPS_IP:30005 will now connect to the new beast-proxy.
+All feeders pointing at `<VPS_IP>:30004` (Beast) and `<VPS_IP>:30105` (MLAT) will now connect to the new system.
 
 ---
 
 ## Port Reference
 
+### External Ports (feeders and browsers connect to these)
+
 | Port | Protocol | Container | Direction | Description |
 |------|----------|-----------|-----------|-------------|
-| 8080 (or 80) | TCP | nginx | Inbound | Web dashboard |
-| 30005 (or 30105) | TCP | beast-proxy | Inbound | Beast input from feeders |
+| 8080 (→ 80) | TCP | nginx | Inbound | Web dashboard |
+| 30004 | TCP | beast-proxy | Inbound | Beast reduce plus input from feeders |
+| 30105 | TCP | mlat-server | Inbound | MLAT data input from feeders |
+| 39001 | TCP | mlat-server | Outbound | MLAT position results back to feeders |
 | 30003 | TCP | readsb | Outbound | SBS BaseStation output |
-| 30007 | TCP | mlat-server | Inbound | MLAT input |
-| 30006 | TCP | readsb | Internal | Beast forwarding (proxy → readsb) |
-| 5000 | TCP | dashboard | Internal | Flask app (behind nginx) |
+
+### Internal Ports (container-to-container only)
+
+| Port | Protocol | Container | Description |
+|------|----------|-----------|-------------|
+| 30006 | TCP | readsb | Beast input (beast-proxy → readsb forwarding) |
+| 30005 | TCP | readsb | Beast output (readsb → tar1090) |
+| 80 | TCP | tar1090 | Map and graphs web interface (behind nginx) |
+| 5000 | TCP | dashboard | Flask app (behind nginx) |
 
 Internal ports are only accessible between containers on the `taknet-internal` Docker network.
 
@@ -336,36 +359,50 @@ Internal ports are only accessible between containers on the `taknet-internal` D
 
 ## Data Flow
 
+### Beast Data (aircraft tracking)
+
 ```
-Feeder Pi ──── Beast TCP (port 30005) ────▶ beast-proxy
+Feeder Pi ─── Beast reduce plus (port 30004) ───▶ beast-proxy
+                                                      │
+                                 ┌────────────────────┤
+                                 │                    │
+                                 ▼                    ▼
+                          SQLite Database        readsb (port 30006)
+                          - feeder registry           │
+                          - connection log            ├──▶ aircraft.json ──▶ tar1090 (map)
+                          - activity log              │
+                                 │                    ├──▶ collectd ──▶ graphs1090 (charts)
+                                 │                    │
+                                 ▼                    └──▶ SBS output (port 30003)
+                          dashboard (Flask)
+                          - reads feeder DB
+                          - reads aircraft.json via tar1090
+                          - manages Docker containers
+                                 │
+                                 ▼
+                            nginx (port 8080)
+                                 │
+                                 ▼
+                              Browser
+```
+
+### MLAT Data (multilateration)
+
+```
+Feeder Pi ─── MLAT data (port 30105) ───▶ mlat-server
                                                │
-                     ┌─────────────────────────┤
-                     │                         │
-                     ▼                         ▼
-              SQLite Database           readsb (port 30006)
-              - feeder registry              │
-              - connection log               ├──▶ aircraft.json ──▶ tar1090 (map)
-              - activity log                 │                          │
-                     │                       ├──▶ stats ──▶ graphs1090 (charts)
-                     │                       │
-                     ▼                       ├──▶ SBS output (port 30003)
-              dashboard (Flask)              │
-              - reads feeder DB              └──▶ mlat-server (port 30007)
-              - reads aircraft.json
-              - manages Docker
-                     │
-                     ▼
-                nginx (port 8080)
-                     │
-                     ▼
-                  Browser
+                                               │ calculates positions
+                                               │
+Feeder Pi ◀── MLAT results (port 39001) ──────┘
 ```
+
+MLAT data flows directly between feeders and mlat-server — it does not pass through the beast-proxy.
 
 ---
 
 ## Database
 
-SQLite database stored at `/data/aggregator.db` inside the `taknet-db-data` Docker volume (host path varies). Shared between the `beast-proxy` (writes) and `dashboard` (reads/writes) containers via WAL mode for concurrent access.
+SQLite database stored at `/data/aggregator.db` inside the `taknet-db-data` Docker volume. Shared between `beast-proxy` (writes) and `dashboard` (reads/writes) via WAL mode for concurrent access.
 
 ### Tables
 
@@ -411,7 +448,7 @@ All endpoints return JSON. Base path: `/api/`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/aircraft` | Current totals from readsb: total aircraft, with_position count, message count |
+| GET | `/api/aircraft` | Current totals from readsb via tar1090: total aircraft, with_position count, message count |
 
 ### VPN
 
@@ -424,8 +461,8 @@ All endpoints return JSON. Base path: `/api/`
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/docker/containers` | List all taknet-* containers: name, status, image, started_at |
-| POST | `/api/docker/containers/<name>/restart` | Restart a container (30s timeout). Name must start with `taknet-`. |
-| GET | `/api/docker/containers/<name>/logs` | Container logs with timestamps (query param: `?tail=N`, default 100) |
+| POST | `/api/docker/containers/<n>/restart` | Restart a container (30s timeout). Name must start with `taknet-`. |
+| GET | `/api/docker/containers/<n>/logs` | Container logs with timestamps (query param: `?tail=N`, default 100) |
 
 ---
 
@@ -450,13 +487,13 @@ Public IP feeders will now show city/state location in the dashboard and get aut
 ```bash
 # Check beast-proxy is listening
 taknet-agg logs beast-proxy
-ss -tuln | grep 30005
+ss -tuln | grep 30004
 
 # Check firewall
-firewall-cmd --list-ports | grep 30005
+firewall-cmd --list-ports | grep 30004
 
-# Test connection from a feeder or another host
-nc -zv <VPS_IP> 30005
+# Test connection from another host
+nc -zv <VPS_IP> 30004
 ```
 
 ### Dashboard shows "Loading..." or errors
@@ -472,29 +509,35 @@ taknet-agg logs dashboard
 docker inspect taknet-readsb | jq '.[0].State.Health'
 
 # Check if database is accessible
-docker exec taknet-dashboard python3 -c "import sqlite3; c=sqlite3.connect('/data/aggregator.db'); print(c.execute('SELECT COUNT(*) FROM feeders').fetchone())"
+docker exec taknet-dashboard python3 -c "
+import sqlite3
+c = sqlite3.connect('/data/aggregator.db')
+print(c.execute('SELECT COUNT(*) FROM feeders').fetchone())
+"
 ```
 
 ### No aircraft on map
 
 ```bash
-# Verify readsb is receiving Beast data
+# Verify readsb is receiving data
 docker exec taknet-readsb cat /run/readsb/aircraft.json | jq '.aircraft | length'
 
-# Verify tar1090 can reach readsb data
-docker exec taknet-tar1090 wget -qO- http://readsb:30005/data/aircraft.json | jq '.aircraft | length'
-
-# Verify nginx proxy passes tar1090 data
+# Verify tar1090 is serving data
 curl -s http://localhost:8080/tar1090/data/aircraft.json | jq '.aircraft | length'
 ```
 
 ### Tailscale peers not resolving
 
+Tailscale runs on the host. The socket is mounted into containers.
+
 ```bash
+# Verify socket exists on the host
+ls -la /var/run/tailscale/tailscaled.sock
+
 # Verify socket is mounted into container
 docker exec taknet-beast-proxy ls -la /var/run/tailscale/
 
-# Test Tailscale socket API from inside the dashboard container
+# Test Tailscale API from inside the dashboard container
 docker exec taknet-dashboard python3 -c "
 import socket, http.client, json
 class C(http.client.HTTPConnection):
@@ -508,6 +551,16 @@ d = json.loads(r.read())
 print(f'Tailnet: {d.get(\"CurrentTailnet\",{}).get(\"Name\")}')
 print(f'Peers: {len(d.get(\"Peer\",{}))}')
 "
+```
+
+### MLAT not working
+
+```bash
+# Check mlat-server is running and ports are listening
+ss -tuln | grep -E '30105|39001'
+
+# Check mlat-server logs
+taknet-agg logs mlat-server
 ```
 
 ### Container won't start or is in a restart loop
@@ -528,7 +581,6 @@ taknet-agg rebuild
 The SQLite database uses WAL mode with a 5-second busy timeout. If you see locking errors under heavy load, it typically means both beast-proxy and dashboard are writing simultaneously. This should resolve on its own. If persistent:
 
 ```bash
-# Restart beast-proxy to reset connections
 taknet-agg restart beast-proxy
 ```
 
@@ -538,7 +590,7 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.0)
+├── VERSION                         # Aggregator version (1.0.2)
 ├── README.md                       # This file
 ├── .env.example                    # Environment variable template
 ├── .gitignore
@@ -549,7 +601,7 @@ taknet-aggregator/
 ├── beast-proxy/                    # Beast TCP Proxy container
 │   ├── Dockerfile
 │   ├── requirements.txt            # maxminddb, requests
-│   ├── proxy.py                    # Async TCP server — main entrypoint
+│   ├── proxy.py                    # Async TCP server — listens on 30004
 │   ├── db.py                       # SQLite write operations
 │   ├── vpn_resolver.py             # Tailscale + NetBird IP classification
 │   ├── geoip_helper.py             # MaxMind GeoIP lookups for public IPs
@@ -573,7 +625,7 @@ taknet-aggregator/
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── docker_service.py       # Container list, restart, logs via Docker socket
-│   │   └── vpn_service.py          # Tailscale + NetBird status readers
+│   │   └── vpn_service.py          # Tailscale (host socket) + NetBird status readers
 │   └── templates/
 │       ├── base.html               # Dark-theme layout, sidebar nav, CSS, JS helpers
 │       ├── dashboard.html          # Stat cards, system health, activity log
@@ -593,7 +645,7 @@ taknet-aggregator/
 └── nginx/                          # Nginx Reverse Proxy
     ├── nginx.conf                  # Worker and event config
     └── conf.d/
-        └── aggregator.conf         # Virtual host — routes to dashboard + tar1090 + graphs1090
+        └── aggregator.conf         # Routes to dashboard + tar1090 + graphs1090
 ```
 
 ---
@@ -638,4 +690,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.0 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.2 — Built for public safety ADS-B operations.*

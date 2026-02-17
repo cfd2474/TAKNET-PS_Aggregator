@@ -158,27 +158,11 @@ def _get_aircraft_count():
 
 
 def _get_aircraft_data():
-    """Fetch aircraft.json from readsb."""
+    """Fetch aircraft.json from tar1090 or readsb."""
+    # tar1090 serves aircraft.json over HTTP
     try:
         resp = http_requests.get(
-            f"http://{READSB_HOST}:30005/data/aircraft.json", timeout=3
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            aircraft = data.get("aircraft", [])
-            with_pos = [a for a in aircraft if "lat" in a and "lon" in a]
-            return {
-                "total": len(aircraft),
-                "with_position": len(with_pos),
-                "messages": data.get("messages", 0),
-            }
-    except Exception:
-        pass
-
-    # Fallback: try tar1090 path
-    try:
-        resp = http_requests.get(
-            f"http://tar1090:80/data/aircraft.json", timeout=3
+            "http://tar1090:80/data/aircraft.json", timeout=3
         )
         if resp.status_code == 200:
             data = resp.json()

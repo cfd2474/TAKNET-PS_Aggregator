@@ -11,6 +11,7 @@ services:
       - TZ=${TZ:-America/Los_Angeles}
       - READSB_HOST=readsb
       - READSB_PORT=30006
+      - LISTEN_PORT=30004
       - DB_PATH=/data/aggregator.db
       - TAILSCALE_ENABLED=${TAILSCALE_ENABLED:-true}
       - TAILSCALE_CIDR=${TAILSCALE_CIDR:-100.64.0.0/10}
@@ -20,7 +21,7 @@ services:
       - NETBIRD_CIDR=${NETBIRD_CIDR:-100.64.0.0/10}
       - GEOIP_ENABLED=${GEOIP_ENABLED:-false}
     ports:
-      - "${BEAST_PORT:-30005}:30005/tcp"
+      - "${BEAST_PORT:-30004}:30004/tcp"
     volumes:
       - db-data:/data
       - ./beast-proxy/GeoLite2-City.mmdb:/app/GeoLite2-City.mmdb:ro
@@ -65,7 +66,7 @@ services:
       retries: 5
       start_period: 15s
 
-  # MLAT Server
+  # MLAT Server — feeders send on 30105, results returned on 39001
   mlat-server:
     image: ghcr.io/wiedehopf/mlat-server:latest
     container_name: taknet-mlat
@@ -73,7 +74,8 @@ services:
     environment:
       - TZ=${TZ:-America/Los_Angeles}
     ports:
-      - "${MLAT_PORT:-30007}:30007/tcp"
+      - "${MLAT_IN_PORT:-30105}:30105/tcp"
+      - "${MLAT_RESULTS_PORT:-39001}:39001/tcp"
     networks:
       - taknet-internal
     depends_on:

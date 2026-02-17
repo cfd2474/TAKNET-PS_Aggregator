@@ -15,7 +15,7 @@ import geoip_helper
 import vpn_resolver
 
 LISTEN_HOST = "0.0.0.0"
-LISTEN_PORT = 30005
+LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "30004"))
 READSB_HOST = os.environ.get("READSB_HOST", "readsb")
 READSB_PORT = int(os.environ.get("READSB_PORT", "30006"))
 
@@ -151,7 +151,7 @@ async def status_reporter():
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.0")
+    print("TAKNET-PS Beast Proxy v1.0.2")
     print(f"  Listening on {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Forwarding to {READSB_HOST}:{READSB_PORT}")
     print(f"  Tailscale: {'enabled' if vpn_resolver.TAILSCALE_ENABLED else 'disabled'}")

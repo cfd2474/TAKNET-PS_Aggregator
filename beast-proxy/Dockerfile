@@ -15,6 +15,6 @@ COPY vpn_resolver.py .
 COPY geoip_helper.py .
 COPY proxy.py .
 
-EXPOSE 30005
+EXPOSE 30004
 
 CMD ["python", "-u", "proxy.py"]
