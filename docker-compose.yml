@@ -20,12 +20,14 @@ services:
       - NETBIRD_API_TOKEN=${NETBIRD_API_TOKEN:-}
       - NETBIRD_CIDR=${NETBIRD_CIDR:-100.64.0.0/10}
       - GEOIP_ENABLED=${GEOIP_ENABLED:-true}
+      - MLAT_LOG_PATH=/mlat-logs/mlat.log
     ports:
       - "${BEAST_PORT:-30004}:30004/tcp"
     volumes:
       - db-data:/data
       - /var/run/tailscale:/var/run/tailscale:ro
       - readsb-run:/run/readsb:ro
+      - mlat-logs:/mlat-logs:ro
     networks:
       - taknet-internal
     depends_on:
@@ -74,16 +76,22 @@ services:
       dockerfile: Dockerfile
     container_name: taknet-mlat
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - --client-listen=0.0.0.0:30105
-      - --basestation-listen=39001
-      - --basestation-connect=readsb:30006
-      - --work-dir=/tmp
+      - >
+        python3 /opt/mlat-server/mlat-server
+        --client-listen=0.0.0.0:30105
+        --basestation-listen=39001
+        --basestation-connect=readsb:30006
+        --work-dir=/tmp
+        2>&1 | tee /mlat-logs/mlat.log
     environment:
       - TZ=${TZ:-America/Los_Angeles}
     ports:
       - "${MLAT_IN_PORT:-30105}:30105/tcp"
       - "${MLAT_RESULTS_PORT:-39001}:39001/tcp"
+    volumes:
+      - mlat-logs:/mlat-logs
     networks:
       - taknet-internal
     depends_on:
@@ -181,6 +189,8 @@ volumes:
     name: taknet-tar1090-data
   graphs1090-data:
     name: taknet-graphs1090-data
+  mlat-logs:
+    name: taknet-mlat-logs
 
 networks:
   taknet-internal:

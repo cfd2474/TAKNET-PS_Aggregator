@@ -121,19 +121,20 @@ def log_disconnection(feeder_id, connection_id, bytes_transferred=0):
     conn.commit()
 
 
-def update_feeder_stats(feeder_id, bytes_count):
-    """Increment feeder byte counters and refresh last_seen."""
+def update_feeder_stats(feeder_id, bytes_count, messages_count=0, positions_count=0):
+    """Increment feeder byte, message, and position counters."""
     conn = _get_conn()
     ts = now_utc()
     conn.execute(
         """UPDATE feeders SET
             bytes_received = bytes_received + ?,
-            messages_received = messages_received + 1,
+            messages_received = messages_received + ?,
+            positions_received = positions_received + ?,
             last_seen = ?,
             status = 'active',
             updated_at = ?
         WHERE id = ?""",
-        (bytes_count, ts, ts, feeder_id),
+        (bytes_count, messages_count, positions_count, ts, ts, feeder_id),
     )
     conn.commit()
 
@@ -145,6 +146,17 @@ def touch_feeder(feeder_id):
     conn.execute(
         "UPDATE feeders SET last_seen = ?, status = 'active', updated_at = ? WHERE id = ?",
         (ts, ts, feeder_id),
+    )
+    conn.commit()
+
+
+def update_feeder_mlat(feeder_id, mlat_enabled):
+    """Update MLAT status for a feeder."""
+    conn = _get_conn()
+    ts = now_utc()
+    conn.execute(
+        "UPDATE feeders SET mlat_enabled = ?, updated_at = ? WHERE id = ?",
+        (1 if mlat_enabled else 0, ts, feeder_id),
     )
     conn.commit()
 
