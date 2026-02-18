@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.4
+# TAKNET-PS Aggregator v1.0.5
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -93,33 +93,38 @@ Feeders (Pi) ──Beast 30004──▶ beast-proxy ──▶ readsb:30006 ─�
 
 ## Installation
 
-### From GitHub
+### One-Liner Install
 
 ```bash
-git clone https://github.com/<your-user>/taknet-aggregator.git
-cd taknet-aggregator
-cp .env.example .env
-nano .env                    # Edit site coordinates, ports, VPN settings
+curl -sSL https://raw.githubusercontent.com/cfd2474/TAKNET-PS_Aggregator/main/install.sh | sudo bash
+```
+
+This clones the repo, copies files to `/opt/taknet-aggregator/`, installs Docker if needed, opens firewall ports, and starts all containers.
+
+### Manual Install
+
+```bash
+git clone https://github.com/cfd2474/TAKNET-PS_Aggregator.git
+cd TAKNET-PS_Aggregator
 sudo bash install.sh
 ```
 
-### From tar.gz Package
+### Post-Install
+
+Edit site coordinates and VPN settings if needed:
 
 ```bash
-tar xzf taknet-aggregator-v1.0.4.tar.gz
-cd taknet-aggregator
-cp .env.example .env
-nano .env
-sudo bash install.sh
+sudo nano /opt/taknet-aggregator/.env
+taknet-agg restart
 ```
 
 ### What the Installer Does
 
-1. Installs Docker CE and docker-compose-plugin if not present
-2. Installs system dependencies (`curl`, `jq`)
-3. Copies files to `/opt/taknet-aggregator/`
-4. Creates `.env` from `.env.example` if it doesn't exist
-5. Configures firewalld rules for all required ports (30004, 30105, 39001, 30003, 80)
+1. Clones the repo from GitHub (if run via curl pipe; skipped if run from local clone)
+2. Installs Docker CE and docker-compose-plugin if not present
+3. Installs system dependencies (`curl`, `jq`)
+4. Deploys files to `/opt/taknet-aggregator/` (preserves existing `.env` on upgrades)
+5. Configures firewalld rules for all required ports (80, 30004, 30105, 39001, 30003)
 6. Installs the `taknet-agg` CLI tool to `/usr/local/bin/`
 7. Runs `docker compose up -d --build` to build and start all containers
 
@@ -127,8 +132,8 @@ sudo bash install.sh
 
 ```bash
 taknet-agg status
-curl http://localhost:80
-curl http://localhost:80/api/status
+curl http://localhost
+curl http://localhost/api/status
 ```
 
 ---
@@ -206,7 +211,7 @@ taknet-agg <command> [args]
 | `restart` | Restart all services, or a specific one: `taknet-agg restart dashboard` |
 | `status` | Show version and `docker compose ps` output |
 | `logs` | Tail logs from all services. Filter by name: `taknet-agg logs beast-proxy` |
-| `update` | Pull latest images and rebuild (`docker compose pull && up -d --build`) |
+| `update` | Pull latest from GitHub, rebuild, and restart |
 | `rebuild` | Force recreate all containers from scratch |
 
 ---
@@ -483,7 +488,7 @@ print(c.execute('SELECT COUNT(*) FROM feeders').fetchone())
 docker exec taknet-readsb cat /run/readsb/aircraft.json | jq '.aircraft | length'
 
 # Verify tar1090 is serving data
-curl -s http://localhost:80/tar1090/data/aircraft.json | jq '.aircraft | length'
+curl -s http://localhost/tar1090/data/aircraft.json | jq '.aircraft | length'
 ```
 
 ### Tailscale peers not resolving
@@ -550,7 +555,7 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.4)
+├── VERSION                         # Aggregator version (1.0.5)
 ├── README.md                       # This file
 ├── .env.example                    # Environment variable template
 ├── .gitignore
@@ -650,4 +655,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.4 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.5 — Built for public safety ADS-B operations.*
