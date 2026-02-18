@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.2 — Installer
+# TAKNET-PS Aggregator v1.0.3 — Installer
 # Target: Rocky Linux 8.x / 9.x
 # =============================================================================
 set -e
@@ -8,7 +8,7 @@ set -e
 INSTALL_DIR="/opt/taknet-aggregator"
 DATA_DIR="/var/lib/taknet-aggregator"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.0.2")
+VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.0.3")
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.2
+# TAKNET-PS Aggregator v1.0.3
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -108,7 +108,7 @@ sudo bash install.sh
 ### From tar.gz Package
 
 ```bash
-tar xzf taknet-aggregator-v1.0.2.tar.gz
+tar xzf taknet-aggregator-v1.0.3.tar.gz
 cd taknet-aggregator
 cp .env.example .env
 nano .env
@@ -389,14 +389,20 @@ Feeder Pi ─── Beast reduce plus (port 30004) ───▶ beast-proxy
 ### MLAT Data (multilateration)
 
 ```
-Feeder Pi ─── MLAT data (port 30105) ───▶ mlat-server
-                                               │
-                                               │ calculates positions
-                                               │
-Feeder Pi ◀── MLAT results (port 39001) ──────┘
+Feeder Pi ─── MLAT timing data (port 30105) ───▶ mlat-server
+                                                      │
+                                                      │ calculates positions from
+                                                      │ 3+ feeders seeing same aircraft
+                                                      │
+Feeder Pi ◀── MLAT results (port 39001) ──────────────┤
+                                                      │
+readsb:30006 ◀── MLAT results (beast,connect) ───────┘
+                       │
+                       ▼
+                  tar1090 map (MLAT positions appear as purple icons)
 ```
 
-MLAT data flows directly between feeders and mlat-server — it does not pass through the beast-proxy.
+MLAT data flows directly between feeders and mlat-server — it does not pass through the beast-proxy. The mlat-server is configured with two result outputs: feeders connect to port 39001 to receive calculated positions back, and mlat-server also pushes results into readsb on port 30006 (beast format) so MLAT-derived positions appear on the tar1090 map.
 
 ---
 
@@ -590,7 +596,7 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.2)
+├── VERSION                         # Aggregator version (1.0.3)
 ├── README.md                       # This file
 ├── .env.example                    # Environment variable template
 ├── .gitignore
@@ -690,4 +696,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.2 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.3 — Built for public safety ADS-B operations.*

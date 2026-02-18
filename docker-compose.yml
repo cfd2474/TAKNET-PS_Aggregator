@@ -71,6 +71,11 @@ services:
     image: ghcr.io/wiedehopf/mlat-server:latest
     container_name: taknet-mlat
     restart: unless-stopped
+    command:
+      - mlat-server
+      - --client-listen=0.0.0.0:30105
+      - --results=beast,listen,39001
+      - --results=beast,connect,readsb:30006
     environment:
       - TZ=${TZ:-America/Los_Angeles}
     ports:
