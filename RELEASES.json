@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.32",
+    "date": "2026-02-18",
+    "notes": "Fixed Tailscale feeder classification. Removed is_private gate that excluded CGNAT range (100.64.0.0/10) from VPN detection."
+  },
+  {
     "version": "1.0.31",
     "date": "2026-02-18",
     "notes": "Fixed Tailscale socket API auth. Added required Sec-Tailscale header to both beast-proxy and dashboard VPN service."

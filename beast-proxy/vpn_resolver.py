@@ -36,23 +36,23 @@ def classify_connection(ip_str):
     except ValueError:
         return "public"
 
-    # Check private/link-local ranges that aren't VPN
-    if addr.is_private and not addr.is_loopback:
-        # Could be VPN — check specifically
-        if TAILSCALE_ENABLED and _tailscale_net and addr in _tailscale_net:
-            # Verify it's actually a Tailscale peer
-            hostname = _resolve_tailscale(ip_str)
-            if hostname:
-                return "tailscale"
-        if NETBIRD_ENABLED and _netbird_net and addr in _netbird_net:
-            hostname = _resolve_netbird(ip_str)
-            if hostname:
-                return "netbird"
-        # In the overlap CIDR but not found in either — still classify by range
-        if TAILSCALE_ENABLED and _tailscale_net and addr in _tailscale_net:
+    # Check Tailscale CIDR first
+    if TAILSCALE_ENABLED and _tailscale_net and addr in _tailscale_net:
+        hostname = _resolve_tailscale(ip_str)
+        if hostname:
             return "tailscale"
-        if NETBIRD_ENABLED and _netbird_net and addr in _netbird_net:
+
+    # Check NetBird CIDR
+    if NETBIRD_ENABLED and _netbird_net and addr in _netbird_net:
+        hostname = _resolve_netbird(ip_str)
+        if hostname:
             return "netbird"
+
+    # In a VPN CIDR but peer not found — still classify by range
+    if TAILSCALE_ENABLED and _tailscale_net and addr in _tailscale_net:
+        return "tailscale"
+    if NETBIRD_ENABLED and _netbird_net and addr in _netbird_net:
+        return "netbird"
 
     return "public"
 
