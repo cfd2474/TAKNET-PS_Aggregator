@@ -61,7 +61,11 @@ services:
       - /tmp:size=64m
       - /var/log:size=32m
     healthcheck:
-      test: ["NONE"]
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # MLAT Server — feeders send on 30105, results returned on 39001
   mlat-server:
