@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.29",
+    "date": "2026-02-18",
+    "notes": "Added READSB_JSON_DIR to enable aircraft.json output. Fixes 0 aircraft count in dashboard and beast-proxy stats."
+  },
+  {
     "version": "1.0.28",
     "date": "2026-02-18",
     "notes": "Updates page with version check against GitHub, release notes display, and update history log. taknet-agg update now logs to database."
@@ -47,7 +52,7 @@
   {
     "version": "1.0.19",
     "date": "2026-02-18",
-    "notes": "Fixed mlat-server Dockerfile — runs script directly from cloned repo instead of pip module. Installs all Python dependencies."
+    "notes": "Fixed mlat-server Dockerfile \u2014 runs script directly from cloned repo instead of pip module. Installs all Python dependencies."
   },
   {
     "version": "1.0.18",
@@ -87,7 +92,7 @@
   {
     "version": "1.0.11",
     "date": "2026-02-18",
-    "notes": "Custom mlat-server Dockerfile — builds from wiedehopf/mlat-server source since no published image exists."
+    "notes": "Custom mlat-server Dockerfile \u2014 builds from wiedehopf/mlat-server source since no published image exists."
   },
   {
     "version": "1.0.10",

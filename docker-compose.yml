@@ -51,6 +51,7 @@ services:
       - READSB_STATS_EVERY=60
       - READSB_MAX_RANGE=500
       - READSB_JSON_INTERVAL=1.0
+      - READSB_JSON_DIR=/run/readsb
       - READSB_LAT=${SITE_LAT:-33.8753}
       - READSB_LON=${SITE_LON:--117.5664}
     ports:
