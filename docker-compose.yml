@@ -112,7 +112,10 @@ services:
     volumes:
       - tar1090-data:/var/lib/tar1090
       - graphs1090-data:/var/lib/collectd
-      - readsb-run:/run/readsb:ro
+    tmpfs:
+      - /run:exec,size=64M
+      - /tmp:size=64M
+      - /var/log:size=32M
     networks:
       - taknet-internal
     depends_on:
