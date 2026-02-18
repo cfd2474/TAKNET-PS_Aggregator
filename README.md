@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.10
+# TAKNET-PS Aggregator v1.0.11
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -51,7 +51,7 @@ Six Docker containers in one compose stack on a shared bridge network (`taknet-i
 |-----------|-------|------------------|---------|
 | `beast-proxy` | Custom (Python 3.11) | 30004/tcp | Intercepts Beast reduce plus from feeders, classifies VPN/public, logs to SQLite, forwards to readsb |
 | `readsb` | ghcr.io/sdr-enthusiasts/docker-readsb-protobuf | 30003/tcp (SBS out) | ADS-B aggregation engine in net-only mode (no SDR hardware) |
-| `mlat-server` | ghcr.io/wiedehopf/mlat-server | 30105/tcp (in), 39001/tcp (results) | Multilateration — calculates positions from multiple feeder timing data |
+| `mlat-server` | Custom (wiedehopf/mlat-server) | 30105/tcp (in), 39001/tcp (results) | Multilateration — calculates positions from multiple feeder timing data |
 | `tar1090` | ghcr.io/sdr-enthusiasts/docker-tar1090 | *(internal only)* | Aircraft map visualization and graphs1090 performance statistics |
 | `dashboard` | Custom (Flask/Gunicorn) | *(internal only)* | Web UI, REST API, background scheduler for feeder status updates |
 | `nginx` | nginx:alpine | WEB_PORT (default 80) | Reverse proxy routing all web traffic to dashboard, tar1090, and graphs1090 |
@@ -581,7 +581,7 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.10)
+├── VERSION                         # Aggregator version (1.0.11)
 ├── README.md                       # This file
 ├── env.example                     # Environment variable template
 ├── .gitignore
@@ -598,6 +598,9 @@ taknet-aggregator/
 │   ├── geoip_helper.py             # MaxMind GeoIP lookups for public IPs
 │   ├── schema.sql                  # Database schema (CREATE TABLE IF NOT EXISTS)
 │   └── GeoLite2-City.mmdb          # User-provided — not in repo
+│
+├── mlat-server/                    # MLAT Server container
+│   └── Dockerfile                  # Builds from wiedehopf/mlat-server GitHub repo
 │
 ├── web/                            # Flask Dashboard container
 │   ├── Dockerfile
@@ -681,4 +684,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.10 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.11 — Built for public safety ADS-B operations.*
