@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.5 — Installer
+# TAKNET-PS Aggregator v1.0.6 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -32,6 +32,13 @@ echo ""
 
 # ── Check root ──────────────────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && err "Run as root: curl ... | sudo bash  OR  sudo bash install.sh"
+
+# ── Early dependencies (needed for clone) ───────────────────────────────────
+for pkg in git curl jq tar rsync; do
+    if ! command -v $pkg &>/dev/null; then
+        dnf install -y $pkg 2>/dev/null || true
+    fi
+done
 
 # ── Determine source: piped from curl or run from cloned repo ───────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" 2>/dev/null && pwd)"
@@ -68,12 +75,7 @@ fi
 
 docker compose version &>/dev/null || err "docker compose plugin not found"
 
-# ── 2. System dependencies ──────────────────────────────────────────────────
-info "Installing dependencies..."
-dnf install -y curl jq 2>/dev/null || true
-ok "Dependencies ready"
-
-# ── 3. Deploy files ─────────────────────────────────────────────────────────
+# ── 2. Deploy files ─────────────────────────────────────────────────────────
 info "Deploying to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"
 rsync -a --exclude='.git' "$SOURCE_DIR/" "$INSTALL_DIR/" 2>/dev/null || cp -a "$SOURCE_DIR"/. "$INSTALL_DIR/"
@@ -87,13 +89,13 @@ else
 fi
 ok "Files deployed"
 
-# ── 4. GeoIP placeholder ───────────────────────────────────────────────────
+# ── 3. GeoIP placeholder ───────────────────────────────────────────────────
 if [ ! -s "$INSTALL_DIR/beast-proxy/GeoLite2-City.mmdb" ]; then
     touch "$INSTALL_DIR/beast-proxy/GeoLite2-City.mmdb"
     warn "GeoIP: place GeoLite2-City.mmdb in $INSTALL_DIR/beast-proxy/ to enable"
 fi
 
-# ── 5. Firewall ─────────────────────────────────────────────────────────────
+# ── 4. Firewall ─────────────────────────────────────────────────────────────
 if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld; then
     info "Opening firewall ports..."
     source "$INSTALL_DIR/.env"
@@ -106,7 +108,7 @@ else
     warn "firewalld not active — open ports manually if needed"
 fi
 
-# ── 6. CLI tool ─────────────────────────────────────────────────────────────
+# ── 5. CLI tool ─────────────────────────────────────────────────────────────
 cat > /usr/local/bin/taknet-agg << 'CLIEOF'
 #!/bin/bash
 INSTALL_DIR="/opt/taknet-aggregator"
@@ -162,7 +164,7 @@ CLIEOF
 chmod +x /usr/local/bin/taknet-agg
 ok "CLI installed: taknet-agg"
 
-# ── 7. Build and start ─────────────────────────────────────────────────────
+# ── 6. Build and start ─────────────────────────────────────────────────────
 info "Building and starting containers..."
 cd "$INSTALL_DIR"
 docker compose up -d --build

@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.5
+# TAKNET-PS Aggregator v1.0.6
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -9,6 +9,7 @@ Distributed ADS-B aircraft tracking aggregation system designed for multi-agency
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
+- [Fresh VPS Setup (Rocky Linux 8)](#fresh-vps-setup-rocky-linux-8)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [CLI Reference](#cli-reference)
@@ -88,6 +89,31 @@ Feeders (Pi) ──Beast 30004──▶ beast-proxy ──▶ readsb:30006 ─�
 - **Docker:** Installed automatically by `install.sh` if not present
 - **Tailscale:** Already running on the host — used for feeder VPN connectivity
 - **NetBird (optional):** Future VPN, can run alongside Tailscale during migration
+
+---
+
+## Fresh VPS Setup (Rocky Linux 8)
+
+Run these first on a clean image before installing the aggregator:
+
+```bash
+# System update and base tools
+dnf update -y
+dnf install -y epel-release
+dnf install -y git curl jq tar rsync
+
+# Install Docker
+dnf install -y dnf-utils
+dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+
+# Verify
+docker compose version
+git --version
+```
+
+Once that's done, proceed to [Installation](#installation).
 
 ---
 
@@ -555,7 +581,7 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.5)
+├── VERSION                         # Aggregator version (1.0.6)
 ├── README.md                       # This file
 ├── .env.example                    # Environment variable template
 ├── .gitignore
@@ -655,4 +681,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.5 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.6 — Built for public safety ADS-B operations.*
