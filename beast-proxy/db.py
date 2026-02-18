@@ -156,19 +156,20 @@ def touch_feeder(feeder_id):
 
 
 def update_feeder_mlat(feeder_id, mlat_enabled, lat=None, lon=None, alt=None, mlat_name=None):
-    """Update MLAT status and coordinates for a feeder."""
+    """Update MLAT status, coordinates, and name for a feeder."""
     conn = _get_conn()
     ts = now_utc()
     if mlat_enabled and lat is not None and lon is not None:
         conn.execute(
             """UPDATE feeders SET
                 mlat_enabled = 1,
+                name = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
                 latitude = ?,
                 longitude = ?,
                 altitude = ?,
                 updated_at = ?
             WHERE id = ?""",
-            (lat, lon, alt, ts, feeder_id),
+            (mlat_name, mlat_name, lat, lon, alt, ts, feeder_id),
         )
     else:
         conn.execute(
