@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.9 — Installer
+# TAKNET-PS Aggregator v1.0.10 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -33,28 +33,26 @@ echo ""
 # ── Check root ──────────────────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && err "Run as root: curl ... | sudo bash  OR  sudo bash install.sh"
 
-# ── Early dependencies (needed for clone) ───────────────────────────────────
-for pkg in git curl jq tar rsync; do
-    if ! command -v $pkg &>/dev/null; then
-        dnf install -y $pkg 2>/dev/null || true
+# ── Early dependencies (needed before clone) ────────────────────────────────
+for pkg in git curl jq tar; do
+    if ! command -v "$pkg" &>/dev/null; then
+        info "Installing $pkg..."
+        dnf install -y "$pkg" 2>/dev/null || true
     fi
 done
 
-# ── Determine source: piped from curl or run from cloned repo ───────────────
+# ── Determine source: local repo or curl pipe ──────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" 2>/dev/null && pwd)"
-SOURCE_DIR=""
+CLEANUP_DIR=""
 
 if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
-    # Running from inside cloned repo
     SOURCE_DIR="$SCRIPT_DIR"
     ok "Running from local repo: $SOURCE_DIR"
 else
-    # Piped from curl or run outside repo — need to clone
     info "Cloning from GitHub..."
-    dnf install -y git 2>/dev/null || yum install -y git 2>/dev/null || true
-    TMPDIR=$(mktemp -d)
-    git clone --depth 1 "$REPO_URL" "$TMPDIR/taknet-aggregator"
-    SOURCE_DIR="$TMPDIR/taknet-aggregator"
+    CLEANUP_DIR=$(mktemp -d)
+    git clone --depth 1 "$REPO_URL" "$CLEANUP_DIR/repo"
+    SOURCE_DIR="$CLEANUP_DIR/repo"
     ok "Cloned to $SOURCE_DIR"
 fi
 
@@ -79,25 +77,24 @@ docker compose version &>/dev/null || err "docker compose plugin not found"
 info "Deploying to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"
 
-# Copy everything including dotfiles
 if command -v rsync &>/dev/null; then
     rsync -a --exclude='.git' "$SOURCE_DIR/" "$INSTALL_DIR/"
 else
-    # cp -a with glob + dotglob to catch hidden files
     shopt -s dotglob
     cp -a "$SOURCE_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
     shopt -u dotglob
     rm -rf "$INSTALL_DIR/.git" 2>/dev/null || true
 fi
+ok "Files deployed"
 
-# Create .env if missing — fix existing broken ones
+# ── 3. Create or fix .env ───────────────────────────────────────────────────
 if [ -f "$INSTALL_DIR/.env" ]; then
-    # Fix unquoted values with spaces from earlier versions
-    sed -i 's/^SITE_NAME=\(.*[[:space:]].*\)$/SITE_NAME="\1"/' "$INSTALL_DIR/.env" 2>/dev/null || true
-    ok "Existing .env preserved (fixed quoting if needed)"
+    # Fix unquoted SITE_NAME from earlier versions
+    sed -i '/^SITE_NAME=/{/"/!s/=\(.*\)/="\1"/}' "$INSTALL_DIR/.env" 2>/dev/null || true
+    ok "Existing .env preserved"
 elif [ -f "$INSTALL_DIR/env.example" ]; then
     cp "$INSTALL_DIR/env.example" "$INSTALL_DIR/.env"
-    warn "Created .env from env.example — edit /opt/taknet-aggregator/.env to customize"
+    warn "Created .env from env.example — edit $INSTALL_DIR/.env to customize"
 else
     cat > "$INSTALL_DIR/.env" << 'ENVEOF'
 WEB_PORT=80
@@ -110,8 +107,6 @@ SITE_LAT=33.8753
 SITE_LON=-117.5664
 SITE_ALT_FT=738
 TZ=America/Los_Angeles
-INSTALL_DIR=/opt/taknet-aggregator
-DATA_DIR=/var/lib/taknet-aggregator
 TAILSCALE_ENABLED=true
 TAILSCALE_API_SOCKET=/var/run/tailscale/tailscaled.sock
 TAILSCALE_CIDR=100.64.0.0/10
@@ -121,28 +116,21 @@ NETBIRD_API_TOKEN=
 NETBIRD_CIDR=100.64.0.0/10
 GEOIP_ENABLED=false
 ENVEOF
-    warn "Created .env with defaults — edit /opt/taknet-aggregator/.env to customize"
+    warn "Created .env with defaults — edit $INSTALL_DIR/.env to customize"
 fi
-    fi
-    warn "Created .env — edit /opt/taknet-aggregator/.env to customize"
-else
-    ok "Existing .env preserved"
-fi
-ok "Files deployed"
 
-# ── 3. GeoIP placeholder ───────────────────────────────────────────────────
+# ── 4. GeoIP placeholder ───────────────────────────────────────────────────
 if [ ! -s "$INSTALL_DIR/beast-proxy/GeoLite2-City.mmdb" ]; then
     touch "$INSTALL_DIR/beast-proxy/GeoLite2-City.mmdb"
     warn "GeoIP: place GeoLite2-City.mmdb in $INSTALL_DIR/beast-proxy/ to enable"
 fi
 
-# ── 4. Firewall ─────────────────────────────────────────────────────────────
+# ── 5. Firewall ─────────────────────────────────────────────────────────────
 if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld; then
     info "Opening firewall ports..."
-    # Source .env safely — export only the PORT variables we need
-    eval $(grep -E '^(WEB_PORT|BEAST_PORT|SBS_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)
+    eval "$(grep -E '^(WEB_PORT|BEAST_PORT|SBS_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)"
     for port in ${WEB_PORT:-80} ${BEAST_PORT:-30004} ${SBS_PORT:-30003} ${MLAT_IN_PORT:-30105} ${MLAT_RESULTS_PORT:-39001}; do
-        firewall-cmd --permanent --add-port=${port}/tcp 2>/dev/null || true
+        firewall-cmd --permanent --add-port="${port}/tcp" 2>/dev/null || true
     done
     firewall-cmd --reload 2>/dev/null || true
     ok "Firewall configured"
@@ -150,7 +138,7 @@ else
     warn "firewalld not active — open ports manually if needed"
 fi
 
-# ── 5. CLI tool ─────────────────────────────────────────────────────────────
+# ── 6. CLI tool ─────────────────────────────────────────────────────────────
 cat > /usr/local/bin/taknet-agg << 'CLIEOF'
 #!/bin/bash
 INSTALL_DIR="/opt/taknet-aggregator"
@@ -177,11 +165,12 @@ case "${1:-help}" in
         ;;
     update)
         echo "Pulling latest from GitHub..."
-        cd /tmp && rm -rf taknet-update
-        git clone --depth 1 https://github.com/cfd2474/TAKNET-PS_Aggregator.git taknet-update
-        rsync -a --exclude='.git' --exclude='.env' /tmp/taknet-update/ "$INSTALL_DIR/" 2>/dev/null || \
-            cp -a /tmp/taknet-update/. "$INSTALL_DIR/"
-        rm -rf /tmp/taknet-update
+        TMPDIR=$(mktemp -d)
+        git clone --depth 1 https://github.com/cfd2474/TAKNET-PS_Aggregator.git "$TMPDIR/repo"
+        shopt -s dotglob
+        cp -a "$TMPDIR/repo"/* "$INSTALL_DIR/" 2>/dev/null || true
+        shopt -u dotglob
+        rm -rf "$INSTALL_DIR/.git" "$TMPDIR"
         docker compose pull 2>/dev/null || true
         docker compose up -d --build
         echo "Updated to v$(cat VERSION 2>/dev/null || echo unknown)"
@@ -206,23 +195,23 @@ CLIEOF
 chmod +x /usr/local/bin/taknet-agg
 ok "CLI installed: taknet-agg"
 
-# ── 6. Build and start ─────────────────────────────────────────────────────
+# ── 7. Build and start ─────────────────────────────────────────────────────
 info "Building and starting containers..."
 cd "$INSTALL_DIR"
 docker compose up -d --build
 
 # ── Cleanup temp clone if we made one ───────────────────────────────────────
-[ -n "$TMPDIR" ] && rm -rf "$TMPDIR"
+[ -n "$CLEANUP_DIR" ] && rm -rf "$CLEANUP_DIR"
 
 # ── Done ────────────────────────────────────────────────────────────────────
-eval $(grep -E '^(WEB_PORT|BEAST_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)
+eval "$(grep -E '^(WEB_PORT|BEAST_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)"
 IP=$(hostname -I | awk '{print $1}')
 echo ""
 echo "=========================================="
 echo -e "  ${GREEN}TAKNET-PS Aggregator v${VERSION} — Installed${NC}"
 echo "=========================================="
 echo ""
-echo "  Dashboard:   http://${IP}"
+echo "  Dashboard:    http://${IP}"
 echo "  Beast Input:  ${IP}:${BEAST_PORT:-30004}"
 echo "  MLAT Input:   ${IP}:${MLAT_IN_PORT:-30105}"
 echo "  MLAT Results: ${IP}:${MLAT_RESULTS_PORT:-39001}"
