@@ -59,11 +59,13 @@ services:
       - taknet-internal
     tmpfs:
       - /tmp:size=64m
+      - /var/log:size=32m
     healthcheck:
-      test: ["CMD", "test", "-f", "/run/readsb/aircraft.json"]
-      interval: 10s
+      test: ["CMD", "sh", "-c", "pgrep readsb > /dev/null || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 30s
       start_period: 15s
 
   # MLAT Server — feeders send on 30105, results returned on 39001
