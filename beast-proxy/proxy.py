@@ -160,11 +160,15 @@ async def handle_client(reader, writer):
             writer.close()
 
 
+TAR1090_URL = os.environ.get("TAR1090_URL", "http://tar1090:80/data/aircraft.json")
+
+
 def get_readsb_aircraft_count():
-    """Read readsb aircraft.json for current aircraft count."""
+    """Fetch aircraft count from tar1090 HTTP endpoint."""
     try:
-        with open("/run/readsb/aircraft.json", "r") as f:
-            data = json.load(f)
+        import urllib.request
+        with urllib.request.urlopen(TAR1090_URL, timeout=5) as resp:
+            data = json.loads(resp.read())
         aircraft = data.get("aircraft", [])
         with_pos = sum(1 for a in aircraft if "lat" in a and "lon" in a)
         return len(aircraft), with_pos
@@ -259,7 +263,7 @@ async def stats_flusher():
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.29")
+    print("TAKNET-PS Beast Proxy v1.0.30")
     print(f"  Listening on {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Forwarding to {READSB_HOST}:{READSB_PORT}")
     print(f"  Stats interval: {STATS_INTERVAL}s")

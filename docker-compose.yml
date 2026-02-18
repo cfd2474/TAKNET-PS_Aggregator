@@ -21,12 +21,12 @@ services:
       - NETBIRD_CIDR=${NETBIRD_CIDR:-100.64.0.0/10}
       - GEOIP_ENABLED=${GEOIP_ENABLED:-true}
       - MLAT_CLIENTS_PATH=/mlat-work/clients.json
+      - TAR1090_URL=http://tar1090:80/data/aircraft.json
     ports:
       - "${BEAST_PORT:-30004}:30004/tcp"
     volumes:
       - db-data:/data
       - /var/run/tailscale:/var/run/tailscale:ro
-      - readsb-run:/run/readsb:ro
       - mlat-work:/mlat-work:ro
     networks:
       - taknet-internal
@@ -51,7 +51,6 @@ services:
       - READSB_STATS_EVERY=60
       - READSB_MAX_RANGE=500
       - READSB_JSON_INTERVAL=1.0
-      - READSB_JSON_DIR=/run/readsb
       - READSB_LAT=${SITE_LAT:-33.8753}
       - READSB_LON=${SITE_LON:--117.5664}
     ports:

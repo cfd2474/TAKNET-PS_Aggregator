@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.30",
+    "date": "2026-02-18",
+    "notes": "Beast-proxy fetches aircraft data from tar1090 HTTP instead of non-existent readsb JSON file. Fixes 0 aircraft count. Removed unused readsb-run volume and READSB_JSON_DIR."
+  },
+  {
     "version": "1.0.29",
     "date": "2026-02-18",
     "notes": "Added READSB_JSON_DIR to enable aircraft.json output. Fixes 0 aircraft count in dashboard and beast-proxy stats."
