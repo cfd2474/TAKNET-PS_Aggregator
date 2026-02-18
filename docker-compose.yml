@@ -19,13 +19,13 @@ services:
       - NETBIRD_API_URL=${NETBIRD_API_URL:-http://localhost:33073}
       - NETBIRD_API_TOKEN=${NETBIRD_API_TOKEN:-}
       - NETBIRD_CIDR=${NETBIRD_CIDR:-100.64.0.0/10}
-      - GEOIP_ENABLED=${GEOIP_ENABLED:-false}
+      - GEOIP_ENABLED=${GEOIP_ENABLED:-true}
     ports:
       - "${BEAST_PORT:-30004}:30004/tcp"
     volumes:
       - db-data:/data
-      - ./beast-proxy/GeoLite2-City.mmdb:/app/GeoLite2-City.mmdb:ro
       - /var/run/tailscale:/var/run/tailscale:ro
+      - readsb-run:/run/readsb:ro
     networks:
       - taknet-internal
     depends_on:

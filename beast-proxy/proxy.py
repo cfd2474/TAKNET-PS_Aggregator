@@ -5,6 +5,7 @@ classifies connections as Tailscale/NetBird/public, and forwards data to readsb.
 """
 
 import asyncio
+import json
 import os
 import signal
 import sys
@@ -18,14 +19,15 @@ LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "30004"))
 READSB_HOST = os.environ.get("READSB_HOST", "readsb")
 READSB_PORT = int(os.environ.get("READSB_PORT", "30006"))
+STATS_INTERVAL = int(os.environ.get("STATS_INTERVAL", "30"))
 
-# Stats
+# Active connections: key = writer id, value = connection info
 active_connections = {}
 total_connections = 0
 start_time = time.time()
 
 
-async def forward_stream(reader, writer, feeder_id, direction, stats):
+async def forward_stream(reader, writer, conn_info, direction):
     """Forward data between two streams, tracking bytes."""
     try:
         while True:
@@ -35,12 +37,8 @@ async def forward_stream(reader, writer, feeder_id, direction, stats):
             writer.write(data)
             await writer.drain()
             if direction == "inbound":
-                stats["bytes"] += len(data)
-                stats["msgs"] += 1
-                # Periodic stats flush (every 1000 messages)
-                if stats["msgs"] % 1000 == 0:
-                    db.update_feeder_stats(feeder_id, stats["bytes"])
-                    stats["bytes"] = 0
+                conn_info["bytes"] += len(data)
+                conn_info["last_data"] = time.time()
     except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
         pass
     except Exception as e:
@@ -92,13 +90,15 @@ async def handle_client(reader, writer):
         "conn_type": conn_type,
         "hostname": hostname,
         "connected_at": time.time(),
+        "bytes": 0,
+        "bytes_flushed": 0,
+        "last_data": time.time(),
     }
     active_connections[id(writer)] = conn_info
 
     # Open forwarding connection to readsb
     readsb_reader = None
     readsb_writer = None
-    stats = {"bytes": 0, "msgs": 0}
 
     try:
         readsb_reader, readsb_writer = await asyncio.open_connection(READSB_HOST, READSB_PORT)
@@ -106,8 +106,8 @@ async def handle_client(reader, writer):
 
         # Bidirectional proxy
         await asyncio.gather(
-            forward_stream(reader, readsb_writer, feeder_id, "inbound", stats),
-            forward_stream(readsb_reader, writer, feeder_id, "outbound", stats),
+            forward_stream(reader, readsb_writer, conn_info, "inbound"),
+            forward_stream(readsb_reader, writer, conn_info, "outbound"),
         )
     except (ConnectionRefusedError, OSError) as e:
         print(f"[proxy] Cannot connect to readsb: {e}")
@@ -115,11 +115,11 @@ async def handle_client(reader, writer):
         pass
     finally:
         # Flush remaining stats
-        if stats["bytes"] > 0:
-            db.update_feeder_stats(feeder_id, stats["bytes"])
+        unflushed = conn_info["bytes"] - conn_info["bytes_flushed"]
+        if unflushed > 0:
+            db.update_feeder_stats(feeder_id, unflushed)
 
-        total_bytes = stats.get("bytes", 0)
-        db.log_disconnection(feeder_id, connection_id, total_bytes)
+        db.log_disconnection(feeder_id, connection_id, conn_info["bytes"])
 
         # Clean up
         active_connections.pop(id(writer), None)
@@ -132,18 +132,52 @@ async def handle_client(reader, writer):
             writer.close()
 
 
-async def status_reporter():
-    """Periodic status output."""
+def get_readsb_aircraft_count():
+    """Read readsb aircraft.json for current aircraft count."""
+    try:
+        with open("/run/readsb/aircraft.json", "r") as f:
+            data = json.load(f)
+        aircraft = data.get("aircraft", [])
+        with_pos = sum(1 for a in aircraft if "lat" in a and "lon" in a)
+        return len(aircraft), with_pos
+    except Exception:
+        return 0, 0
+
+
+async def stats_flusher():
+    """Periodically flush stats for all active connections."""
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(STATS_INTERVAL)
+
+        # Flush byte counters and update last_seen for all active feeders
+        for conn_info in list(active_connections.values()):
+            feeder_id = conn_info["feeder_id"]
+            unflushed = conn_info["bytes"] - conn_info["bytes_flushed"]
+            if unflushed > 0:
+                db.update_feeder_stats(feeder_id, unflushed)
+                conn_info["bytes_flushed"] = conn_info["bytes"]
+            else:
+                # Even if no new bytes, keep feeder marked active
+                db.touch_feeder(feeder_id)
+
+        # Get aircraft count from readsb
+        total_ac, with_pos = get_readsb_aircraft_count()
+
+        # Mark feeders with no active connection as stale/offline
+        active_feeder_ids = {c["feeder_id"] for c in active_connections.values()}
+        db.mark_inactive_feeders(active_feeder_ids)
+
+        # Status line
         count = len(active_connections)
         uptime = int(time.time() - start_time)
         hours, remainder = divmod(uptime, 3600)
         minutes, seconds = divmod(remainder, 60)
         print(
-            f"[proxy] Status: {count} active connections, "
-            f"{total_connections} total, uptime {hours}h{minutes}m{seconds}s"
+            f"[proxy] Status: {count} feeders, "
+            f"{total_ac} aircraft ({with_pos} with pos), "
+            f"uptime {hours}h{minutes}m{seconds}s"
         )
+
         # Refresh VPN caches periodically
         vpn_resolver.refresh_caches()
 
@@ -151,9 +185,10 @@ async def status_reporter():
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.22")
+    print("TAKNET-PS Beast Proxy v1.0.23")
     print(f"  Listening on {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Forwarding to {READSB_HOST}:{READSB_PORT}")
+    print(f"  Stats interval: {STATS_INTERVAL}s")
     print(f"  Tailscale: {'enabled' if vpn_resolver.TAILSCALE_ENABLED else 'disabled'}")
     print(f"  NetBird:   {'enabled' if vpn_resolver.NETBIRD_ENABLED else 'disabled'}")
     print(f"  GeoIP:     {'enabled' if geoip_helper.GEOIP_ENABLED else 'disabled'}")
@@ -164,8 +199,8 @@ async def main():
 
     server = await asyncio.start_server(handle_client, LISTEN_HOST, LISTEN_PORT)
 
-    # Start status reporter
-    asyncio.create_task(status_reporter())
+    # Start periodic stats flusher
+    asyncio.create_task(stats_flusher())
 
     async with server:
         await server.serve_forever()

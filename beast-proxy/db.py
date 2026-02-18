@@ -122,7 +122,7 @@ def log_disconnection(feeder_id, connection_id, bytes_transferred=0):
 
 
 def update_feeder_stats(feeder_id, bytes_count):
-    """Increment feeder byte and message counters."""
+    """Increment feeder byte counters and refresh last_seen."""
     conn = _get_conn()
     ts = now_utc()
     conn.execute(
@@ -130,8 +130,39 @@ def update_feeder_stats(feeder_id, bytes_count):
             bytes_received = bytes_received + ?,
             messages_received = messages_received + 1,
             last_seen = ?,
-            status = 'active'
+            status = 'active',
+            updated_at = ?
         WHERE id = ?""",
-        (bytes_count, ts, feeder_id),
+        (bytes_count, ts, ts, feeder_id),
     )
+    conn.commit()
+
+
+def touch_feeder(feeder_id):
+    """Update last_seen and ensure feeder is marked active (even with no new data)."""
+    conn = _get_conn()
+    ts = now_utc()
+    conn.execute(
+        "UPDATE feeders SET last_seen = ?, status = 'active', updated_at = ? WHERE id = ?",
+        (ts, ts, feeder_id),
+    )
+    conn.commit()
+
+
+def mark_inactive_feeders(active_feeder_ids):
+    """Mark feeders not in active_feeder_ids as stale if they were active."""
+    conn = _get_conn()
+    ts = now_utc()
+    if active_feeder_ids:
+        placeholders = ",".join("?" for _ in active_feeder_ids)
+        conn.execute(
+            f"""UPDATE feeders SET status = 'stale', updated_at = ?
+                WHERE status = 'active' AND id NOT IN ({placeholders})""",
+            (ts, *active_feeder_ids),
+        )
+    else:
+        conn.execute(
+            "UPDATE feeders SET status = 'stale', updated_at = ? WHERE status = 'active'",
+            (ts,),
+        )
     conn.commit()
