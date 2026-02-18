@@ -25,6 +25,11 @@ def init_db():
     schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
     with open(schema_path) as f:
         conn.executescript(f.read())
+    # Migrations for existing databases
+    try:
+        conn.execute("ALTER TABLE feeders ADD COLUMN altitude REAL")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     conn.commit()
     print(f"[db] Database initialized at {DB_PATH}")
 
@@ -150,14 +155,26 @@ def touch_feeder(feeder_id):
     conn.commit()
 
 
-def update_feeder_mlat(feeder_id, mlat_enabled):
-    """Update MLAT status for a feeder."""
+def update_feeder_mlat(feeder_id, mlat_enabled, lat=None, lon=None, alt=None, mlat_name=None):
+    """Update MLAT status and coordinates for a feeder."""
     conn = _get_conn()
     ts = now_utc()
-    conn.execute(
-        "UPDATE feeders SET mlat_enabled = ?, updated_at = ? WHERE id = ?",
-        (1 if mlat_enabled else 0, ts, feeder_id),
-    )
+    if mlat_enabled and lat is not None and lon is not None:
+        conn.execute(
+            """UPDATE feeders SET
+                mlat_enabled = 1,
+                latitude = ?,
+                longitude = ?,
+                altitude = ?,
+                updated_at = ?
+            WHERE id = ?""",
+            (lat, lon, alt, ts, feeder_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE feeders SET mlat_enabled = ?, updated_at = ? WHERE id = ?",
+            (1 if mlat_enabled else 0, ts, feeder_id),
+        )
     conn.commit()
 
 

@@ -7,7 +7,6 @@ classifies connections as Tailscale/NetBird/public, and forwards data to readsb.
 import asyncio
 import json
 import os
-import re
 import signal
 import sys
 import time
@@ -21,7 +20,7 @@ LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "30004"))
 READSB_HOST = os.environ.get("READSB_HOST", "readsb")
 READSB_PORT = int(os.environ.get("READSB_PORT", "30006"))
 STATS_INTERVAL = int(os.environ.get("STATS_INTERVAL", "30"))
-MLAT_LOG_PATH = os.environ.get("MLAT_LOG_PATH", "/mlat-logs/mlat.log")
+MLAT_CLIENTS_PATH = os.environ.get("MLAT_CLIENTS_PATH", "/mlat-work/clients.json")
 
 # Active connections: key = writer id, value = connection info
 active_connections = {}
@@ -29,17 +28,13 @@ total_connections = 0
 start_time = time.time()
 
 # Beast protocol: 0x1a followed by type byte
-# Type 0x31 = Mode-AC (2 byte payload)
-# Type 0x32 = Mode-S short (7 byte payload)
-# Type 0x33 = Mode-S long (14 byte payload) — includes DF17 ADS-B with positions
 BEAST_ESCAPE = 0x1A
 BEAST_TYPES = {0x31, 0x32, 0x33, 0x34, 0x35}
 BEAST_LONG = {0x33, 0x35}  # Mode-S long messages (contain ADS-B/DF17)
 
 
 def count_beast_frames(data):
-    """Count Beast message frames and position-capable messages in raw data.
-    Returns (total_messages, position_messages)."""
+    """Count Beast message frames and position-capable messages in raw data."""
     msgs = 0
     positions = 0
     i = 0
@@ -48,7 +43,6 @@ def count_beast_frames(data):
         if data[i] == BEAST_ESCAPE:
             next_byte = data[i + 1]
             if next_byte == BEAST_ESCAPE:
-                # Escaped literal 0x1a, skip both
                 i += 2
                 continue
             if next_byte in BEAST_TYPES:
@@ -73,7 +67,6 @@ async def forward_stream(reader, writer, conn_info, direction):
             if direction == "inbound":
                 conn_info["bytes"] += len(data)
                 conn_info["last_data"] = time.time()
-                # Count Beast frames
                 msgs, positions = count_beast_frames(data)
                 conn_info["messages"] += msgs
                 conn_info["positions"] += positions
@@ -96,10 +89,7 @@ async def handle_client(reader, writer):
     ip_address = peername[0]
     print(f"[proxy] New connection from {ip_address}")
 
-    # Classify connection type
     conn_type = vpn_resolver.classify_connection(ip_address)
-
-    # Resolve hostname for VPN connections
     hostname = None
     location = None
     lat = None
@@ -116,11 +106,9 @@ async def handle_client(reader, writer):
             lon = geo.get("longitude")
         print(f"[proxy] {ip_address} classified as public, location: {location}")
 
-    # Register feeder and log connection
     feeder_id = db.upsert_feeder(ip_address, hostname, conn_type, location, lat, lon)
     connection_id = db.log_connection(feeder_id, ip_address)
 
-    # Track active connection
     conn_info = {
         "feeder_id": feeder_id,
         "connection_id": connection_id,
@@ -138,7 +126,6 @@ async def handle_client(reader, writer):
     }
     active_connections[id(writer)] = conn_info
 
-    # Open forwarding connection to readsb
     readsb_reader = None
     readsb_writer = None
 
@@ -146,7 +133,6 @@ async def handle_client(reader, writer):
         readsb_reader, readsb_writer = await asyncio.open_connection(READSB_HOST, READSB_PORT)
         print(f"[proxy] Forwarding {ip_address} → readsb:{READSB_PORT}")
 
-        # Bidirectional proxy
         await asyncio.gather(
             forward_stream(reader, readsb_writer, conn_info, "inbound"),
             forward_stream(readsb_reader, writer, conn_info, "outbound"),
@@ -156,7 +142,6 @@ async def handle_client(reader, writer):
     except asyncio.CancelledError:
         pass
     finally:
-        # Flush remaining stats
         unflushed_bytes = conn_info["bytes"] - conn_info["bytes_flushed"]
         unflushed_msgs = conn_info["messages"] - conn_info["messages_flushed"]
         unflushed_pos = conn_info["positions"] - conn_info["positions_flushed"]
@@ -165,7 +150,6 @@ async def handle_client(reader, writer):
 
         db.log_disconnection(feeder_id, connection_id, conn_info["bytes"])
 
-        # Clean up
         active_connections.pop(id(writer), None)
         display = hostname or location or ip_address
         print(f"[proxy] Disconnected: {display} ({conn_type})")
@@ -188,33 +172,30 @@ def get_readsb_aircraft_count():
         return 0, 0
 
 
-def get_mlat_connected_ips():
-    """Parse mlat-server log to find currently connected feeder IPs."""
-    mlat_ips = set()
+def get_mlat_clients():
+    """Read mlat-server clients.json for connected feeders with coordinates.
+    Returns dict keyed by source_ip."""
     try:
-        with open(MLAT_LOG_PATH, "r") as f:
-            # Read last 100 lines for recent connections/disconnections
-            lines = f.readlines()[-200:]
-
-        # Track connect/disconnect per IP
-        connected = {}
-        for line in lines:
-            # Match: "Handshake successful" lines with IP
-            m = re.search(r'\[(\d+\.\d+\.\d+\.\d+):\d+\] Handshake successful', line)
-            if m:
-                connected[m.group(1)] = True
-                continue
-            # Match: disconnect/lost lines
-            m = re.search(r'\[(\d+\.\d+\.\d+\.\d+):\d+\].*(lost|disconnect|closed)', line, re.I)
-            if m:
-                connected[m.group(1)] = False
-
-        mlat_ips = {ip for ip, status in connected.items() if status}
+        with open(MLAT_CLIENTS_PATH, "r") as f:
+            data = json.load(f)
+        clients = {}
+        for user, info in data.items():
+            ip = info.get("source_ip")
+            if ip:
+                clients[ip] = {
+                    "name": info.get("user", user),
+                    "lat": info.get("lat"),
+                    "lon": info.get("lon"),
+                    "alt": info.get("alt"),
+                    "message_rate": info.get("message_rate", 0),
+                    "peer_count": info.get("peer_count", 0),
+                }
+        return clients
     except (FileNotFoundError, PermissionError):
-        pass
+        return {}
     except Exception as e:
-        print(f"[proxy] MLAT log parse error: {e}")
-    return mlat_ips
+        print(f"[proxy] MLAT clients.json error: {e}")
+        return {}
 
 
 async def stats_flusher():
@@ -222,8 +203,8 @@ async def stats_flusher():
     while True:
         await asyncio.sleep(STATS_INTERVAL)
 
-        # Check which IPs are connected to MLAT
-        mlat_ips = get_mlat_connected_ips()
+        # Read MLAT client data (includes coordinates)
+        mlat_clients = get_mlat_clients()
 
         # Flush counters for all active feeders
         for conn_info in list(active_connections.values()):
@@ -242,9 +223,16 @@ async def stats_flusher():
             else:
                 db.touch_feeder(feeder_id)
 
-            # Update MLAT status
-            is_mlat = ip in mlat_ips
-            db.update_feeder_mlat(feeder_id, is_mlat)
+            # Update MLAT status and coordinates from mlat-server
+            mlat_info = mlat_clients.get(ip)
+            if mlat_info:
+                db.update_feeder_mlat(feeder_id, True,
+                                      mlat_info.get("lat"),
+                                      mlat_info.get("lon"),
+                                      mlat_info.get("alt"),
+                                      mlat_info.get("name"))
+            else:
+                db.update_feeder_mlat(feeder_id, False)
 
         # Get aircraft count from readsb
         total_ac, with_pos = get_readsb_aircraft_count()
@@ -255,7 +243,7 @@ async def stats_flusher():
 
         # Status line
         count = len(active_connections)
-        mlat_count = sum(1 for c in active_connections.values() if c["ip"] in mlat_ips)
+        mlat_count = len(mlat_clients)
         uptime = int(time.time() - start_time)
         hours, remainder = divmod(uptime, 3600)
         minutes, seconds = divmod(remainder, 60)
@@ -265,29 +253,25 @@ async def stats_flusher():
             f"uptime {hours}h{minutes}m{seconds}s"
         )
 
-        # Refresh VPN caches periodically
         vpn_resolver.refresh_caches()
 
 
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.24")
+    print("TAKNET-PS Beast Proxy v1.0.25")
     print(f"  Listening on {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Forwarding to {READSB_HOST}:{READSB_PORT}")
     print(f"  Stats interval: {STATS_INTERVAL}s")
-    print(f"  MLAT log: {MLAT_LOG_PATH}")
+    print(f"  MLAT clients: {MLAT_CLIENTS_PATH}")
     print(f"  Tailscale: {'enabled' if vpn_resolver.TAILSCALE_ENABLED else 'disabled'}")
     print(f"  NetBird:   {'enabled' if vpn_resolver.NETBIRD_ENABLED else 'disabled'}")
     print(f"  GeoIP:     {'enabled' if geoip_helper.GEOIP_ENABLED else 'disabled'}")
     print("=" * 60)
 
-    # Initialize database
     db.init_db()
 
     server = await asyncio.start_server(handle_client, LISTEN_HOST, LISTEN_PORT)
-
-    # Start periodic stats flusher
     asyncio.create_task(stats_flusher())
 
     async with server:
@@ -295,7 +279,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Handle graceful shutdown
     loop = asyncio.new_event_loop()
 
     def shutdown_handler():

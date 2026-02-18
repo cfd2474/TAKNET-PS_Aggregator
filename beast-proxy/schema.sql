@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.24
+-- TAKNET-PS Aggregator Database Schema v1.0.25
 
 -- Feeder registry
 CREATE TABLE IF NOT EXISTS feeders (
@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     location TEXT,
     latitude REAL,
     longitude REAL,
+    altitude REAL,
     tar1090_url TEXT,
     graphs1090_url TEXT,
     first_seen DATETIME NOT NULL,
