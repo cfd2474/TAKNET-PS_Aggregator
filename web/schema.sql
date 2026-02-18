@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.7
+-- TAKNET-PS Aggregator Database Schema v1.0.8
 
 -- Feeder registry
 CREATE TABLE IF NOT EXISTS feeders (

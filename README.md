@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.7
+# TAKNET-PS Aggregator v1.0.8
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -581,9 +581,9 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.7)
+├── VERSION                         # Aggregator version (1.0.8)
 ├── README.md                       # This file
-├── .env.example                    # Environment variable template
+├── env.example                     # Environment variable template
 ├── .gitignore
 ├── docker-compose.yml              # Full 6-container stack definition
 ├── install.sh                      # Automated installer for Rocky Linux
@@ -681,4 +681,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.7 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.8 — Built for public safety ADS-B operations.*

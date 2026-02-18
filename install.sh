@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.7 — Installer
+# TAKNET-PS Aggregator v1.0.8 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -92,8 +92,8 @@ fi
 
 # Create .env if missing — preserve existing on upgrades
 if [ ! -f "$INSTALL_DIR/.env" ]; then
-    if [ -f "$INSTALL_DIR/.env.example" ]; then
-        cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+    if [ -f "$INSTALL_DIR/env.example" ]; then
+        cp "$INSTALL_DIR/env.example" "$INSTALL_DIR/.env"
     else
         # Generate default .env inline
         cat > "$INSTALL_DIR/.env" << 'ENVEOF'
