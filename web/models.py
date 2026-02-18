@@ -173,6 +173,32 @@ class ActivityModel:
         conn.close()
 
 
+# ── Update History ───────────────────────────────────────────────────────────
+
+class UpdateModel:
+    @staticmethod
+    def log_update(from_version, to_version, success, output=""):
+        conn = get_db()
+        conn.execute(
+            """INSERT INTO update_history
+               (from_version, to_version, success, output, timestamp)
+               VALUES (?, ?, ?, ?, datetime('now'))""",
+            (from_version, to_version, 1 if success else 0, output),
+        )
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def get_history(limit=6):
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT * FROM update_history ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        conn.close()
+        return dict_rows(rows)
+
+
 # ── Background Tasks ─────────────────────────────────────────────────────────
 
 def mark_stale_feeders():

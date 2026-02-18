@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.27 — Installer
+# TAKNET-PS Aggregator v1.0.28 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -40,6 +40,10 @@ for pkg in git curl jq tar; do
         dnf install -y "$pkg" 2>/dev/null || true
     fi
 done
+if ! command -v sqlite3 &>/dev/null; then
+    info "Installing sqlite..."
+    dnf install -y sqlite 2>/dev/null || true
+fi
 
 # ── Determine source: local repo or curl pipe ──────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" 2>/dev/null && pwd)"
@@ -158,6 +162,7 @@ case "${1:-help}" in
         docker compose logs ${2:---tail=50} ${3:-}
         ;;
     update)
+        OLD_VERSION=$(cat VERSION 2>/dev/null || echo "unknown")
         echo "Pulling latest from GitHub..."
         TMPDIR=$(mktemp -d)
         git clone --depth 1 https://github.com/cfd2474/TAKNET-PS_Aggregator.git "$TMPDIR/repo"
@@ -167,7 +172,14 @@ case "${1:-help}" in
         rm -rf "$INSTALL_DIR/.git" "$TMPDIR"
         docker compose pull 2>/dev/null || true
         docker compose up -d --build
-        echo "Updated to v$(cat VERSION 2>/dev/null || echo unknown)"
+        NEW_VERSION=$(cat VERSION 2>/dev/null || echo "unknown")
+        echo "Updated from v$OLD_VERSION to v$NEW_VERSION"
+        # Log update to database
+        DB_FILE="/var/lib/docker/volumes/taknet-db-data/_data/aggregator.db"
+        if command -v sqlite3 &>/dev/null && [ -f "$DB_FILE" ]; then
+            sqlite3 "$DB_FILE" "CREATE TABLE IF NOT EXISTS update_history (id INTEGER PRIMARY KEY AUTOINCREMENT, from_version TEXT, to_version TEXT, success BOOLEAN DEFAULT 1, output TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);"
+            sqlite3 "$DB_FILE" "INSERT INTO update_history (from_version, to_version, success, output) VALUES ('$OLD_VERSION', '$NEW_VERSION', 1, 'Updated via taknet-agg update');"
+        fi
         ;;
     rebuild)
         docker compose up -d --build --force-recreate

@@ -150,10 +150,13 @@ services:
       - NETBIRD_ENABLED=${NETBIRD_ENABLED:-false}
       - NETBIRD_API_URL=${NETBIRD_API_URL:-http://localhost:33073}
       - NETBIRD_API_TOKEN=${NETBIRD_API_TOKEN:-}
+      - GITHUB_REPO=${GITHUB_REPO:-cfd2474/TAKNET-PS_Aggregator}
+      - INSTALL_DIR=/opt/taknet-aggregator
     volumes:
       - db-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/run/tailscale:/var/run/tailscale:ro
+      - /opt/taknet-aggregator/RELEASES.json:/app/RELEASES.json:ro
     networks:
       - taknet-internal
     depends_on:

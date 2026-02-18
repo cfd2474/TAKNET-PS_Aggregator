@@ -1,5 +1,6 @@
 """API routes — JSON endpoints for dashboard data."""
 
+import json
 import os
 import time
 
@@ -7,7 +8,7 @@ import psutil
 import requests as http_requests
 from flask import Blueprint, jsonify, request
 
-from models import FeederModel, ConnectionModel, ActivityModel
+from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel
 from services.docker_service import get_containers, restart_container, get_logs
 from services.vpn_service import get_combined_status
 
@@ -15,6 +16,8 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 
 READSB_HOST = os.environ.get("READSB_HOST", "readsb")
 SITE_NAME = os.environ.get("SITE_NAME", "TAKNET-PS Aggregator")
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "cfd2474/TAKNET-PS_Aggregator")
+INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
 
 _start_time = time.time()
 
@@ -147,6 +150,73 @@ def activity():
 def system_info():
     """System resource information."""
     return jsonify(_get_system_info())
+
+
+# ── Updates ──────────────────────────────────────────────────────────────────
+
+@bp.route("/updates/check")
+def updates_check():
+    """Check GitHub for latest version."""
+    try:
+        url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/VERSION"
+        resp = http_requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            latest = resp.text.strip()
+            current = _get_current_version()
+            return jsonify({
+                "current": current,
+                "latest": latest,
+                "update_available": latest != current,
+            })
+        return jsonify({"error": f"GitHub returned {resp.status_code}"}), 502
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/updates/run", methods=["POST"])
+def updates_run():
+    """Update must be run via SSH: taknet-agg update"""
+    return jsonify({
+        "error": "Run 'taknet-agg update' via SSH on the server.",
+        "command": "taknet-agg update",
+    }), 400
+
+
+@bp.route("/updates/releases")
+def updates_releases():
+    """Return release notes from RELEASES.json."""
+    limit = request.args.get("limit", 6, type=int)
+    try:
+        # Check mounted path first, then install dir, then relative
+        for path in ["/app/RELEASES.json",
+                     os.path.join(INSTALL_DIR, "RELEASES.json"),
+                     os.path.join(os.path.dirname(os.path.dirname(__file__)), "RELEASES.json")]:
+            if os.path.exists(path):
+                with open(path) as f:
+                    releases = json.load(f)
+                return jsonify({"releases": releases[:limit]})
+        return jsonify({"releases": []})
+    except Exception as e:
+        return jsonify({"error": str(e), "releases": []}), 500
+
+
+@bp.route("/updates/history")
+def updates_history():
+    """Return past update log."""
+    limit = request.args.get("limit", 6, type=int)
+    history = UpdateModel.get_history(limit)
+    return jsonify({"history": history})
+
+
+def _get_current_version():
+    """Read current VERSION file."""
+    try:
+        vpath = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
+        if os.path.exists(vpath):
+            return open(vpath).read().strip()
+    except Exception:
+        pass
+    return "unknown"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

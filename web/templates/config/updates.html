@@ -2,20 +2,50 @@
 {% block page_title %}Updates{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width:600px;">
-    <div class="card-header"><h3>Version Information</h3></div>
+<!-- Version Check -->
+<div class="card" style="max-width:700px;">
+    <div class="card-header">
+        <h3>Version Information</h3>
+        <button class="btn" onclick="checkUpdate()" id="btn-check" style="font-size:12px;">Check Now</button>
+    </div>
     <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;">
         <span style="color:var(--text-muted)">Installed</span>
-        <span style="font-weight:600;color:var(--text-primary)">v{{ version }}</span>
+        <span style="font-weight:600;color:var(--text-primary);font-family:monospace;">v{{ version }}</span>
         <span style="color:var(--text-muted)">Latest</span>
-        <span id="latest-version" style="color:var(--text-secondary)">Checking...</span>
+        <span id="latest-version" style="font-family:monospace;">Checking...</span>
     </div>
-    <div style="margin-top:20px;" id="update-actions">
-        <button class="btn" onclick="checkUpdate()">Check for Updates</button>
+
+    <!-- Update Available Banner -->
+    <div id="update-banner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;">
+        <div style="font-weight:600;color:var(--blue);margin-bottom:8px;">Update Available</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+            Run the following command on the server via SSH:
+        </div>
+        <div style="position:relative;">
+            <pre id="update-cmd" style="background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:12px 16px;font-size:13px;color:var(--green);overflow-x:auto;margin:0;">taknet-agg update</pre>
+            <button onclick="copyCmd()" style="position:absolute;top:8px;right:8px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11px;color:var(--text-muted);cursor:pointer;" id="btn-copy">Copy</button>
+        </div>
     </div>
-    <div id="update-notes" style="margin-top:16px;display:none;">
-        <div class="card-header"><h3>Release Notes</h3></div>
-        <div id="release-notes" style="font-size:13px;color:var(--text-secondary);line-height:1.6;"></div>
+
+    <!-- Up to Date Banner -->
+    <div id="uptodate-banner" style="display:none;margin-top:16px;padding:12px 16px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;">
+        <span style="color:var(--green);font-weight:500;">&#10003; You're running the latest version</span>
+    </div>
+</div>
+
+<!-- Release Notes -->
+<div class="card" style="margin-top:16px;max-width:700px;">
+    <div class="card-header"><h3>Release Notes</h3></div>
+    <div id="release-notes" style="font-size:13px;">
+        <div style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</div>
+    </div>
+</div>
+
+<!-- Update History -->
+<div class="card" style="margin-top:16px;max-width:700px;">
+    <div class="card-header"><h3>Update History</h3></div>
+    <div id="update-history">
+        <div style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</div>
     </div>
 </div>
 {% endblock %}
@@ -25,11 +55,115 @@
 const currentVersion = '{{ version }}';
 
 async function checkUpdate() {
-    document.getElementById('latest-version').textContent = 'Checking...';
-    // Placeholder — in production this would check GitHub releases API
-    document.getElementById('latest-version').innerHTML =
-        '<span style="color:var(--green)">v' + currentVersion + ' (up to date)</span>';
+    const el = document.getElementById('latest-version');
+    const btn = document.getElementById('btn-check');
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+    el.innerHTML = '<span style="color:var(--text-muted)">Checking...</span>';
+
+    try {
+        const r = await fetch('/api/updates/check');
+        const d = await r.json();
+
+        if (d.error) {
+            el.innerHTML = '<span style="color:var(--red)">Error: ' + d.error + '</span>';
+        } else if (d.update_available) {
+            el.innerHTML = '<span style="color:var(--blue);font-weight:600;">v' + d.latest + ' available</span>';
+            document.getElementById('update-banner').style.display = 'block';
+            document.getElementById('uptodate-banner').style.display = 'none';
+        } else {
+            el.innerHTML = '<span style="color:var(--green);font-weight:500;">v' + d.latest + '</span>';
+            document.getElementById('uptodate-banner').style.display = 'block';
+            document.getElementById('update-banner').style.display = 'none';
+        }
+    } catch(e) {
+        el.innerHTML = '<span style="color:var(--red)">Network error</span>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Check Now';
 }
+
+function copyCmd() {
+    navigator.clipboard.writeText('taknet-agg update').then(() => {
+        const btn = document.getElementById('btn-copy');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+}
+
+async function loadReleases() {
+    try {
+        const r = await fetch('/api/updates/releases?limit=6');
+        const d = await r.json();
+        const releases = d.releases || [];
+        const el = document.getElementById('release-notes');
+
+        if (releases.length === 0) {
+            el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;">No release notes available</div>';
+            return;
+        }
+
+        let html = '';
+        releases.forEach((rel, i) => {
+            const isCurrent = rel.version === currentVersion;
+            const highlight = isCurrent ? 'border-left:3px solid var(--green);padding-left:12px;' : 'padding-left:15px;';
+            html += '<div style="' + highlight + 'margin-bottom:16px;' + (i < releases.length-1 ? 'padding-bottom:16px;border-bottom:1px solid var(--border);' : '') + '">';
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+            html += '<span style="font-weight:600;font-family:monospace;color:var(--text-primary);">v' + rel.version + '</span>';
+            if (isCurrent) {
+                html += '<span class="badge badge-live" style="font-size:10px;">installed</span>';
+            }
+            html += '<span style="color:var(--text-muted);font-size:12px;margin-left:auto;">' + rel.date + '</span>';
+            html += '</div>';
+            html += '<div style="color:var(--text-secondary);line-height:1.5;">' + rel.notes + '</div>';
+            html += '</div>';
+        });
+        el.innerHTML = html;
+    } catch(e) {
+        document.getElementById('release-notes').innerHTML =
+            '<div style="text-align:center;color:var(--red);padding:20px;">Failed to load release notes</div>';
+    }
+}
+
+async function loadHistory() {
+    try {
+        const r = await fetch('/api/updates/history?limit=6');
+        const d = await r.json();
+        const history = d.history || [];
+        const el = document.getElementById('update-history');
+
+        if (history.length === 0) {
+            el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;">No updates performed yet</div>';
+            return;
+        }
+
+        let html = '<div class="table-wrap"><table><thead><tr>';
+        html += '<th>Date</th><th>From</th><th>To</th><th>Status</th>';
+        html += '</tr></thead><tbody>';
+
+        history.forEach(h => {
+            const status = h.success
+                ? '<span style="color:var(--green);">&#10003; Success</span>'
+                : '<span style="color:var(--red);">&#10007; Failed</span>';
+            html += '<tr>';
+            html += '<td>' + fmtTime(h.timestamp) + '</td>';
+            html += '<td style="font-family:monospace;font-size:12px;">v' + (h.from_version || '?') + '</td>';
+            html += '<td style="font-family:monospace;font-size:12px;">v' + (h.to_version || '?') + '</td>';
+            html += '<td>' + status + '</td>';
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        el.innerHTML = html;
+    } catch(e) {
+        document.getElementById('update-history').innerHTML =
+            '<div style="text-align:center;color:var(--text-muted);padding:20px;">Failed to load history</div>';
+    }
+}
+
 checkUpdate();
+loadReleases();
+loadHistory();
 </script>
 {% endblock %}

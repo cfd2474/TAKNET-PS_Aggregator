@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.27
+-- TAKNET-PS Aggregator Database Schema v1.0.28
 
 -- Feeder registry
 CREATE TABLE IF NOT EXISTS feeders (
@@ -52,6 +52,16 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Update history
+CREATE TABLE IF NOT EXISTS update_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_version TEXT,
+    to_version TEXT,
+    success BOOLEAN DEFAULT 1,
+    output TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes

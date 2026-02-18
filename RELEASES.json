@@ -1,0 +1,147 @@
+[
+  {
+    "version": "1.0.28",
+    "date": "2026-02-18",
+    "notes": "Updates page with version check against GitHub, release notes display, and update history log. taknet-agg update now logs to database."
+  },
+  {
+    "version": "1.0.27",
+    "date": "2026-02-18",
+    "notes": "Feeder names auto-populated from MLAT handshake data, overriding default IP-based naming."
+  },
+  {
+    "version": "1.0.26",
+    "date": "2026-02-18",
+    "notes": "Web UI now displays feeder coordinates, altitude, and MLAT status. Feeders list shows location and MLAT columns."
+  },
+  {
+    "version": "1.0.25",
+    "date": "2026-02-18",
+    "notes": "Beast frame parsing for accurate message/position counts. MLAT clients.json integration for coordinates, altitude, and connection status. Added altitude column to schema."
+  },
+  {
+    "version": "1.0.24",
+    "date": "2026-02-18",
+    "notes": "Beast protocol frame counting, position tracking, MLAT detection via shared log volume. Replaced per-flush counters with real message stats."
+  },
+  {
+    "version": "1.0.23",
+    "date": "2026-02-18",
+    "notes": "Time-based stats flushing every 30s. Feeders stay active while connected. Aircraft count from readsb. GeoIP enabled by default. Removed stale host mount for mmdb."
+  },
+  {
+    "version": "1.0.22",
+    "date": "2026-02-18",
+    "notes": "Fixed tar1090 read-only filesystem error. Replaced shared readsb volume with tmpfs mounts for tar1090's internal readsb."
+  },
+  {
+    "version": "1.0.21",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server arguments for wiedehopf fork: --basestation-listen/connect instead of --results."
+  },
+  {
+    "version": "1.0.20",
+    "date": "2026-02-18",
+    "notes": "Added required --work-dir=/tmp argument for mlat-server."
+  },
+  {
+    "version": "1.0.19",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server Dockerfile — runs script directly from cloned repo instead of pip module. Installs all Python dependencies."
+  },
+  {
+    "version": "1.0.18",
+    "date": "2026-02-18",
+    "notes": "GeoIP auto-download built into beast-proxy image using db-ip.com City Lite database. No registration required."
+  },
+  {
+    "version": "1.0.17",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server entrypoint from binary to python3 -m. Corrected executable path resolution."
+  },
+  {
+    "version": "1.0.16",
+    "date": "2026-02-18",
+    "notes": "Healthcheck set to always-pass for readsb container. Resolves dependency startup failures."
+  },
+  {
+    "version": "1.0.15",
+    "date": "2026-02-18",
+    "notes": "Explicit healthcheck override for readsb. Removed service_healthy dependencies."
+  },
+  {
+    "version": "1.0.14",
+    "date": "2026-02-18",
+    "notes": "Switched all container dependencies to service_started. Removed custom healthcheck."
+  },
+  {
+    "version": "1.0.13",
+    "date": "2026-02-18",
+    "notes": "Changed readsb healthcheck from file check to process check. Added start_period grace."
+  },
+  {
+    "version": "1.0.12",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server build: added Cython and build-essential dependencies for C extension compilation."
+  },
+  {
+    "version": "1.0.11",
+    "date": "2026-02-18",
+    "notes": "Custom mlat-server Dockerfile — builds from wiedehopf/mlat-server source since no published image exists."
+  },
+  {
+    "version": "1.0.10",
+    "date": "2026-02-18",
+    "notes": "Complete install.sh rewrite. Full validation suite: bash syntax, Python compile, YAML parse, heredoc balance."
+  },
+  {
+    "version": "1.0.9",
+    "date": "2026-02-18",
+    "notes": "Fixed unquoted SITE_NAME causing bash source error. Safe env variable extraction."
+  },
+  {
+    "version": "1.0.8",
+    "date": "2026-02-18",
+    "notes": "Renamed .env.example to env.example for macOS Finder/GitHub Desktop visibility."
+  },
+  {
+    "version": "1.0.7",
+    "date": "2026-02-18",
+    "notes": "Fixed dotfile deployment with shopt dotglob fallback for systems without rsync."
+  },
+  {
+    "version": "1.0.6",
+    "date": "2026-02-18",
+    "notes": "Added Fresh VPS Setup section to README. Installer bootstraps its own dependencies."
+  },
+  {
+    "version": "1.0.5",
+    "date": "2026-02-18",
+    "notes": "GitHub curl-pipe installer with auto-clone. Supports both curl-pipe and local clone workflows."
+  },
+  {
+    "version": "1.0.4",
+    "date": "2026-02-18",
+    "notes": "Removed parallel/cutover mode. WEB_PORT defaults to 80."
+  },
+  {
+    "version": "1.0.3",
+    "date": "2026-02-18",
+    "notes": "MLAT server wired into Docker stack with client and results ports."
+  },
+  {
+    "version": "1.0.2",
+    "date": "2026-02-18",
+    "notes": "Port corrections: Beast 30004, MLAT 30105, MLAT results 39001. Tailscale runs on host."
+  },
+  {
+    "version": "1.0.1",
+    "date": "2026-02-18",
+    "notes": "Detailed README with architecture overview, port map, and deployment instructions."
+  },
+  {
+    "version": "1.0.0",
+    "date": "2026-02-18",
+    "notes": "Initial Docker-based aggregator build. Six containers: beast-proxy, readsb, mlat-server, tar1090, dashboard, nginx."
+  }
+]
