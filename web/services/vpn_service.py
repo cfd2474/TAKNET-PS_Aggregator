@@ -29,8 +29,9 @@ def get_tailscale_status():
                     self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                     self.sock.connect(sock_path)
 
-            conn = TSConn("localhost")
-            conn.request("GET", "/localapi/v0/status")
+            conn = TSConn("local-tailscaled.sock")
+            conn.request("GET", "/localapi/v0/status",
+                         headers={"Sec-Tailscale": "localapi"})
             resp = conn.getresponse()
             if resp.status == 200:
                 data = json.loads(resp.read())

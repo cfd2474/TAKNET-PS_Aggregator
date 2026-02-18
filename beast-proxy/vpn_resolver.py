@@ -100,8 +100,9 @@ def _resolve_tailscale(ip_str):
                     self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                     self.sock.connect(sock_path)
 
-            conn = TailscaleConnection("localhost")
-            conn.request("GET", "/localapi/v0/status")
+            conn = TailscaleConnection("local-tailscaled.sock")
+            conn.request("GET", "/localapi/v0/status",
+                         headers={"Sec-Tailscale": "localapi"})
             resp = conn.getresponse()
             if resp.status == 200:
                 data = json.loads(resp.read())
