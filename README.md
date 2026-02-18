@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.17
+# TAKNET-PS Aggregator v1.0.18
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -218,7 +218,7 @@ Tailscale runs directly on the host. Its daemon socket is mounted read-only into
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEOIP_ENABLED` | `false` | Enable GeoIP lookups for public IP feeders. Requires MaxMind database file. |
+| `GEOIP_ENABLED` | `true` | Enable GeoIP lookups for public IP feeders. Database is auto-downloaded at build time. |
 
 ---
 
@@ -296,7 +296,7 @@ When a feeder connects to the beast-proxy on port 30004, the proxy classifies th
 
 2. **NetBird** — IP falls within `NETBIRD_CIDR` and is confirmed via the NetBird management API. Hostname is resolved from the `/api/peers` endpoint.
 
-3. **Public** — Any IP not matching a VPN range. Optionally geolocated via MaxMind GeoLite2-City database.
+3. **Public** — Any IP not matching a VPN range. Geolocated via db-ip.com City Lite database (auto-downloaded).
 
 When both VPNs use overlapping CIDR ranges (both default to `100.64.0.0/10`), the proxy checks Tailscale first (as the current production VPN), then NetBird. If neither API confirms the peer, the IP is still classified by whichever CIDR range matches.
 
@@ -459,12 +459,13 @@ All endpoints return JSON. Base path: `/api/`
 
 ## GeoIP Setup
 
-GeoIP is optional and only used for public IP feeders (not VPN). To enable:
+GeoIP is built in automatically. The beast-proxy container downloads the free [db-ip.com](https://db-ip.com/db/lite.php) City Lite database at build time (mmdb format, no registration required). It is enabled by default (`GEOIP_ENABLED=true` in `.env`).
 
-1. Create a free account at [MaxMind](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)
-2. Download the `GeoLite2-City.mmdb` file
-3. Place it at `/opt/taknet-aggregator/beast-proxy/GeoLite2-City.mmdb`
-4. Set `GEOIP_ENABLED=true` in `.env`
+To refresh the database, rebuild the beast-proxy container:
+
+```bash
+taknet-agg rebuild
+```
 5. Restart: `taknet-agg restart beast-proxy`
 
 Public IP feeders will now show city/state location in the dashboard and get auto-generated names like `feeder-corona-ca-a3f2`.
@@ -581,7 +582,7 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.17)
+├── VERSION                         # Aggregator version (1.0.18)
 ├── README.md                       # This file
 ├── env.example                     # Environment variable template
 ├── .gitignore
@@ -595,9 +596,9 @@ taknet-aggregator/
 │   ├── proxy.py                    # Async TCP server — listens on 30004
 │   ├── db.py                       # SQLite write operations
 │   ├── vpn_resolver.py             # Tailscale + NetBird IP classification
-│   ├── geoip_helper.py             # MaxMind GeoIP lookups for public IPs
+│   ├── geoip_helper.py             # GeoIP lookups for public IPs (db-ip.com)
 │   ├── schema.sql                  # Database schema (CREATE TABLE IF NOT EXISTS)
-│   └── GeoLite2-City.mmdb          # User-provided — not in repo
+│   └── GeoLite2-City.mmdb          # Auto-downloaded at build time
 │
 ├── mlat-server/                    # MLAT Server container
 │   └── Dockerfile                  # Builds from wiedehopf/mlat-server GitHub repo
@@ -684,4 +685,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.17 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.18 — Built for public safety ADS-B operations.*

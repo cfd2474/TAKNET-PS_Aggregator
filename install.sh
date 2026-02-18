@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.17 — Installer
+# TAKNET-PS Aggregator v1.0.18 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -114,18 +114,12 @@ NETBIRD_ENABLED=false
 NETBIRD_API_URL=http://localhost:33073
 NETBIRD_API_TOKEN=
 NETBIRD_CIDR=100.64.0.0/10
-GEOIP_ENABLED=false
+GEOIP_ENABLED=true
 ENVEOF
     warn "Created .env with defaults — edit $INSTALL_DIR/.env to customize"
 fi
 
-# ── 4. GeoIP placeholder ───────────────────────────────────────────────────
-if [ ! -s "$INSTALL_DIR/beast-proxy/GeoLite2-City.mmdb" ]; then
-    touch "$INSTALL_DIR/beast-proxy/GeoLite2-City.mmdb"
-    warn "GeoIP: place GeoLite2-City.mmdb in $INSTALL_DIR/beast-proxy/ to enable"
-fi
-
-# ── 5. Firewall ─────────────────────────────────────────────────────────────
+# ── 4. Firewall ─────────────────────────────────────────────────────────────
 if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld; then
     info "Opening firewall ports..."
     eval "$(grep -E '^(WEB_PORT|BEAST_PORT|SBS_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)"
