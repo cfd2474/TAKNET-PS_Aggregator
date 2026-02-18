@@ -41,15 +41,40 @@
         <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
             <span style="color:var(--text-muted)">Messages</span>
             <span style="color:var(--text-primary);font-weight:500">{{ '{:,}'.format(feeder.messages_received or 0) }}</span>
-            <span style="color:var(--text-muted)">Data Received</span>
-            <span id="fd-bytes">{{ feeder.bytes_received or 0 }}</span>
             <span style="color:var(--text-muted)">Positions</span>
             <span>{{ '{:,}'.format(feeder.positions_received or 0) }}</span>
+            <span style="color:var(--text-muted)">Data Received</span>
+            <span id="fd-bytes">{{ feeder.bytes_received or 0 }}</span>
             <span style="color:var(--text-muted)">MLAT</span>
-            <span>{{ 'Enabled' if feeder.mlat_enabled else 'Disabled' }}</span>
+            <span>
+                {% if feeder.mlat_enabled %}
+                    <span class="badge badge-live">Enabled</span>
+                {% else %}
+                    <span style="color:var(--text-muted)">Disabled</span>
+                {% endif %}
+            </span>
         </div>
     </div>
 </div>
+
+<!-- Coordinates (from MLAT handshake) -->
+{% if feeder.latitude is not none and feeder.longitude is not none %}
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>Feeder Location</h3></div>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
+        <span style="color:var(--text-muted)">Latitude</span>
+        <span style="font-family:monospace;">{{ '%.6f' | format(feeder.latitude) }}</span>
+        <span style="color:var(--text-muted)">Longitude</span>
+        <span style="font-family:monospace;">{{ '%.6f' | format(feeder.longitude) }}</span>
+        {% if feeder.altitude is not none %}
+        <span style="color:var(--text-muted)">Altitude</span>
+        <span style="font-family:monospace;">{{ '%.1f' | format(feeder.altitude) }} m ({{ '%.0f' | format(feeder.altitude * 3.28084) }} ft)</span>
+        {% endif %}
+        <span style="color:var(--text-muted)">Source</span>
+        <span style="color:var(--text-muted);font-size:12px;">Coordinates from MLAT client handshake</span>
+    </div>
+</div>
+{% endif %}
 
 <!-- Edit Form -->
 <div class="card" style="margin-top:16px;">
