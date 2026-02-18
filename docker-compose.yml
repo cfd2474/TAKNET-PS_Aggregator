@@ -76,8 +76,9 @@ services:
     restart: unless-stopped
     command:
       - --client-listen=0.0.0.0:30105
-      - --results=beast,listen,39001
-      - --results=beast,connect,readsb:30006
+      - --basestation-listen=39001
+      - --basestation-connect=readsb:30006
+      - --work-dir=/tmp
     environment:
       - TZ=${TZ:-America/Los_Angeles}
     ports:
