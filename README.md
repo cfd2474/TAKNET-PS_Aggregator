@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.3
+# TAKNET-PS Aggregator v1.0.4
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of Raspberry Pi feeders connected via Tailscale VPN, NetBird VPN, or public IP, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -14,7 +14,6 @@ Distributed ADS-B aircraft tracking aggregation system designed for multi-agency
 - [CLI Reference](#cli-reference)
 - [Dashboard Pages](#dashboard-pages)
 - [VPN Support](#vpn-support)
-- [Parallel Deployment & Cutover](#parallel-deployment--cutover)
 - [Port Reference](#port-reference)
 - [Data Flow](#data-flow)
 - [Database](#database)
@@ -39,7 +38,6 @@ TAKNET-PS Aggregator replaces a bare-metal readsb/tar1090 installation with a fu
 - Track per-feeder connection history, byte counts, and message stats in SQLite
 - Display aggregated aircraft on a tar1090 map with graphs1090 statistics
 - Provide Docker container management (restart, logs) from the web UI
-- Support zero-downtime parallel deployment alongside an existing aggregator
 - Run everything from a single `docker compose up -d` command
 
 ---
@@ -55,7 +53,7 @@ Six Docker containers in one compose stack on a shared bridge network (`taknet-i
 | `mlat-server` | ghcr.io/wiedehopf/mlat-server | 30105/tcp (in), 39001/tcp (results) | Multilateration — calculates positions from multiple feeder timing data |
 | `tar1090` | ghcr.io/sdr-enthusiasts/docker-tar1090 | *(internal only)* | Aircraft map visualization and graphs1090 performance statistics |
 | `dashboard` | Custom (Flask/Gunicorn) | *(internal only)* | Web UI, REST API, background scheduler for feeder status updates |
-| `nginx` | nginx:alpine | WEB_PORT (default 8080) | Reverse proxy routing all web traffic to dashboard, tar1090, and graphs1090 |
+| `nginx` | nginx:alpine | WEB_PORT (default 80) | Reverse proxy routing all web traffic to dashboard, tar1090, and graphs1090 |
 
 ```
                                Tailscale (on host)
@@ -68,7 +66,7 @@ Feeders (Pi) ──Beast 30004──▶ beast-proxy ──▶ readsb:30006 ─�
                 │                    │
                 │                    │ shared volume
                 │                    ▼
-                │             dashboard:5000 ◀── nginx:8080 ◀── Browser
+                │             dashboard:5000 ◀── nginx:80 ◀── Browser
                 │
                 └──MLAT 30105──▶ mlat-server ──results 39001──▶ Feeders
 ```
@@ -108,7 +106,7 @@ sudo bash install.sh
 ### From tar.gz Package
 
 ```bash
-tar xzf taknet-aggregator-v1.0.3.tar.gz
+tar xzf taknet-aggregator-v1.0.4.tar.gz
 cd taknet-aggregator
 cp .env.example .env
 nano .env
@@ -121,7 +119,7 @@ sudo bash install.sh
 2. Installs system dependencies (`curl`, `jq`)
 3. Copies files to `/opt/taknet-aggregator/`
 4. Creates `.env` from `.env.example` if it doesn't exist
-5. Configures firewalld rules for all required ports (30004, 30105, 39001, 30003, 8080)
+5. Configures firewalld rules for all required ports (30004, 30105, 39001, 30003, 80)
 6. Installs the `taknet-agg` CLI tool to `/usr/local/bin/`
 7. Runs `docker compose up -d --build` to build and start all containers
 
@@ -129,8 +127,8 @@ sudo bash install.sh
 
 ```bash
 taknet-agg status
-curl http://localhost:8080
-curl http://localhost:8080/api/status
+curl http://localhost:80
+curl http://localhost:80/api/status
 ```
 
 ---
@@ -143,7 +141,7 @@ All configuration is in `/opt/taknet-aggregator/.env`. Changes require a restart
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WEB_PORT` | `8080` | External port for the web dashboard. Change to `80` after cutover. |
+| `WEB_PORT` | `80` | External port for the web dashboard. |
 
 ### Aggregator Ports
 
@@ -210,7 +208,6 @@ taknet-agg <command> [args]
 | `logs` | Tail logs from all services. Filter by name: `taknet-agg logs beast-proxy` |
 | `update` | Pull latest images and rebuild (`docker compose pull && up -d --build`) |
 | `rebuild` | Force recreate all containers from scratch |
-| `cutover` | Switch `.env` to production ports (WEB_PORT=80, BEAST_PORT=30004) and restart |
 
 ---
 
@@ -289,56 +286,13 @@ Both VPNs work simultaneously — feeders on either VPN appear correctly classif
 
 ---
 
-## Parallel Deployment & Cutover
-
-This system is designed to run alongside an existing bare-metal aggregator with zero downtime.
-
-### Parallel Phase
-
-The old bare-metal aggregator currently listens on port 30004 (Beast) and port 80 (web). During parallel operation, temporarily use different ports:
-
-1. Set non-conflicting ports in `.env`:
-   ```
-   WEB_PORT=8080
-   BEAST_PORT=30014       # Temporary — avoids conflict with old system on 30004
-   ```
-
-2. Install and start: `sudo bash install.sh`
-
-3. Point 1-2 test feeders at the new Beast port (`<VPS_IP>:30014`)
-
-4. Verify at `http://<VPS_IP>:8080` — dashboard, map, and feeder tracking should all work
-
-5. Leave both systems running. Existing feeders stay on the old aggregator.
-
-### Cutover
-
-When ready to switch all feeders to the new system:
-
-```bash
-# Stop old bare-metal services
-sudo systemctl stop readsb tar1090 lighttpd
-
-# Switch TAKNET-PS to production ports
-taknet-agg cutover
-
-# Verify
-curl http://<VPS_IP>              # Dashboard on port 80
-nc -zv <VPS_IP> 30004            # Beast accepting connections
-nc -zv <VPS_IP> 30105            # MLAT accepting connections
-```
-
-All feeders pointing at `<VPS_IP>:30004` (Beast) and `<VPS_IP>:30105` (MLAT) will now connect to the new system.
-
----
-
 ## Port Reference
 
 ### External Ports (feeders and browsers connect to these)
 
 | Port | Protocol | Container | Direction | Description |
 |------|----------|-----------|-----------|-------------|
-| 8080 (→ 80) | TCP | nginx | Inbound | Web dashboard |
+| 80 | TCP | nginx | Inbound | Web dashboard |
 | 30004 | TCP | beast-proxy | Inbound | Beast reduce plus input from feeders |
 | 30105 | TCP | mlat-server | Inbound | MLAT data input from feeders |
 | 39001 | TCP | mlat-server | Outbound | MLAT position results back to feeders |
@@ -380,7 +334,7 @@ Feeder Pi ─── Beast reduce plus (port 30004) ───▶ beast-proxy
                           - manages Docker containers
                                  │
                                  ▼
-                            nginx (port 8080)
+                            nginx (port 80)
                                  │
                                  ▼
                               Browser
@@ -529,7 +483,7 @@ print(c.execute('SELECT COUNT(*) FROM feeders').fetchone())
 docker exec taknet-readsb cat /run/readsb/aircraft.json | jq '.aircraft | length'
 
 # Verify tar1090 is serving data
-curl -s http://localhost:8080/tar1090/data/aircraft.json | jq '.aircraft | length'
+curl -s http://localhost:80/tar1090/data/aircraft.json | jq '.aircraft | length'
 ```
 
 ### Tailscale peers not resolving
@@ -596,7 +550,7 @@ taknet-agg restart beast-proxy
 
 ```
 taknet-aggregator/
-├── VERSION                         # Aggregator version (1.0.3)
+├── VERSION                         # Aggregator version (1.0.4)
 ├── README.md                       # This file
 ├── .env.example                    # Environment variable template
 ├── .gitignore
@@ -696,4 +650,4 @@ This will:
 
 ---
 
-*TAKNET-PS Aggregator v1.0.3 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.4 — Built for public safety ADS-B operations.*

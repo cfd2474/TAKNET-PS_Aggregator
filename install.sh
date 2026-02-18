@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.3 — Installer
+# TAKNET-PS Aggregator v1.0.4 — Installer
 # Target: Rocky Linux 8.x / 9.x
 # =============================================================================
 set -e
@@ -8,7 +8,7 @@ set -e
 INSTALL_DIR="/opt/taknet-aggregator"
 DATA_DIR="/var/lib/taknet-aggregator"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.0.3")
+VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.0.4")
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -84,7 +84,7 @@ if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld;
     info "Configuring firewall..."
     # Source .env for ports
     source "$INSTALL_DIR/.env"
-    WEB=${WEB_PORT:-8080}
+    WEB=${WEB_PORT:-80}
     BEAST=${BEAST_PORT:-30004}
     SBS=${SBS_PORT:-30003}
     MLAT_IN=${MLAT_IN_PORT:-30105}
@@ -136,13 +136,6 @@ case "${1:-help}" in
     rebuild)
         docker compose up -d --build --force-recreate
         ;;
-    cutover)
-        echo "Switching to production ports (80, 30004)..."
-        sed -i 's/^WEB_PORT=.*/WEB_PORT=80/' .env
-        sed -i 's/^BEAST_PORT=.*/BEAST_PORT=30004/' .env
-        docker compose up -d --build
-        echo "Cutover complete. Dashboard on port 80, Beast on port 30004."
-        ;;
     help|*)
         echo "Usage: taknet-agg <command> [args]"
         echo ""
@@ -154,7 +147,6 @@ case "${1:-help}" in
         echo "  logs       Show logs (optional: service name)"
         echo "  update     Pull latest and restart"
         echo "  rebuild    Force rebuild all containers"
-        echo "  cutover    Switch to production ports (80/30004)"
         ;;
 esac
 CLIEOF
@@ -171,7 +163,7 @@ echo "=========================================="
 echo -e "  ${GREEN}Installation Complete!${NC}"
 echo "=========================================="
 echo ""
-echo "  Dashboard:  http://$(hostname -I | awk '{print $1}'):$(grep WEB_PORT .env | cut -d= -f2 || echo 8080)"
+echo "  Dashboard:  http://$(hostname -I | awk '{print $1}'):$(grep WEB_PORT .env | cut -d= -f2 || echo 80)"
 echo "  Beast Port: $(grep BEAST_PORT .env | cut -d= -f2 || echo 30004)"
 echo ""
 echo "  CLI:        taknet-agg status"
