@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.6 — Installer
+# TAKNET-PS Aggregator v1.0.7 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -78,11 +78,47 @@ docker compose version &>/dev/null || err "docker compose plugin not found"
 # ── 2. Deploy files ─────────────────────────────────────────────────────────
 info "Deploying to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"
-rsync -a --exclude='.git' "$SOURCE_DIR/" "$INSTALL_DIR/" 2>/dev/null || cp -a "$SOURCE_DIR"/. "$INSTALL_DIR/"
+
+# Copy everything including dotfiles
+if command -v rsync &>/dev/null; then
+    rsync -a --exclude='.git' "$SOURCE_DIR/" "$INSTALL_DIR/"
+else
+    # cp -a with glob + dotglob to catch hidden files
+    shopt -s dotglob
+    cp -a "$SOURCE_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
+    shopt -u dotglob
+    rm -rf "$INSTALL_DIR/.git" 2>/dev/null || true
+fi
 
 # Create .env if missing — preserve existing on upgrades
 if [ ! -f "$INSTALL_DIR/.env" ]; then
-    cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+    if [ -f "$INSTALL_DIR/.env.example" ]; then
+        cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+    else
+        # Generate default .env inline
+        cat > "$INSTALL_DIR/.env" << 'ENVEOF'
+WEB_PORT=80
+BEAST_PORT=30004
+SBS_PORT=30003
+MLAT_IN_PORT=30105
+MLAT_RESULTS_PORT=39001
+SITE_NAME=TAKNET-PS Aggregator
+SITE_LAT=33.8753
+SITE_LON=-117.5664
+SITE_ALT_FT=738
+TZ=America/Los_Angeles
+INSTALL_DIR=/opt/taknet-aggregator
+DATA_DIR=/var/lib/taknet-aggregator
+TAILSCALE_ENABLED=true
+TAILSCALE_API_SOCKET=/var/run/tailscale/tailscaled.sock
+TAILSCALE_CIDR=100.64.0.0/10
+NETBIRD_ENABLED=false
+NETBIRD_API_URL=http://localhost:33073
+NETBIRD_API_TOKEN=
+NETBIRD_CIDR=100.64.0.0/10
+GEOIP_ENABLED=false
+ENVEOF
+    fi
     warn "Created .env — edit /opt/taknet-aggregator/.env to customize"
 else
     ok "Existing .env preserved"
