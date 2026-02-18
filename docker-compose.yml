@@ -30,7 +30,7 @@ services:
       - taknet-internal
     depends_on:
       readsb:
-        condition: service_healthy
+        condition: service_started
 
   # Readsb — net-only ADS-B aggregator
   readsb:
@@ -60,13 +60,6 @@ services:
     tmpfs:
       - /tmp:size=64m
       - /var/log:size=32m
-    healthcheck:
-      test: ["CMD", "sh", "-c", "pgrep readsb > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-      start_period: 15s
 
   # MLAT Server — feeders send on 30105, results returned on 39001
   mlat-server:
@@ -88,7 +81,7 @@ services:
       - taknet-internal
     depends_on:
       readsb:
-        condition: service_healthy
+        condition: service_started
 
   # tar1090 + graphs1090
   tar1090:
@@ -117,7 +110,7 @@ services:
       - taknet-internal
     depends_on:
       readsb:
-        condition: service_healthy
+        condition: service_started
 
   # Flask Dashboard
   dashboard:
@@ -147,7 +140,7 @@ services:
       - taknet-internal
     depends_on:
       readsb:
-        condition: service_healthy
+        condition: service_started
       tar1090:
         condition: service_started
       beast-proxy:
