@@ -7,11 +7,10 @@ RUN apt-get update && \
 
 RUN git clone --depth 1 https://github.com/wiedehopf/mlat-server.git /opt/mlat-server && \
     cd /opt/mlat-server && \
-    python3 setup.py build_ext --inplace && \
-    python3 setup.py install && \
+    pip install --no-cache-dir . && \
     rm -rf /opt/mlat-server/.git
 
 EXPOSE 30105 39001
 
-ENTRYPOINT ["mlat-server"]
+ENTRYPOINT ["python3", "-m", "mlat.server"]
 CMD ["--client-listen=0.0.0.0:30105", "--results=beast,listen,39001"]
