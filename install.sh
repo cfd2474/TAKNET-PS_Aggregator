@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.8 — Installer
+# TAKNET-PS Aggregator v1.0.9 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -90,19 +90,22 @@ else
     rm -rf "$INSTALL_DIR/.git" 2>/dev/null || true
 fi
 
-# Create .env if missing — preserve existing on upgrades
-if [ ! -f "$INSTALL_DIR/.env" ]; then
-    if [ -f "$INSTALL_DIR/env.example" ]; then
-        cp "$INSTALL_DIR/env.example" "$INSTALL_DIR/.env"
-    else
-        # Generate default .env inline
-        cat > "$INSTALL_DIR/.env" << 'ENVEOF'
+# Create .env if missing — fix existing broken ones
+if [ -f "$INSTALL_DIR/.env" ]; then
+    # Fix unquoted values with spaces from earlier versions
+    sed -i 's/^SITE_NAME=\(.*[[:space:]].*\)$/SITE_NAME="\1"/' "$INSTALL_DIR/.env" 2>/dev/null || true
+    ok "Existing .env preserved (fixed quoting if needed)"
+elif [ -f "$INSTALL_DIR/env.example" ]; then
+    cp "$INSTALL_DIR/env.example" "$INSTALL_DIR/.env"
+    warn "Created .env from env.example — edit /opt/taknet-aggregator/.env to customize"
+else
+    cat > "$INSTALL_DIR/.env" << 'ENVEOF'
 WEB_PORT=80
 BEAST_PORT=30004
 SBS_PORT=30003
 MLAT_IN_PORT=30105
 MLAT_RESULTS_PORT=39001
-SITE_NAME=TAKNET-PS Aggregator
+SITE_NAME="TAKNET-PS Aggregator"
 SITE_LAT=33.8753
 SITE_LON=-117.5664
 SITE_ALT_FT=738
@@ -118,6 +121,8 @@ NETBIRD_API_TOKEN=
 NETBIRD_CIDR=100.64.0.0/10
 GEOIP_ENABLED=false
 ENVEOF
+    warn "Created .env with defaults — edit /opt/taknet-aggregator/.env to customize"
+fi
     fi
     warn "Created .env — edit /opt/taknet-aggregator/.env to customize"
 else
@@ -134,7 +139,8 @@ fi
 # ── 4. Firewall ─────────────────────────────────────────────────────────────
 if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld; then
     info "Opening firewall ports..."
-    source "$INSTALL_DIR/.env"
+    # Source .env safely — export only the PORT variables we need
+    eval $(grep -E '^(WEB_PORT|BEAST_PORT|SBS_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)
     for port in ${WEB_PORT:-80} ${BEAST_PORT:-30004} ${SBS_PORT:-30003} ${MLAT_IN_PORT:-30105} ${MLAT_RESULTS_PORT:-39001}; do
         firewall-cmd --permanent --add-port=${port}/tcp 2>/dev/null || true
     done
@@ -209,7 +215,7 @@ docker compose up -d --build
 [ -n "$TMPDIR" ] && rm -rf "$TMPDIR"
 
 # ── Done ────────────────────────────────────────────────────────────────────
-source "$INSTALL_DIR/.env" 2>/dev/null || true
+eval $(grep -E '^(WEB_PORT|BEAST_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)
 IP=$(hostname -I | awk '{print $1}')
 echo ""
 echo "=========================================="
