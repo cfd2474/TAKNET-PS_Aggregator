@@ -60,6 +60,8 @@ services:
     tmpfs:
       - /tmp:size=64m
       - /var/log:size=32m
+    healthcheck:
+      test: ["NONE"]
 
   # MLAT Server — feeders send on 30105, results returned on 39001
   mlat-server:
