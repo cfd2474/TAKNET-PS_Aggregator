@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.33",
+    "date": "2026-02-19",
+    "notes": "NetBird self-hosted integration. Added nginx config for netbird.tak-solutions.com with TLS (Let's Encrypt). Port 443 added to nginx container with /etc/letsencrypt bind mount."
+  },
+  {
     "version": "1.0.32",
     "date": "2026-02-18",
     "notes": "Fixed Tailscale feeder classification. Removed is_private gate that excluded CGNAT range (100.64.0.0/10) from VPN detection."
