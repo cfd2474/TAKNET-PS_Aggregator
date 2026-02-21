@@ -9,7 +9,8 @@ import requests as http_requests
 from flask import Blueprint, jsonify, request
 
 from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel
-from services.docker_service import get_containers, restart_container, get_logs
+from services.docker_service import (get_containers, restart_container, get_logs,
+                                      get_netbird_client_status, enroll_netbird, disconnect_netbird)
 from services.vpn_service import get_combined_status
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -105,6 +106,38 @@ def aircraft():
 def vpn_status():
     """Combined VPN status (Tailscale + NetBird)."""
     return jsonify(get_combined_status())
+
+
+# ── NetBird Client (server enrollment) ───────────────────────────────────────
+
+@bp.route("/netbird/client")
+def netbird_client():
+    """Get netbird-client container status."""
+    return jsonify(get_netbird_client_status())
+
+
+@bp.route("/netbird/enroll", methods=["POST"])
+def netbird_enroll():
+    """Enroll this server as a NetBird peer using a setup key."""
+    data = request.get_json()
+    setup_key = (data or {}).get("setup_key", "").strip()
+    if not setup_key:
+        return jsonify({"error": "setup_key is required"}), 400
+
+    management_url = os.environ.get("NETBIRD_API_URL", "https://netbird.tak-solutions.com")
+    ok, msg = enroll_netbird(setup_key, management_url)
+    if ok:
+        return jsonify({"success": True, "message": msg})
+    return jsonify({"success": False, "error": msg}), 500
+
+
+@bp.route("/netbird/disconnect", methods=["POST"])
+def netbird_disconnect_route():
+    """Stop and remove the netbird-client container."""
+    ok, msg = disconnect_netbird()
+    if ok:
+        return jsonify({"success": True, "message": msg})
+    return jsonify({"success": False, "error": msg}), 500
 
 
 # ── Docker ───────────────────────────────────────────────────────────────────

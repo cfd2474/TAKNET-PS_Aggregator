@@ -5,6 +5,33 @@
 <div id="vpn-content">
     <div style="color:var(--text-muted);padding:40px;text-align:center;">Loading VPN status...</div>
 </div>
+
+<!-- NetBird Enrollment Card -->
+<div class="card" style="margin-top:16px;" id="nb-enroll-card">
+    <div class="card-header">
+        <h3>Server Enrollment</h3>
+        <span id="nb-client-badge"><span class="badge badge-offline">Checking...</span></span>
+    </div>
+    <div id="nb-client-status" style="margin-bottom:16px;font-size:13px;color:var(--text-secondary);">Loading...</div>
+
+    <div id="nb-enroll-form">
+        <div class="form-group">
+            <label>Setup Key</label>
+            <input type="text" class="form-control" id="nb-setup-key"
+                   placeholder="Enter a NetBird setup key to enroll this server as a peer..."
+                   style="font-family:monospace;">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-primary" onclick="enrollNetbird()" id="nb-enroll-btn">Enroll Server</button>
+            <button class="btn btn-danger" onclick="disconnectNetbird()" id="nb-disconnect-btn" style="display:none;">Disconnect</button>
+            <span id="nb-action-msg" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+    </div>
+
+    <div style="margin-top:16px;padding:12px;background:var(--bg-input);border-radius:6px;font-size:12px;color:var(--text-muted);">
+        ⚠ To persist enrollment through updates, add <code style="color:var(--accent);">NB_SETUP_KEY=&lt;key&gt;</code> to <code style="color:var(--accent);">/opt/taknet-aggregator/.env</code>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -53,10 +80,10 @@ async function loadVPN() {
         }
         html += '</div>';
 
-        // NetBird section
+        // NetBird peers section
         const nb = d.netbird || {};
         html += '<div class="card">';
-        html += '<div class="card-header"><h3>NetBird</h3>';
+        html += '<div class="card-header"><h3>NetBird Peers</h3>';
         if (nb.enabled) {
             const nbState = nb.state === 'running' ? 'var(--green)' : 'var(--yellow)';
             html += '<span class="badge" style="background:rgba(168,85,247,0.12);color:' + nbState + '">' + (nb.state || 'unknown') + '</span>';
@@ -79,6 +106,8 @@ async function loadVPN() {
                     html += '<td>' + badge + '</td></tr>';
                 });
                 html += '</tbody></table></div>';
+            } else {
+                html += '<div style="color:var(--text-muted);font-size:13px;">No peers enrolled yet. Use a setup key in the Server Enrollment section below.</div>';
             }
         } else if (nb.enabled && nb.state === 'no_token') {
             html += '<div style="color:var(--text-muted);font-size:13px;">NetBird is enabled but no API token is configured. Set NETBIRD_API_TOKEN in .env.</div>';
@@ -95,7 +124,97 @@ async function loadVPN() {
             '<div class="card"><div style="color:var(--red);padding:20px;">Error loading VPN status: ' + e + '</div></div>';
     }
 }
+
+async function loadClientStatus() {
+    try {
+        const r = await fetch('/api/netbird/client');
+        const d = await r.json();
+        const badge = document.getElementById('nb-client-badge');
+        const statusEl = document.getElementById('nb-client-status');
+        const disconnectBtn = document.getElementById('nb-disconnect-btn');
+        const enrollBtn = document.getElementById('nb-enroll-btn');
+
+        if (d.enrolled && d.running) {
+            badge.innerHTML = '<span class="badge badge-live"><span class="pulse">●</span> Connected</span>';
+            statusEl.textContent = 'Server is enrolled as a NetBird peer and running. Started: ' + (fmtTime(d.started_at) || '—');
+            disconnectBtn.style.display = 'inline-flex';
+            enrollBtn.textContent = 'Re-enroll';
+        } else if (d.enrolled && !d.running) {
+            badge.innerHTML = '<span class="badge badge-stale">Enrolled / Not Running</span>';
+            statusEl.textContent = 'Container exists but is not running (status: ' + d.status + ')';
+            disconnectBtn.style.display = 'inline-flex';
+            enrollBtn.textContent = 'Re-enroll';
+        } else {
+            badge.innerHTML = '<span class="badge badge-offline">Not Enrolled</span>';
+            statusEl.textContent = 'This server is not enrolled as a NetBird peer. Enter a setup key to enroll.';
+            disconnectBtn.style.display = 'none';
+            enrollBtn.textContent = 'Enroll Server';
+        }
+    } catch(e) {
+        document.getElementById('nb-client-status').textContent = 'Error checking status: ' + e;
+    }
+}
+
+async function enrollNetbird() {
+    const key = document.getElementById('nb-setup-key').value.trim();
+    if (!key) {
+        setMsg('Please enter a setup key.', 'var(--red)');
+        return;
+    }
+    const btn = document.getElementById('nb-enroll-btn');
+    btn.disabled = true;
+    btn.textContent = 'Enrolling...';
+    setMsg('Starting NetBird client (pulling image if needed, may take a moment)...', 'var(--text-muted)');
+
+    try {
+        const r = await fetch('/api/netbird/enroll', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({setup_key: key})
+        });
+        const d = await r.json();
+        if (d.success) {
+            setMsg(d.message, 'var(--green)');
+            document.getElementById('nb-setup-key').value = '';
+            setTimeout(loadClientStatus, 3000);
+            setTimeout(loadVPN, 5000);
+        } else {
+            setMsg('Error: ' + (d.error || 'Unknown error'), 'var(--red)');
+        }
+    } catch(e) {
+        setMsg('Request failed: ' + e, 'var(--red)');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enroll Server';
+    }
+}
+
+async function disconnectNetbird() {
+    if (!confirm('Disconnect this server from NetBird?')) return;
+    setMsg('Disconnecting...', 'var(--text-muted)');
+    try {
+        const r = await fetch('/api/netbird/disconnect', {method: 'POST'});
+        const d = await r.json();
+        if (d.success) {
+            setMsg(d.message, 'var(--green)');
+            setTimeout(loadClientStatus, 1000);
+        } else {
+            setMsg('Error: ' + (d.error || 'Unknown error'), 'var(--red)');
+        }
+    } catch(e) {
+        setMsg('Request failed: ' + e, 'var(--red)');
+    }
+}
+
+function setMsg(msg, color) {
+    const el = document.getElementById('nb-action-msg');
+    el.textContent = msg;
+    el.style.color = color || 'var(--text-muted)';
+}
+
 loadVPN();
+loadClientStatus();
 setInterval(loadVPN, 30000);
+setInterval(loadClientStatus, 15000);
 </script>
 {% endblock %}

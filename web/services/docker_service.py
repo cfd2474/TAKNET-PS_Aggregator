@@ -1,6 +1,10 @@
 """Docker service — container management via Docker socket."""
 
 import docker
+import docker.errors
+
+NETBIRD_CLIENT_NAME = "netbird-client"
+NETBIRD_IMAGE = "netbirdio/netbird:latest"
 
 
 def get_client():
@@ -56,3 +60,82 @@ def get_logs(name, tail=100):
         return container.logs(tail=tail, timestamps=True).decode("utf-8", errors="replace")
     except Exception as e:
         return f"Error: {e}"
+
+
+def get_netbird_client_status():
+    """Get netbird-client container status."""
+    client = get_client()
+    if not client:
+        return {"enrolled": False, "error": "Docker not available"}
+    try:
+        container = client.containers.get(NETBIRD_CLIENT_NAME)
+        return {
+            "enrolled": True,
+            "running": container.status == "running",
+            "status": container.status,
+            "started_at": container.attrs.get("State", {}).get("StartedAt", ""),
+        }
+    except docker.errors.NotFound:
+        return {"enrolled": False, "status": "not_enrolled"}
+    except Exception as e:
+        return {"enrolled": False, "error": str(e)}
+
+
+def enroll_netbird(setup_key, management_url):
+    """Start netbird-client container with the given setup key.
+    Uses network_mode=host so the WireGuard interface appears on the host.
+    """
+    client = get_client()
+    if not client:
+        return False, "Docker not available"
+
+    # Remove existing container if present
+    try:
+        existing = client.containers.get(NETBIRD_CLIENT_NAME)
+        existing.stop(timeout=10)
+        existing.remove()
+    except docker.errors.NotFound:
+        pass
+    except Exception as e:
+        return False, f"Failed to remove existing container: {e}"
+
+    # Pull image to ensure latest
+    try:
+        client.images.pull(NETBIRD_IMAGE)
+    except Exception:
+        pass  # Use cached image if pull fails
+
+    # Start new container
+    try:
+        client.containers.run(
+            NETBIRD_IMAGE,
+            name=NETBIRD_CLIENT_NAME,
+            cap_add=["NET_ADMIN", "SYS_MODULE"],
+            environment={
+                "NB_SETUP_KEY": setup_key,
+                "NB_MANAGEMENT_URL": management_url,
+            },
+            volumes={"netbird-client-data": {"bind": "/etc/netbird", "mode": "rw"}},
+            network_mode="host",
+            restart_policy={"Name": "unless-stopped"},
+            detach=True,
+        )
+        return True, "NetBird client enrolled and started"
+    except Exception as e:
+        return False, str(e)
+
+
+def disconnect_netbird():
+    """Stop and remove netbird-client container."""
+    client = get_client()
+    if not client:
+        return False, "Docker not available"
+    try:
+        container = client.containers.get(NETBIRD_CLIENT_NAME)
+        container.stop(timeout=10)
+        container.remove()
+        return True, "NetBird client disconnected"
+    except docker.errors.NotFound:
+        return True, "NetBird client was not running"
+    except Exception as e:
+        return False, str(e)
