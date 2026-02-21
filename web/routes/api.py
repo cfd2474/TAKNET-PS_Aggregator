@@ -127,6 +127,8 @@ def netbird_enroll():
     management_url = os.environ.get("NETBIRD_API_URL", "https://netbird.tak-solutions.com")
     ok, msg = enroll_netbird(setup_key, management_url)
     if ok:
+        # Persist the setup key to .env so it survives updates
+        _persist_env_var("NB_SETUP_KEY", setup_key)
         return jsonify({"success": True, "message": msg})
     return jsonify({"success": False, "error": msg}), 500
 
@@ -250,6 +252,30 @@ def _get_current_version():
     except Exception:
         pass
     return "unknown"
+
+
+def _persist_env_var(key, value):
+    """Write or update a key=value line in the host .env file."""
+    env_path = os.path.join(INSTALL_DIR, ".env")
+    try:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                lines = f.readlines()
+            found = False
+            for i, line in enumerate(lines):
+                if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
+                    lines[i] = f"{key}={value}\n"
+                    found = True
+                    break
+            if not found:
+                lines.append(f"{key}={value}\n")
+            with open(env_path, "w") as f:
+                f.writelines(lines)
+        else:
+            with open(env_path, "w") as f:
+                f.write(f"{key}={value}\n")
+    except Exception as e:
+        print(f"[api] Failed to persist {key} to .env: {e}")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.36",
+    "date": "2026-02-20",
+    "notes": "NetBird setup key now persists to .env automatically when enrolled via the VPN page. .env mounted into dashboard container for writing."
+  },
+  {
     "version": "1.0.35",
     "date": "2026-02-20",
     "notes": "Fixed NetBird enrollment — added /dev/net/tun device to container so WireGuard interface creates successfully."

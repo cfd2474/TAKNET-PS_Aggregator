@@ -157,6 +157,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/run/tailscale:/var/run/tailscale:ro
       - /opt/taknet-aggregator/RELEASES.json:/app/RELEASES.json:ro
+      - /opt/taknet-aggregator/.env:/opt/taknet-aggregator/.env:rw
     networks:
       - taknet-internal
     depends_on:
