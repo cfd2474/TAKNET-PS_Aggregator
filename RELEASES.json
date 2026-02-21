@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.35",
+    "date": "2026-02-20",
+    "notes": "Fixed NetBird enrollment — added /dev/net/tun device to container so WireGuard interface creates successfully."
+  },
+  {
     "version": "1.0.34",
     "date": "2026-02-20",
     "notes": "NetBird server enrollment UI. VPN page now includes enrollment form — enter a setup key to register the aggregator as a NetBird peer. Status, re-enroll, and disconnect controls added."

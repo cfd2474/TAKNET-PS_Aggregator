@@ -111,6 +111,7 @@ def enroll_netbird(setup_key, management_url):
             NETBIRD_IMAGE,
             name=NETBIRD_CLIENT_NAME,
             cap_add=["NET_ADMIN", "SYS_MODULE"],
+            devices=["/dev/net/tun:/dev/net/tun:rwm"],
             environment={
                 "NB_SETUP_KEY": setup_key,
                 "NB_MANAGEMENT_URL": management_url,
