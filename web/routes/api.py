@@ -526,3 +526,66 @@ def _get_system_info():
         "uptime_seconds": uptime_seconds,
         "app_uptime_seconds": app_uptime,
     }
+
+
+# ── Feeder Proxy ──────────────────────────────────────────────────────────────
+
+@bp.route("/feeder-proxy/<int:feeder_id>/<view_type>")
+@bp.route("/feeder-proxy/<int:feeder_id>/<view_type>/<path:sub_path>")
+@login_required_any
+def feeder_proxy(feeder_id, view_type, sub_path=""):
+    """Proxy feeder tar1090/graphs1090 through the aggregator's NetBird connection."""
+    feeder = FeederModel.get_by_id(feeder_id)
+    if not feeder:
+        return "Feeder not found", 404
+
+    if view_type == "map":
+        base_url = (feeder.get("tar1090_url") or "").rstrip("/")
+    elif view_type == "graphs":
+        base_url = (feeder.get("graphs1090_url") or "").rstrip("/")
+    else:
+        return "Unknown view type", 400
+
+    if not base_url:
+        return "No URL configured for this feeder", 404
+
+    target = f"{base_url}/{sub_path}" if sub_path else base_url
+    # Forward query string
+    if request.query_string:
+        target += "?" + request.query_string.decode()
+
+    try:
+        resp = http_requests.get(target, timeout=10, stream=True,
+                                  headers={"Accept-Encoding": "identity"})
+        content_type = resp.headers.get("Content-Type", "text/html")
+
+        # For HTML, rewrite relative URLs to go through this proxy
+        if "text/html" in content_type:
+            content = resp.text
+            proxy_base = f"/api/feeder-proxy/{feeder_id}/{view_type}"
+            # Rewrite absolute paths for assets
+            content = content.replace('src="/', f'src="{proxy_base}/')
+            content = content.replace("src='/", f"src='{proxy_base}/")
+            content = content.replace('href="/', f'href="{proxy_base}/')
+            content = content.replace("href='/", f"href='{proxy_base}/")
+            content = content.replace('action="/', f'action="{proxy_base}/')
+            # Rewrite fetch/XHR calls via a base tag injection
+            inject = f'<base href="{proxy_base}/">\n'
+            content = content.replace("<head>", "<head>\n" + inject, 1)
+            content = content.replace("<HEAD>", "<HEAD>\n" + inject, 1)
+            return Response(content, status=resp.status_code, content_type=content_type)
+
+        # For non-HTML (JS, CSS, images, JSON), stream through directly
+        def generate():
+            for chunk in resp.iter_content(chunk_size=4096):
+                yield chunk
+
+        return Response(stream_with_context(generate()),
+                        status=resp.status_code,
+                        content_type=content_type)
+    except http_requests.exceptions.ConnectionError:
+        return f"Cannot reach feeder at {base_url} — check that it is online and reachable via NetBird.", 502
+    except http_requests.exceptions.Timeout:
+        return f"Timed out connecting to feeder at {base_url}.", 504
+    except Exception as e:
+        return f"Proxy error: {e}", 500

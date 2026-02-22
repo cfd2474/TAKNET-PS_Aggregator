@@ -87,11 +87,21 @@
             </div>
             <div class="form-group">
                 <label>tar1090 URL</label>
-                <input type="text" class="form-control" name="tar1090_url" value="{{ feeder.tar1090_url or '' }}" placeholder="http://...">
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" class="form-control" name="tar1090_url" value="{{ feeder.tar1090_url or '' }}" placeholder="http://...">
+                    {% if feeder.tar1090_url %}
+                    <button type="button" class="btn" style="white-space:nowrap;font-size:12px;padding:6px 12px;" onclick="openFeederView('map')">📡 View Map</button>
+                    {% endif %}
+                </div>
             </div>
             <div class="form-group">
                 <label>graphs1090 URL</label>
-                <input type="text" class="form-control" name="graphs1090_url" value="{{ feeder.graphs1090_url or '' }}" placeholder="http://...">
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" class="form-control" name="graphs1090_url" value="{{ feeder.graphs1090_url or '' }}" placeholder="http://...">
+                    {% if feeder.graphs1090_url %}
+                    <button type="button" class="btn" style="white-space:nowrap;font-size:12px;padding:6px 12px;" onclick="openFeederView('graphs')">📊 View Stats</button>
+                    {% endif %}
+                </div>
             </div>
         </div>
         <div class="form-group">
@@ -122,6 +132,23 @@
                 <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</td></tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Feeder Proxy Modal -->
+<div class="modal-overlay" id="feeder-proxy-modal" style="z-index:1000;" onclick="if(event.target===this)closeProxyModal()">
+    <div class="modal" style="width:95vw;max-width:1400px;height:90vh;display:flex;flex-direction:column;padding:0;">
+        <div class="modal-header" style="flex-shrink:0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
+            <h3 id="proxy-modal-title" style="font-size:14px;"></h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <a id="proxy-direct-link" href="#" target="_blank" class="btn" style="font-size:11px;padding:4px 10px;">Open Directly ↗</a>
+                <button class="modal-close" onclick="closeProxyModal()">&#x2715;</button>
+            </div>
+        </div>
+        <div id="proxy-iframe-wrap" style="flex:1;position:relative;background:#0f1923;">
+            <div id="proxy-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;">Loading...</div>
+            <iframe id="proxy-iframe" src="" style="width:100%;height:100%;border:none;display:none;" onload="onProxyLoad()"></iframe>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -190,6 +217,32 @@ async function deleteFeeder() {
         await fetch('/api/feeders/' + feederId, { method: 'DELETE' });
         location.href = '/inputs/feeders';
     } catch(e) { alert('Error: ' + e); }
+}
+
+function openFeederView(type) {
+    const titles = { map: 'Feeder Map (via NetBird)', graphs: 'Feeder Stats (via NetBird)' };
+    const proxyUrl = '/api/feeder-proxy/' + feederId + '/' + type;
+    document.getElementById('proxy-modal-title').textContent = titles[type] || type;
+    document.getElementById('proxy-direct-link').href = proxyUrl;
+    document.getElementById('proxy-iframe').style.display = 'none';
+    document.getElementById('proxy-iframe').src = '';
+    document.getElementById('proxy-loading').style.display = 'flex';
+    document.getElementById('proxy-loading').textContent = 'Connecting via NetBird…';
+    document.getElementById('feeder-proxy-modal').classList.add('show');
+    // Small delay so modal renders before iframe starts loading
+    setTimeout(() => {
+        document.getElementById('proxy-iframe').src = proxyUrl;
+    }, 50);
+}
+
+function onProxyLoad() {
+    document.getElementById('proxy-loading').style.display = 'none';
+    document.getElementById('proxy-iframe').style.display = 'block';
+}
+
+function closeProxyModal() {
+    document.getElementById('feeder-proxy-modal').classList.remove('show');
+    document.getElementById('proxy-iframe').src = '';
 }
 
 loadHistory();

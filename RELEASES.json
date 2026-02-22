@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.56",
+    "date": "2026-02-22",
+    "notes": "Feeder detail page: 'View Map' and 'View Stats' buttons open the feeder's tar1090/graphs1090 in a full-screen modal proxied through the aggregator's NetBird connection, so users not on NetBird can still access feeder interfaces. Includes 'Open Directly' link for direct access when on NetBird."
+  },
+  {
     "version": "1.0.55",
     "date": "2026-02-22",
     "notes": "NetBird connection type indicator changed from purple to orange throughout the UI (feeders page, dashboard breakdown, feeder detail). NetBird feeders now auto-populate map URL (http://IP:8080) and stats URL (http://IP:8080/graphs1090/) on first connection; existing empty fields are back-filled on reconnect."
