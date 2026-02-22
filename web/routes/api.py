@@ -336,19 +336,39 @@ def system_info():
 @bp.route("/updates/check")
 @admin_required
 def updates_check():
-    """Check GitHub for latest version."""
+    """Check GitHub for latest version and return release notes for new versions."""
     try:
         url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/VERSION"
         resp = http_requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            latest = resp.text.strip()
-            current = _get_current_version()
-            return jsonify({
-                "current": current,
-                "latest": latest,
-                "update_available": latest != current,
-            })
-        return jsonify({"error": f"GitHub returned {resp.status_code}"}), 502
+        if resp.status_code != 200:
+            return jsonify({"error": f"GitHub returned {resp.status_code}"}), 502
+
+        latest = resp.text.strip()
+        current = _get_current_version()
+        update_available = latest != current
+
+        # Fetch RELEASES.json from GitHub to get notes for unreleased versions
+        new_releases = []
+        if update_available:
+            try:
+                rurl = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/RELEASES.json"
+                rresp = http_requests.get(rurl, timeout=10)
+                if rresp.status_code == 200:
+                    all_releases = rresp.json()
+                    # Return entries that are newer than current (appear before current in list)
+                    for rel in all_releases:
+                        if rel.get("version") == current:
+                            break
+                        new_releases.append(rel)
+            except Exception:
+                pass
+
+        return jsonify({
+            "current": current,
+            "latest": latest,
+            "update_available": update_available,
+            "new_releases": new_releases,
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
