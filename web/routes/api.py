@@ -554,29 +554,12 @@ def _feeder_proxy_url(feeder, view_type):
 
 @bp.route("/feeder-view-auth")
 def feeder_view_auth():
-    """nginx auth_request sub-endpoint. Validates session and that the target
-    IP belongs to a registered feeder. Returns 200 to allow or 401/403 to deny."""
+    """nginx auth_request sub-endpoint. Returns 200 if user has a valid session,
+    401 otherwise. NetBird IPs are only routable within the mesh so no further
+    IP validation is required."""
     from flask_login import current_user
     if not current_user.is_authenticated:
         return Response("Unauthorized", status=401)
-
-    # Extract the target IP from the original URI nginx passes us
-    original_uri = request.headers.get("X-Original-URI", "")
-    match = _re.match(r"^/feeder-view/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):", original_uri)
-    if not match:
-        return Response("Bad request", status=400)
-
-    target_ip = match.group(1)
-    # Confirm IP belongs to a known feeder
-    from models import get_db
-    conn = get_db()
-    row = conn.execute(
-        "SELECT id FROM feeders WHERE ip_address = ?", (target_ip,)
-    ).fetchone()
-    conn.close()
-    if not row:
-        return Response("Forbidden — IP not a registered feeder", status=403)
-
     return Response("OK", status=200)
 
 

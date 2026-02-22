@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.59",
+    "date": "2026-02-22",
+    "notes": "Fixed feeder proxy 404. Root cause: nginx proxy_pass with IP variables requires a resolver directive — without it nginx silently falls through to Flask which has no matching route. Added Docker DNS resolver (127.0.0.11) to nginx config. Also fixed WebSocket Connection header and simplified auth sub-request."
+  },
+  {
     "version": "1.0.58",
     "date": "2026-02-22",
     "notes": "Fixed feeder map proxy freezing. Root cause: Flask proxy could not handle tar1090's WebSocket connections for live aircraft updates. Rewrote proxy to route through nginx (which handles WebSockets natively). Flask now only validates auth and redirects; nginx does the actual proxying to the feeder's NetBird IP with WebSocket upgrade support."

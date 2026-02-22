@@ -305,7 +305,7 @@ async def stats_flusher():
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.58")
+    print("TAKNET-PS Beast Proxy v1.0.59")
     print(f"  Listening on {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Forwarding to {READSB_HOST}:{READSB_PORT}")
     print(f"  Stats interval: {STATS_INTERVAL}s")
