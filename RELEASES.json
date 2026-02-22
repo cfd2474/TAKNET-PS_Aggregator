@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.51",
+    "date": "2026-02-22",
+    "notes": "VPN page peer tables now collapse by default. Click the card header to expand/collapse Tailscale or NetBird peer lists. Peer counts remain visible in the header at all times."
+  },
+  {
     "version": "1.0.50",
     "date": "2026-02-22",
     "notes": "Added self-registration with access request workflow. New users register via 'Request Access' on the login page, enter a pending state, and see a holding screen until approved. Admins see pending requests in Users page with approve/deny/role controls, and a banner on the dashboard when requests are waiting."
