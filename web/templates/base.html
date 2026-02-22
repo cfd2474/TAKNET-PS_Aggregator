@@ -376,21 +376,26 @@
         </div>
         <div class="sidebar-nav">
             <div class="nav-section">
+                {% if current_user.is_authenticated and current_user.role != 'viewer' %}
                 <a href="/" class="nav-item {% if request.path == '/' or request.path == '/dashboard' %}active{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                     Dashboard
                 </a>
+                {% endif %}
             </div>
             <div class="nav-section">
                 <div class="nav-section-label">Data</div>
+                {% if current_user.is_authenticated and current_user.role != 'viewer' %}
                 <a href="/inputs/feeders" class="nav-item {% if request.path.startswith('/inputs') %}active{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                     Feeders
                 </a>
+                {% endif %}
                 <a href="/map" class="nav-item {% if request.path == '/map' %}active{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
                     Map
                 </a>
+                {% if current_user.is_authenticated and current_user.role != 'viewer' %}
                 <a href="/stats" class="nav-item {% if request.path == '/stats' %}active{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                     Statistics
@@ -399,9 +404,11 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
                     Outputs
                 </a>
+                {% endif %}
             </div>
             <div class="nav-section">
                 <div class="nav-section-label">System</div>
+                {% if current_user.is_authenticated and current_user.role == 'admin' %}
                 <a href="/config/vpn" class="nav-item {% if request.path == '/config/vpn' %}active{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
                     VPN
@@ -414,10 +421,15 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                     Updates
                 </a>
+                <a href="/config/users" class="nav-item {% if request.path == '/config/users' %}active{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    Users
+                </a>
                 <a href="/about" class="nav-item {% if request.path == '/about' %}active{% endif %}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                     About
                 </a>
+                {% endif %}
             </div>
         </div>
     </nav>
@@ -430,6 +442,21 @@
             <div class="topbar-right">
                 <span id="topbar-aircraft">— aircraft</span>
                 <span id="topbar-feeders">— feeders</span>
+                <span style="color:var(--border);">|</span>
+                <div style="position:relative;" id="user-menu-wrap">
+                    <button onclick="toggleUserMenu()" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;color:var(--text-secondary);font-size:13px;padding:4px 8px;border-radius:6px;" onmouseenter="this.style.background='var(--bg-input)'" onmouseleave="this.style.background='none'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        {{ current_user.username if current_user.is_authenticated else 'Guest' }}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div id="user-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;min-width:160px;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,0.4);overflow:hidden;">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">
+                            {{ current_user.role if current_user.is_authenticated else '' }}
+                        </div>
+                        <a href="/profile" style="display:block;padding:10px 12px;font-size:13px;color:var(--text-secondary);text-decoration:none;" onmouseenter="this.style.background='var(--bg-input)'" onmouseleave="this.style.background='none'">Change Password</a>
+                        <a href="/logout" style="display:block;padding:10px 12px;font-size:13px;color:var(--red);text-decoration:none;border-top:1px solid var(--border);" onmouseenter="this.style.background='rgba(239,68,68,0.08)'" onmouseleave="this.style.background='none'">Sign Out</a>
+                    </div>
+                </div>
             </div>
         </div>
         {% endblock %}
@@ -442,6 +469,19 @@
     <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
 
     <script>
+        // User menu toggle
+        function toggleUserMenu() {
+            const menu = document.getElementById('user-menu');
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+        document.addEventListener('click', function(e) {
+            const wrap = document.getElementById('user-menu-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+                const menu = document.getElementById('user-menu');
+                if (menu) menu.style.display = 'none';
+            }
+        });
+
         // Global: update topbar stats
         async function updateTopbar() {
             try {

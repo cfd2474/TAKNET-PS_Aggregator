@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.39",
+    "date": "2026-02-21",
+    "notes": "Access control added — login required. Three roles: admin (full access), network_admin (dashboard + data), viewer (map only). Default credentials admin/password. User management page under System. Each user can change their own password via profile menu."
+  },
+  {
     "version": "1.0.38",
     "date": "2026-02-21",
     "notes": "Web UI update button on Updates page. Live log modal streams output via SSE. Auto-reconnects after dashboard restart. Error state waits for user dismissal."

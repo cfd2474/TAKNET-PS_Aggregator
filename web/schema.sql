@@ -1,4 +1,14 @@
--- TAKNET-PS Aggregator Database Schema v1.0.38
+-- TAKNET-PS Aggregator Database Schema v1.0.39
+
+-- Users (authentication)
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'viewer',         -- 'admin', 'network_admin', 'viewer'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Feeder registry
 CREATE TABLE IF NOT EXISTS feeders (

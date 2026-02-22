@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — TAKNET-PS Aggregator</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:var(--bg-primary); }
+        .login-box { width:100%; max-width:380px; padding:0 16px; }
+        .login-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px; padding:40px; }
+        .login-logo { text-align:center; margin-bottom:32px; }
+        .login-logo h1 { font-size:20px; font-weight:700; color:var(--text-primary); margin:0 0 4px; }
+        .login-logo p  { font-size:13px; color:var(--text-muted); margin:0; }
+        .form-group { margin-bottom:16px; }
+        .form-group label { display:block; font-size:12px; font-weight:500; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
+        .form-group input { width:100%; box-sizing:border-box; }
+        .btn-login { width:100%; margin-top:8px; padding:10px; font-size:14px; font-weight:600; }
+        .error-msg { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:10px 14px; font-size:13px; color:var(--red); margin-bottom:16px; }
+    </style>
+</head>
+<body>
+<div class="login-box">
+    <div class="login-card">
+        <div class="login-logo">
+            <h1>TAKNET-PS</h1>
+            <p>Aggregator Dashboard</p>
+        </div>
+        {% if error %}
+        <div class="error-msg">{{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <div class="form-group">
+                <label>Username</label>
+                <input class="form-control" type="text" name="username" autocomplete="username" autofocus required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input class="form-control" type="password" name="password" autocomplete="current-password" required>
+            </div>
+            <button class="btn btn-primary btn-login" type="submit">Sign In</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

@@ -18,6 +18,7 @@ from services.docker_service import (get_containers, restart_container, get_logs
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
 from services.vpn_service import get_combined_status
+from routes.auth_utils import login_required_any, network_admin_required, admin_required
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -150,6 +151,7 @@ def _run_update():
 # ── Status / Overview ────────────────────────────────────────────────────────
 
 @bp.route("/status")
+@login_required_any
 def status():
     """Dashboard overview data."""
     feeder_stats = FeederModel.get_stats()
@@ -169,6 +171,7 @@ def status():
 # ── Feeders ──────────────────────────────────────────────────────────────────
 
 @bp.route("/feeders")
+@network_admin_required
 def feeders_list():
     """List all feeders with optional filters."""
     status_filter = request.args.get("status", "all")
@@ -179,6 +182,7 @@ def feeders_list():
 
 
 @bp.route("/feeders/<int:feeder_id>")
+@network_admin_required
 def feeder_detail(feeder_id):
     """Single feeder with full details."""
     feeder = FeederModel.get_by_id(feeder_id)
@@ -189,6 +193,7 @@ def feeder_detail(feeder_id):
 
 
 @bp.route("/feeders/<int:feeder_id>", methods=["PUT"])
+@network_admin_required
 def feeder_update(feeder_id):
     """Update feeder metadata."""
     data = request.get_json()
@@ -201,6 +206,7 @@ def feeder_update(feeder_id):
 
 
 @bp.route("/feeders/<int:feeder_id>", methods=["DELETE"])
+@admin_required
 def feeder_delete(feeder_id):
     """Delete a feeder."""
     FeederModel.delete(feeder_id)
@@ -208,6 +214,7 @@ def feeder_delete(feeder_id):
 
 
 @bp.route("/feeders/<int:feeder_id>/connections")
+@network_admin_required
 def feeder_connections(feeder_id):
     """Connection history for a feeder."""
     limit = request.args.get("limit", 50, type=int)
@@ -218,6 +225,7 @@ def feeder_connections(feeder_id):
 # ── Aircraft ─────────────────────────────────────────────────────────────────
 
 @bp.route("/aircraft")
+@login_required_any
 def aircraft():
     """Current aircraft data from readsb."""
     data = _get_aircraft_data()
@@ -227,6 +235,7 @@ def aircraft():
 # ── VPN Status ───────────────────────────────────────────────────────────────
 
 @bp.route("/vpn/status")
+@admin_required
 def vpn_status():
     """Combined VPN status (Tailscale + NetBird)."""
     return jsonify(get_combined_status())
@@ -235,12 +244,14 @@ def vpn_status():
 # ── NetBird Client (server enrollment) ───────────────────────────────────────
 
 @bp.route("/netbird/client")
+@admin_required
 def netbird_client():
     """Get netbird-client container status."""
     return jsonify(get_netbird_client_status())
 
 
 @bp.route("/netbird/enroll", methods=["POST"])
+@admin_required
 def netbird_enroll():
     """Enroll this server as a NetBird peer using a setup key."""
     data = request.get_json()
@@ -258,6 +269,7 @@ def netbird_enroll():
 
 
 @bp.route("/netbird/disconnect", methods=["POST"])
+@admin_required
 def netbird_disconnect_route():
     """Stop and remove the netbird-client container."""
     ok, msg = disconnect_netbird()
@@ -269,12 +281,14 @@ def netbird_disconnect_route():
 # ── Docker ───────────────────────────────────────────────────────────────────
 
 @bp.route("/docker/containers")
+@admin_required
 def docker_containers():
     """List all TAKNET containers."""
     return jsonify({"containers": get_containers()})
 
 
 @bp.route("/docker/containers/<name>/restart", methods=["POST"])
+@admin_required
 def docker_restart(n):
     """Restart a container."""
     if not n.startswith("taknet-"):
@@ -283,7 +297,8 @@ def docker_restart(n):
     return jsonify({"success": ok, "message": msg})
 
 
-@bp.route("/docker/containers/<name>/logs")
+@bp.route("/docker/containers/<n>/logs")
+@admin_required
 def docker_logs(n):
     """Get container logs."""
     if not n.startswith("taknet-"):
@@ -296,6 +311,7 @@ def docker_logs(n):
 # ── Activity ─────────────────────────────────────────────────────────────────
 
 @bp.route("/activity")
+@network_admin_required
 def activity():
     """Recent activity log."""
     limit = request.args.get("limit", 20, type=int)
@@ -306,6 +322,7 @@ def activity():
 # ── System ───────────────────────────────────────────────────────────────────
 
 @bp.route("/system")
+@network_admin_required
 def system_info():
     """System resource information."""
     return jsonify(_get_system_info())
@@ -314,6 +331,7 @@ def system_info():
 # ── Updates ──────────────────────────────────────────────────────────────────
 
 @bp.route("/updates/check")
+@admin_required
 def updates_check():
     """Check GitHub for latest version."""
     try:
@@ -333,13 +351,13 @@ def updates_check():
 
 
 @bp.route("/updates/run", methods=["POST"])
+@admin_required
 def updates_run():
     """Kick off the update process in a background thread."""
     global _update_running
     if _update_running:
         return jsonify({"error": "Update already in progress"}), 409
     _update_running = True
-    # Clear stale queue entries
     while not _update_queue.empty():
         try:
             _update_queue.get_nowait()
@@ -351,6 +369,7 @@ def updates_run():
 
 
 @bp.route("/updates/stream")
+@admin_required
 def updates_stream():
     """SSE endpoint — streams update log lines to the browser."""
     def generate():
@@ -361,9 +380,7 @@ def updates_stream():
                 if item.get("type") in ("done", "error"):
                     break
             except Exception:
-                # Heartbeat to keep connection alive through nginx
                 yield "data: {\"type\": \"heartbeat\"}\n\n"
-    from flask import Response, stream_with_context
     headers = {
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
@@ -375,11 +392,11 @@ def updates_stream():
 
 
 @bp.route("/updates/releases")
+@login_required_any
 def updates_releases():
     """Return release notes from RELEASES.json."""
     limit = request.args.get("limit", 6, type=int)
     try:
-        # Check mounted path first, then install dir, then relative
         for path in ["/app/RELEASES.json",
                      os.path.join(INSTALL_DIR, "RELEASES.json"),
                      os.path.join(os.path.dirname(os.path.dirname(__file__)), "RELEASES.json")]:
@@ -393,6 +410,7 @@ def updates_releases():
 
 
 @bp.route("/updates/history")
+@admin_required
 def updates_history():
     """Return past update log."""
     limit = request.args.get("limit", 6, type=int)

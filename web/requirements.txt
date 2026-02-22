@@ -4,3 +4,4 @@ requests==2.32.3
 psutil==6.1.0
 APScheduler==3.10.4
 docker==7.1.0
+flask-login==0.6.3

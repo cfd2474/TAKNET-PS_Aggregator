@@ -211,3 +211,108 @@ def mark_stale_feeders():
     )
     conn.commit()
     conn.close()
+
+
+# ── Users ─────────────────────────────────────────────────────────────────────
+
+from werkzeug.security import generate_password_hash, check_password_hash
+
+
+class UserModel:
+    ROLES = ("admin", "network_admin", "viewer")
+
+    @staticmethod
+    def seed_default():
+        """Create default admin if no users exist."""
+        conn = get_db()
+        count = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+        if count == 0:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                ("admin", generate_password_hash("password"), "admin"),
+            )
+            conn.commit()
+        conn.close()
+
+    @staticmethod
+    def get_by_username(username):
+        conn = get_db()
+        row = conn.execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        conn.close()
+        return dict_row(row)
+
+    @staticmethod
+    def get_by_id(user_id):
+        conn = get_db()
+        row = conn.execute(
+            "SELECT * FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        conn.close()
+        return dict_row(row)
+
+    @staticmethod
+    def get_all():
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT id, username, role, created_at, updated_at FROM users ORDER BY username"
+        ).fetchall()
+        conn.close()
+        return dict_rows(rows)
+
+    @staticmethod
+    def verify_password(username, password):
+        user = UserModel.get_by_username(username)
+        if not user:
+            return None
+        if check_password_hash(user["password_hash"], password):
+            return user
+        return None
+
+    @staticmethod
+    def create(username, password, role):
+        if role not in UserModel.ROLES:
+            return False, "Invalid role"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                (username, generate_password_hash(password), role),
+            )
+            conn.commit()
+            conn.close()
+            return True, "User created"
+        except Exception as e:
+            conn.close()
+            return False, str(e)
+
+    @staticmethod
+    def update_password(user_id, new_password):
+        conn = get_db()
+        conn.execute(
+            "UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?",
+            (generate_password_hash(new_password), user_id),
+        )
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def update_role(user_id, role):
+        if role not in UserModel.ROLES:
+            return False, "Invalid role"
+        conn = get_db()
+        conn.execute(
+            "UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?",
+            (role, user_id),
+        )
+        conn.commit()
+        conn.close()
+        return True, "Role updated"
+
+    @staticmethod
+    def delete(user_id):
+        conn = get_db()
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
