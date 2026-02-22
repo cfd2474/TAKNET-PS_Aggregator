@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.60",
+    "date": "2026-02-22",
+    "notes": "Fixed broken web interface caused by corrupted nginx config (duplicate location blocks outside server context from a failed str_replace in v1.0.59). Config rewritten clean with single server block."
+  },
+  {
     "version": "1.0.59",
     "date": "2026-02-22",
     "notes": "Fixed feeder proxy 404. Root cause: nginx proxy_pass with IP variables requires a resolver directive — without it nginx silently falls through to Flask which has no matching route. Added Docker DNS resolver (127.0.0.11) to nginx config. Also fixed WebSocket Connection header and simplified auth sub-request."
