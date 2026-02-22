@@ -33,6 +33,48 @@ BEAST_TYPES = {0x31, 0x32, 0x33, 0x34, 0x35}
 BEAST_LONG = {0x33, 0x35}  # Mode-S long messages (contain ADS-B/DF17)
 
 
+def _reclassify_existing_feeders():
+    """On startup, re-check all stored feeders against live VPN peer lists.
+
+    Fixes feeders that were previously mis-classified (e.g. NetBird peers
+    marked as tailscale because Tailscale CIDR was checked first).
+    Only reclassifies when the new classification differs from the stored one.
+    """
+    conn = db._get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, ip_address, conn_type FROM feeders"
+        ).fetchall()
+    except Exception as e:
+        print(f"[proxy] Reclassify: DB read failed: {e}")
+        return
+
+    # Force a fresh peer list load before checking anything
+    vpn_resolver.refresh_caches()
+
+    corrected = 0
+    for row in rows:
+        feeder_id   = row["id"]
+        ip_address  = row["ip_address"]
+        stored_type = row["conn_type"]
+        new_type    = vpn_resolver.classify_connection(ip_address)
+        if new_type != stored_type:
+            hostname = vpn_resolver.resolve_hostname(ip_address, new_type)
+            conn.execute(
+                """UPDATE feeders SET conn_type = ?, hostname = COALESCE(?, hostname),
+                   updated_at = datetime('now') WHERE id = ?""",
+                (new_type, hostname, feeder_id),
+            )
+            print(f"[proxy] Reclassified feeder {ip_address}: {stored_type} → {new_type}")
+            corrected += 1
+
+    if corrected:
+        conn.commit()
+        print(f"[proxy] Reclassified {corrected} feeder(s) on startup")
+    else:
+        print("[proxy] Reclassification: all feeders correctly classified")
+
+
 def count_beast_frames(data):
     """Count Beast message frames and position-capable messages in raw data."""
     msgs = 0
@@ -263,7 +305,7 @@ async def stats_flusher():
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.55")
+    print("TAKNET-PS Beast Proxy v1.0.57")
     print(f"  Listening on {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Forwarding to {READSB_HOST}:{READSB_PORT}")
     print(f"  Stats interval: {STATS_INTERVAL}s")
@@ -274,6 +316,7 @@ async def main():
     print("=" * 60)
 
     db.init_db()
+    _reclassify_existing_feeders()
 
     server = await asyncio.start_server(handle_client, LISTEN_HOST, LISTEN_PORT)
     asyncio.create_task(stats_flusher())

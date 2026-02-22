@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.57",
+    "date": "2026-02-22",
+    "notes": "Fixed NetBird feeders being mis-classified as Tailscale. VPN resolver now checks NetBird first (primary VPN), uses a full peer list cache refreshed every 60s instead of per-IP API calls, and prefers NetBird in the CIDR fallback when both VPNs share the same range. On startup, beast-proxy now reclassifies all existing feeders against live peer lists and corrects any mis-classifications in the database."
+  },
+  {
     "version": "1.0.56",
     "date": "2026-02-22",
     "notes": "Feeder detail page: 'View Map' and 'View Stats' buttons open the feeder's tar1090/graphs1090 in a full-screen modal proxied through the aggregator's NetBird connection, so users not on NetBird can still access feeder interfaces. Includes 'Open Directly' link for direct access when on NetBird."
