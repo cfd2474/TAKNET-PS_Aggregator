@@ -2,15 +2,21 @@
 
 import json
 import os
+import queue
+import shutil
+import subprocess
+import tempfile
+import threading
 import time
 
 import psutil
 import requests as http_requests
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response, stream_with_context
 
 from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel
 from services.docker_service import (get_containers, restart_container, get_logs,
-                                      get_netbird_client_status, enroll_netbird, disconnect_netbird)
+                                      get_netbird_client_status, enroll_netbird,
+                                      disconnect_netbird, get_client as _get_docker_client)
 from services.vpn_service import get_combined_status
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -21,6 +27,124 @@ GITHUB_REPO = os.environ.get("GITHUB_REPO", "cfd2474/TAKNET-PS_Aggregator")
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
 
 _start_time = time.time()
+
+# ── Update streaming state ────────────────────────────────────────────────────
+_update_queue = queue.Queue()
+_update_running = False
+
+
+def _run_update():
+    """Background thread: clone from GitHub, copy files, run compose up."""
+    global _update_running
+
+    def log(msg, log_type="log"):
+        for line in str(msg).splitlines():
+            line = line.strip()
+            if line:
+                _update_queue.put({"type": log_type, "msg": line})
+
+    try:
+        # ── Step 1: git clone ─────────────────────────────────────────────
+        log(f"Cloning https://github.com/{GITHUB_REPO}.git ...")
+        tmpdir = tempfile.mkdtemp()
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1",
+             f"https://github.com/{GITHUB_REPO}.git", f"{tmpdir}/repo"],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.stderr:
+            log(result.stderr)
+        if result.returncode != 0:
+            log(f"Git clone failed (exit {result.returncode})", "error")
+            return
+        log("Clone complete.")
+
+        # ── Step 2: read versions ─────────────────────────────────────────
+        old_ver = "unknown"
+        new_ver = "unknown"
+        try:
+            old_ver = open(os.path.join(INSTALL_DIR, "VERSION")).read().strip()
+        except Exception:
+            pass
+        try:
+            new_ver = open(f"{tmpdir}/repo/VERSION").read().strip()
+        except Exception:
+            pass
+        log(f"Updating v{old_ver} → v{new_ver}")
+
+        # ── Step 3: copy files ────────────────────────────────────────────
+        log(f"Copying files to {INSTALL_DIR} ...")
+        src = f"{tmpdir}/repo"
+        for item in os.listdir(src):
+            if item == ".git":
+                continue
+            s = os.path.join(src, item)
+            d = os.path.join(INSTALL_DIR, item)
+            if os.path.isdir(s):
+                shutil.copytree(s, d, dirs_exist_ok=True)
+            else:
+                shutil.copy2(s, d)
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        git_dir = os.path.join(INSTALL_DIR, ".git")
+        if os.path.exists(git_dir):
+            shutil.rmtree(git_dir, ignore_errors=True)
+        log("Files updated.")
+
+        # ── Step 4: docker compose up via docker:cli container ────────────
+        log("Pulling updated images...")
+        log("(Dashboard will reconnect automatically after containers restart)", "pre_restart")
+
+        client = _get_docker_client()
+        if not client:
+            log("Docker not available", "error")
+            return
+
+        try:
+            client.images.pull("docker:cli")
+        except Exception:
+            pass
+
+        compose_container = client.containers.create(
+            "docker:cli",
+            command=[
+                "sh", "-c",
+                f"cd {INSTALL_DIR} && "
+                "docker compose pull 2>&1 && "
+                "docker compose up -d --build 2>&1"
+            ],
+            volumes={
+                "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
+                INSTALL_DIR: {"bind": INSTALL_DIR, "mode": "rw"},
+            },
+            working_dir=INSTALL_DIR,
+        )
+        compose_container.start()
+
+        for chunk in compose_container.logs(stream=True, follow=True):
+            log(chunk.decode("utf-8", errors="replace"))
+
+        result = compose_container.wait()
+        try:
+            compose_container.remove()
+        except Exception:
+            pass
+        exit_code = result.get("StatusCode", -1)
+
+        if exit_code == 0:
+            try:
+                UpdateModel.log_update(old_ver, new_ver, True, "Updated via web UI")
+            except Exception:
+                pass
+            log(f"✓ Update complete: v{old_ver} → v{new_ver}", "done")
+        else:
+            log(f"docker compose exited with code {exit_code}", "error")
+
+    except subprocess.TimeoutExpired:
+        log("Git clone timed out after 120s", "error")
+    except Exception as e:
+        log(f"Update error: {e}", "error")
+    finally:
+        _update_running = False
 
 
 # ── Status / Overview ────────────────────────────────────────────────────────
@@ -210,11 +334,44 @@ def updates_check():
 
 @bp.route("/updates/run", methods=["POST"])
 def updates_run():
-    """Update must be run via SSH: taknet-agg update"""
-    return jsonify({
-        "error": "Run 'taknet-agg update' via SSH on the server.",
-        "command": "taknet-agg update",
-    }), 400
+    """Kick off the update process in a background thread."""
+    global _update_running
+    if _update_running:
+        return jsonify({"error": "Update already in progress"}), 409
+    _update_running = True
+    # Clear stale queue entries
+    while not _update_queue.empty():
+        try:
+            _update_queue.get_nowait()
+        except Exception:
+            break
+    thread = threading.Thread(target=_run_update, daemon=True)
+    thread.start()
+    return jsonify({"success": True, "message": "Update started"})
+
+
+@bp.route("/updates/stream")
+def updates_stream():
+    """SSE endpoint — streams update log lines to the browser."""
+    def generate():
+        while True:
+            try:
+                item = _update_queue.get(timeout=90)
+                yield f"data: {json.dumps(item)}\n\n"
+                if item.get("type") in ("done", "error"):
+                    break
+            except Exception:
+                # Heartbeat to keep connection alive through nginx
+                yield "data: {\"type\": \"heartbeat\"}\n\n"
+    from flask import Response, stream_with_context
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive",
+    }
+    return Response(stream_with_context(generate()),
+                    mimetype="text/event-stream",
+                    headers=headers)
 
 
 @bp.route("/updates/releases")

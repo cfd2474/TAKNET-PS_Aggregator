@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.38",
+    "date": "2026-02-21",
+    "notes": "Web UI update button on Updates page. Live log modal streams output via SSE. Auto-reconnects after dashboard restart. Error state waits for user dismissal."
+  },
+  {
     "version": "1.0.37",
     "date": "2026-02-21",
     "notes": "Fixed Aircraft Tracked stat card — now shows 'with position' sub-count. Fixed topbar aircraft count (was showing [object Object])."

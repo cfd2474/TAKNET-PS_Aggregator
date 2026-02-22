@@ -15,7 +15,7 @@ def create_app():
     # Inject site name into all templates
     @app.context_processor
     def inject_globals():
-        version = "1.0.37"
+        version = "1.0.38"
         try:
             vpath = os.path.join(os.path.dirname(__file__), "VERSION")
             if os.path.exists(vpath):
