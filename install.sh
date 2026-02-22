@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.36 — Installer
+# TAKNET-PS Aggregator v1.0.37 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:

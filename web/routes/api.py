@@ -29,7 +29,7 @@ _start_time = time.time()
 def status():
     """Dashboard overview data."""
     feeder_stats = FeederModel.get_stats()
-    aircraft = _get_aircraft_count()
+    aircraft = _get_aircraft_data()
     system = _get_system_info()
     activity = ActivityModel.get_recent(10)
 

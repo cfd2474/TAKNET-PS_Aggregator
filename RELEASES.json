@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.37",
+    "date": "2026-02-21",
+    "notes": "Fixed Aircraft Tracked stat card — now shows 'with position' sub-count. Fixed topbar aircraft count (was showing [object Object])."
+  },
+  {
     "version": "1.0.36",
     "date": "2026-02-20",
     "notes": "NetBird setup key now persists to .env automatically when enrolled via the VPN page. .env mounted into dashboard container for writing."

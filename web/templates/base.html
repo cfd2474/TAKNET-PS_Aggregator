@@ -447,7 +447,8 @@
             try {
                 const r = await fetch('/api/status');
                 const d = await r.json();
-                document.getElementById('topbar-aircraft').textContent = (d.aircraft || 0) + ' aircraft';
+                const acCount = typeof d.aircraft === 'object' ? (d.aircraft.total || 0) : (d.aircraft || 0);
+                document.getElementById('topbar-aircraft').textContent = acCount + ' aircraft';
                 document.getElementById('topbar-feeders').textContent = (d.feeders?.active || 0) + ' feeders';
             } catch(e) {}
         }
