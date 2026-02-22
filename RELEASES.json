@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.49",
+    "date": "2026-02-22",
+    "notes": "Map page now fills full available height with no blank space. README rewritten: NetBird as primary VPN, Tailscale references minimized, irrelevant content removed, feeder beast_out requirement documented."
+  },
+  {
     "version": "1.0.48",
     "date": "2026-02-21",
     "notes": "Login logo centered correctly. Services page: added Restart All Services (soft reset) button that restarts all TAKNET containers with a live status modal."

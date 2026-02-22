@@ -127,8 +127,17 @@
             width: 100%;
         }
 
+        /* Map page full-bleed override */
+        body.page-map .content {
+            padding: 0;
+            max-width: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        body.page-map .main { overflow: hidden; }
+
         .mobile-toggle {
-            display: none;
             position: fixed;
             bottom: 16px;
             right: 16px;
@@ -367,7 +376,7 @@
     </style>
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
