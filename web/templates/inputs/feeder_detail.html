@@ -222,14 +222,17 @@ async function deleteFeeder() {
 function openFeederView(type) {
     const titles = { map: 'Feeder Map (via NetBird)', graphs: 'Feeder Stats (via NetBird)' };
     const proxyUrl = '/api/feeder-proxy/' + feederId + '/' + type;
+    const directUrls = {
+        map:    '{{ feeder.tar1090_url or "" }}',
+        graphs: '{{ feeder.graphs1090_url or "" }}'
+    };
     document.getElementById('proxy-modal-title').textContent = titles[type] || type;
-    document.getElementById('proxy-direct-link').href = proxyUrl;
+    document.getElementById('proxy-direct-link').href = directUrls[type] || proxyUrl;
     document.getElementById('proxy-iframe').style.display = 'none';
     document.getElementById('proxy-iframe').src = '';
     document.getElementById('proxy-loading').style.display = 'flex';
     document.getElementById('proxy-loading').textContent = 'Connecting via NetBird…';
     document.getElementById('feeder-proxy-modal').classList.add('show');
-    // Small delay so modal renders before iframe starts loading
     setTimeout(() => {
         document.getElementById('proxy-iframe').src = proxyUrl;
     }, 50);

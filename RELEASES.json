@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.58",
+    "date": "2026-02-22",
+    "notes": "Fixed feeder map proxy freezing. Root cause: Flask proxy could not handle tar1090's WebSocket connections for live aircraft updates. Rewrote proxy to route through nginx (which handles WebSockets natively). Flask now only validates auth and redirects; nginx does the actual proxying to the feeder's NetBird IP with WebSocket upgrade support."
+  },
+  {
     "version": "1.0.57",
     "date": "2026-02-22",
     "notes": "Fixed NetBird feeders being mis-classified as Tailscale. VPN resolver now checks NetBird first (primary VPN), uses a full peer list cache refreshed every 60s instead of per-IP API calls, and prefers NetBird in the CIDR fallback when both VPNs share the same range. On startup, beast-proxy now reclassifies all existing feeders against live peer lists and corrects any mis-classifications in the database."

@@ -528,64 +528,69 @@ def _get_system_info():
     }
 
 
-# ── Feeder Proxy ──────────────────────────────────────────────────────────────
+# ── Feeder Proxy (nginx handles actual proxying, Flask handles auth) ───────────
+
+import re as _re
+import urllib.parse as _urlparse
+
+def _feeder_proxy_url(feeder, view_type):
+    """Build the /feeder-view/<ip>:<port>/... URL for a given feeder and view type."""
+    if view_type == "map":
+        raw = (feeder.get("tar1090_url") or "").rstrip("/")
+    elif view_type == "graphs":
+        raw = (feeder.get("graphs1090_url") or "").rstrip("/")
+    else:
+        return None
+    if not raw:
+        return None
+    parsed = _urlparse.urlparse(raw)
+    host = parsed.hostname or feeder.get("ip_address", "")
+    port = parsed.port or 8080
+    path = parsed.path or "/"
+    if not path.startswith("/"):
+        path = "/" + path
+    return f"/feeder-view/{host}:{port}{path}"
+
+
+@bp.route("/feeder-view-auth")
+def feeder_view_auth():
+    """nginx auth_request sub-endpoint. Validates session and that the target
+    IP belongs to a registered feeder. Returns 200 to allow or 401/403 to deny."""
+    from flask_login import current_user
+    if not current_user.is_authenticated:
+        return Response("Unauthorized", status=401)
+
+    # Extract the target IP from the original URI nginx passes us
+    original_uri = request.headers.get("X-Original-URI", "")
+    match = _re.match(r"^/feeder-view/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):", original_uri)
+    if not match:
+        return Response("Bad request", status=400)
+
+    target_ip = match.group(1)
+    # Confirm IP belongs to a known feeder
+    from models import get_db
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM feeders WHERE ip_address = ?", (target_ip,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return Response("Forbidden — IP not a registered feeder", status=403)
+
+    return Response("OK", status=200)
+
 
 @bp.route("/feeder-proxy/<int:feeder_id>/<view_type>")
-@bp.route("/feeder-proxy/<int:feeder_id>/<view_type>/<path:sub_path>")
 @login_required_any
-def feeder_proxy(feeder_id, view_type, sub_path=""):
-    """Proxy feeder tar1090/graphs1090 through the aggregator's NetBird connection."""
+def feeder_proxy(feeder_id, view_type):
+    """Return a redirect to the nginx-proxied feeder URL."""
     feeder = FeederModel.get_by_id(feeder_id)
     if not feeder:
         return "Feeder not found", 404
 
-    if view_type == "map":
-        base_url = (feeder.get("tar1090_url") or "").rstrip("/")
-    elif view_type == "graphs":
-        base_url = (feeder.get("graphs1090_url") or "").rstrip("/")
-    else:
-        return "Unknown view type", 400
+    proxy_url = _feeder_proxy_url(feeder, view_type)
+    if not proxy_url:
+        return f"No {'map' if view_type == 'map' else 'stats'} URL configured for this feeder", 404
 
-    if not base_url:
-        return "No URL configured for this feeder", 404
-
-    target = f"{base_url}/{sub_path}" if sub_path else base_url
-    # Forward query string
-    if request.query_string:
-        target += "?" + request.query_string.decode()
-
-    try:
-        resp = http_requests.get(target, timeout=10, stream=True,
-                                  headers={"Accept-Encoding": "identity"})
-        content_type = resp.headers.get("Content-Type", "text/html")
-
-        # For HTML, rewrite relative URLs to go through this proxy
-        if "text/html" in content_type:
-            content = resp.text
-            proxy_base = f"/api/feeder-proxy/{feeder_id}/{view_type}"
-            # Rewrite absolute paths for assets
-            content = content.replace('src="/', f'src="{proxy_base}/')
-            content = content.replace("src='/", f"src='{proxy_base}/")
-            content = content.replace('href="/', f'href="{proxy_base}/')
-            content = content.replace("href='/", f"href='{proxy_base}/")
-            content = content.replace('action="/', f'action="{proxy_base}/')
-            # Rewrite fetch/XHR calls via a base tag injection
-            inject = f'<base href="{proxy_base}/">\n'
-            content = content.replace("<head>", "<head>\n" + inject, 1)
-            content = content.replace("<HEAD>", "<HEAD>\n" + inject, 1)
-            return Response(content, status=resp.status_code, content_type=content_type)
-
-        # For non-HTML (JS, CSS, images, JSON), stream through directly
-        def generate():
-            for chunk in resp.iter_content(chunk_size=4096):
-                yield chunk
-
-        return Response(stream_with_context(generate()),
-                        status=resp.status_code,
-                        content_type=content_type)
-    except http_requests.exceptions.ConnectionError:
-        return f"Cannot reach feeder at {base_url} — check that it is online and reachable via NetBird.", 502
-    except http_requests.exceptions.Timeout:
-        return f"Timed out connecting to feeder at {base_url}.", 504
-    except Exception as e:
-        return f"Proxy error: {e}", 500
+    from flask import redirect
+    return redirect(proxy_url)
