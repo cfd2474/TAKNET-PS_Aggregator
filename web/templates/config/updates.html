@@ -189,7 +189,7 @@ function setModalDone(msg) {
     setModalStatus('✓ ' + msg, 'var(--green)');
     document.getElementById('modal-close-btn').style.display = 'block';
     appendLog('✓ ' + msg, 'var(--green)');
-    setTimeout(closeModal, 4000);
+    setTimeout(() => { closeModal(); checkUpdate(); }, 4000);
 }
 
 function setModalError(msg) {
