@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.48",
+    "date": "2026-02-21",
+    "notes": "Login logo centered correctly. Services page: added Restart All Services (soft reset) button that restarts all TAKNET containers with a live status modal."
+  },
+  {
     "version": "1.0.47",
     "date": "2026-02-21",
     "notes": "Login page logo updated to oval TAKNET-PS badge, displayed at 80% screen width."

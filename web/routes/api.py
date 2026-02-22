@@ -271,6 +271,24 @@ def docker_containers():
     return jsonify({"containers": get_containers()})
 
 
+@bp.route("/docker/restart-all", methods=["POST"])
+@admin_required
+def docker_restart_all():
+    """Restart all TAKNET containers."""
+    containers = get_containers()
+    output_lines = []
+    errors = []
+    for c in containers:
+        ok, msg = restart_container(c["name"])
+        output_lines.append(f"{'✓' if ok else '✗'} {c['short_name']}: {msg}")
+        if not ok:
+            errors.append(c["short_name"])
+    output = "\n".join(output_lines)
+    if errors:
+        return jsonify({"success": False, "error": f"Failed: {', '.join(errors)}", "output": output})
+    return jsonify({"success": True, "output": output})
+
+
 @bp.route("/docker/containers/<name>/restart", methods=["POST"])
 @admin_required
 def docker_restart(n):
