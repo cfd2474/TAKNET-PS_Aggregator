@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.47",
+    "date": "2026-02-21",
+    "notes": "Login page logo updated to oval TAKNET-PS badge, displayed at 80% screen width."
+  },
+  {
     "version": "1.0.46",
     "date": "2026-02-21",
     "notes": "Fixed web update — git clone and file copy now run inside docker:cli container which has the host install directory bind-mounted, ensuring files actually land on disk. Also added 1s delay before restart to ensure pre_restart event reaches the browser."
