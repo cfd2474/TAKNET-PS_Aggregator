@@ -20,6 +20,6 @@ def outputs():
     return render_template("outputs.html")
 
 @bp.route("/about")
-@admin_required
+@login_required_any
 def about():
     return render_template("about.html")

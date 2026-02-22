@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.40",
+    "date": "2026-02-21",
+    "notes": "About page now accessible to all authenticated users (admin, network_admin, viewer)."
+  },
+  {
     "version": "1.0.39",
     "date": "2026-02-21",
     "notes": "Access control added — login required. Three roles: admin (full access), network_admin (dashboard + data), viewer (map only). Default credentials admin/password. User management page under System. Each user can change their own password via profile menu."
