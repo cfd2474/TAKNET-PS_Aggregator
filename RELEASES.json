@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.46",
+    "date": "2026-02-21",
+    "notes": "Fixed web update — git clone and file copy now run inside docker:cli container which has the host install directory bind-mounted, ensuring files actually land on disk. Also added 1s delay before restart to ensure pre_restart event reaches the browser."
+  },
+  {
     "version": "1.0.45",
     "date": "2026-02-21",
     "notes": "Login page restyled to match dashboard dark theme. TAKNET-PS logo added as splash above login fields."

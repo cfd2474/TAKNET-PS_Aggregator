@@ -3,9 +3,6 @@
 import json
 import os
 import queue
-import shutil
-import subprocess
-import tempfile
 import threading
 import time
 
@@ -35,7 +32,7 @@ _update_running = False
 
 
 def _run_update():
-    """Background thread: clone from GitHub, copy files, run compose up."""
+    """Background thread: clone from GitHub and deploy via docker:cli container (all writes go to host via bind mount)."""
     global _update_running
 
     def log(msg, log_type="log"):
@@ -44,56 +41,15 @@ def _run_update():
             if line:
                 _update_queue.put({"type": log_type, "msg": line})
 
-    try:
-        # ── Step 1: git clone ─────────────────────────────────────────────
-        log(f"Cloning https://github.com/{GITHUB_REPO}.git ...")
-        tmpdir = tempfile.mkdtemp()
-        result = subprocess.run(
-            ["git", "clone", "--depth", "1",
-             f"https://github.com/{GITHUB_REPO}.git", f"{tmpdir}/repo"],
-            capture_output=True, text=True, timeout=120
-        )
-        if result.stderr:
-            log(result.stderr)
-        if result.returncode != 0:
-            log(f"Git clone failed (exit {result.returncode})", "error")
-            return
-        log("Clone complete.")
+    old_ver = "unknown"
+    new_ver = "unknown"
 
-        # ── Step 2: read versions ─────────────────────────────────────────
-        old_ver = "unknown"
-        new_ver = "unknown"
+    try:
+        # Read current version from .env-mounted path
         try:
             old_ver = open(os.path.join(INSTALL_DIR, "VERSION")).read().strip()
         except Exception:
             pass
-        try:
-            new_ver = open(f"{tmpdir}/repo/VERSION").read().strip()
-        except Exception:
-            pass
-        log(f"Updating v{old_ver} → v{new_ver}")
-
-        # ── Step 3: copy files ────────────────────────────────────────────
-        log(f"Copying files to {INSTALL_DIR} ...")
-        src = f"{tmpdir}/repo"
-        for item in os.listdir(src):
-            if item == ".git":
-                continue
-            s = os.path.join(src, item)
-            d = os.path.join(INSTALL_DIR, item)
-            if os.path.isdir(s):
-                shutil.copytree(s, d, dirs_exist_ok=True)
-            else:
-                shutil.copy2(s, d)
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        git_dir = os.path.join(INSTALL_DIR, ".git")
-        if os.path.exists(git_dir):
-            shutil.rmtree(git_dir, ignore_errors=True)
-        log("Files updated.")
-
-        # ── Step 4: docker compose up via docker:cli container ────────────
-        log("Pulling updated images...")
-        log("(Dashboard will reconnect automatically after containers restart)", "pre_restart")
 
         client = _get_docker_client()
         if not client:
@@ -105,14 +61,40 @@ def _run_update():
         except Exception:
             pass
 
+        # Shell script that runs entirely inside docker:cli which has INSTALL_DIR
+        # bind-mounted from the host — so all file writes land on the host filesystem.
+        script = f"""
+set -e
+echo "Cloning https://github.com/{GITHUB_REPO}.git ..."
+TMPDIR=$(mktemp -d)
+git clone --depth 1 https://github.com/{GITHUB_REPO}.git $TMPDIR/repo
+echo "Clone complete."
+NEW_VER=$(cat $TMPDIR/repo/VERSION 2>/dev/null || echo unknown)
+echo "Updating to v$NEW_VER ..."
+# Copy all files except .git to INSTALL_DIR on the host
+cd $TMPDIR/repo
+for item in $(ls -A | grep -v '^[.]git$'); do
+    cp -r $item {INSTALL_DIR}/
+done
+rm -rf $TMPDIR
+echo "Files updated on host."
+echo "Pulling updated images..."
+cd {INSTALL_DIR}
+docker compose pull 2>&1
+echo "Restarting containers..."
+docker compose up -d --build 2>&1
+echo "DONE:$NEW_VER"
+"""
+
+        log("Starting update via docker:cli ...")
+        log("(Dashboard will reconnect automatically after containers restart)", "pre_restart")
+
+        import time
+        time.sleep(1)  # give SSE a moment to flush pre_restart to browser
+
         compose_container = client.containers.create(
             "docker:cli",
-            command=[
-                "sh", "-c",
-                f"cd {INSTALL_DIR} && "
-                "docker compose pull 2>&1 && "
-                "docker compose up -d --build 2>&1"
-            ],
+            command=["sh", "-c", script],
             volumes={
                 "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
                 INSTALL_DIR: {"bind": INSTALL_DIR, "mode": "rw"},
@@ -122,7 +104,11 @@ def _run_update():
         compose_container.start()
 
         for chunk in compose_container.logs(stream=True, follow=True):
-            log(chunk.decode("utf-8", errors="replace"))
+            line = chunk.decode("utf-8", errors="replace").strip()
+            if line.startswith("DONE:"):
+                new_ver = line.split(":", 1)[1]
+            elif line:
+                log(line)
 
         result = compose_container.wait()
         try:
@@ -138,10 +124,8 @@ def _run_update():
                 pass
             log(f"✓ Update complete: v{old_ver} → v{new_ver}", "done")
         else:
-            log(f"docker compose exited with code {exit_code}", "error")
+            log(f"docker:cli exited with code {exit_code}", "error")
 
-    except subprocess.TimeoutExpired:
-        log("Git clone timed out after 120s", "error")
     except Exception as e:
         log(f"Update error: {e}", "error")
     finally:
