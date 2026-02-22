@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.55",
+    "date": "2026-02-22",
+    "notes": "NetBird connection type indicator changed from purple to orange throughout the UI (feeders page, dashboard breakdown, feeder detail). NetBird feeders now auto-populate map URL (http://IP:8080) and stats URL (http://IP:8080/graphs1090/) on first connection; existing empty fields are back-filled on reconnect."
+  },
+  {
     "version": "1.0.54",
     "date": "2026-02-22",
     "notes": "NetBird peer table now shows peer name instead of system hostname."

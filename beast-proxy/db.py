@@ -43,6 +43,10 @@ def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=
     conn = _get_conn()
     ts = now_utc()
 
+    # Auto-populate map/stats URLs for NetBird feeders
+    nb_tar1090 = f"http://{ip_address}:8080" if conn_type == "netbird" else None
+    nb_graphs  = f"http://{ip_address}:8080/graphs1090/" if conn_type == "netbird" else None
+
     # Try to find existing feeder by IP
     row = conn.execute(
         "SELECT id, name FROM feeders WHERE ip_address = ?", (ip_address,)
@@ -59,9 +63,12 @@ def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=
                 longitude = COALESCE(?, longitude),
                 last_seen = ?,
                 status = 'active',
-                updated_at = ?
+                updated_at = ?,
+                tar1090_url    = CASE WHEN (tar1090_url IS NULL OR tar1090_url = '') AND ? IS NOT NULL THEN ? ELSE tar1090_url END,
+                graphs1090_url = CASE WHEN (graphs1090_url IS NULL OR graphs1090_url = '') AND ? IS NOT NULL THEN ? ELSE graphs1090_url END
             WHERE id = ?""",
-            (hostname, conn_type, location, lat, lon, ts, ts, feeder_id),
+            (hostname, conn_type, location, lat, lon, ts, ts,
+             nb_tar1090, nb_tar1090, nb_graphs, nb_graphs, feeder_id),
         )
     else:
         # Auto-generate name
@@ -77,9 +84,11 @@ def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=
         cursor = conn.execute(
             """INSERT INTO feeders
                 (name, conn_type, ip_address, hostname, location, latitude, longitude,
+                 tar1090_url, graphs1090_url,
                  first_seen, last_seen, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
-            (name, conn_type, ip_address, hostname, location, lat, lon, ts, ts, ts, ts),
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
+            (name, conn_type, ip_address, hostname, location, lat, lon,
+             nb_tar1090, nb_graphs, ts, ts, ts, ts),
         )
         feeder_id = cursor.lastrowid
 

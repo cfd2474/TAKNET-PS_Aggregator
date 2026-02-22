@@ -104,8 +104,7 @@ async function loadVPN() {
         html += '<div class="card-header" style="cursor:pointer;user-select:none;" onclick="toggleSection(\'nb-body\')">';
         html += '<div style="display:flex;align-items:center;gap:10px;"><h3>NetBird Peers</h3>';
         if (nb.enabled) {
-            const nbColor = nb.state === 'running' ? 'var(--green)' : 'var(--yellow)';
-            html += '<span class="badge" style="background:rgba(168,85,247,0.12);color:' + nbColor + '">' + (nb.state || 'unknown') + '</span>';
+            html += '<span class="badge" style="background:rgba(249,115,22,0.12);color:var(--orange)">' + (nb.state || 'unknown') + '</span>';
             if (nb.state === 'running') {
                 html += '<span style="font-size:12px;color:var(--text-muted);">' + (nb.peers_online || 0) + ' online / ' + (nb.peers_total || 0) + ' total</span>';
             }
