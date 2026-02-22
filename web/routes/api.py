@@ -10,7 +10,7 @@ import psutil
 import requests as http_requests
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 
-from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel
+from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
@@ -149,6 +149,7 @@ def status():
         "aircraft": aircraft,
         "system": system,
         "activity": activity,
+        "pending_users": UserModel.pending_count(),
     })
 
 

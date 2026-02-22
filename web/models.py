@@ -22,6 +22,12 @@ def get_db():
             with open(schema_path) as f:
                 conn.executescript(f.read())
             conn.commit()
+        # Migration: add status column to users if it doesn't exist
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
         _initialized = True
 
     return conn
@@ -256,19 +262,75 @@ class UserModel:
     def get_all():
         conn = get_db()
         rows = conn.execute(
-            "SELECT id, username, role, created_at, updated_at FROM users ORDER BY username"
+            "SELECT id, username, role, status, created_at, updated_at FROM users WHERE status != 'pending' ORDER BY username"
         ).fetchall()
         conn.close()
         return dict_rows(rows)
 
     @staticmethod
+    def get_pending():
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT id, username, role, status, created_at FROM users WHERE status = 'pending' ORDER BY created_at ASC"
+        ).fetchall()
+        conn.close()
+        return dict_rows(rows)
+
+    @staticmethod
+    def pending_count():
+        conn = get_db()
+        count = conn.execute("SELECT COUNT(*) as c FROM users WHERE status = 'pending'").fetchone()["c"]
+        conn.close()
+        return count
+
+    @staticmethod
+    def register(username, password):
+        """Create a pending user from a self-registration request."""
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, role, status) VALUES (?, ?, 'viewer', 'pending')",
+                (username, generate_password_hash(password)),
+            )
+            conn.commit()
+            conn.close()
+            return True, "Registration submitted"
+        except Exception as e:
+            conn.close()
+            return False, str(e)
+
+    @staticmethod
+    def approve(user_id, role):
+        if role not in UserModel.ROLES:
+            role = "viewer"
+        conn = get_db()
+        conn.execute(
+            "UPDATE users SET status = 'active', role = ?, updated_at = datetime('now') WHERE id = ?",
+            (role, user_id),
+        )
+        conn.commit()
+        conn.close()
+        return True, "User approved"
+
+    @staticmethod
+    def deny(user_id):
+        conn = get_db()
+        conn.execute(
+            "UPDATE users SET status = 'denied', updated_at = datetime('now') WHERE id = ?",
+            (user_id,),
+        )
+        conn.commit()
+        conn.close()
+        return True, "User denied"
+
+    @staticmethod
     def verify_password(username, password):
         user = UserModel.get_by_username(username)
         if not user:
-            return None
+            return None, None
         if check_password_hash(user["password_hash"], password):
-            return user
-        return None
+            return user, user.get("status", "active")
+        return None, None
 
     @staticmethod
     def create(username, password, role):

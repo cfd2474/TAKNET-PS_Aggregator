@@ -2,6 +2,17 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
+<!-- Pending Users Banner (admin only, shown when pending > 0) -->
+{% if current_user.role == 'admin' %}
+<div id="pending-banner" style="display:none;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.35);border-radius:8px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">⚠️</span>
+        <span id="pending-banner-text" style="font-size:13px;color:#eab308;font-weight:500;"></span>
+    </div>
+    <a href="/config/users" style="background:rgba(234,179,8,0.2);border:1px solid rgba(234,179,8,0.5);color:#eab308;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">Review Requests</a>
+</div>
+{% endif %}
+
 <!-- Stat Cards -->
 <div class="card-grid card-grid-4" id="stat-cards">
     <a href="/inputs/feeders" class="stat-card">
@@ -53,6 +64,19 @@ async function loadDashboard() {
     try {
         const r = await fetch('/api/status');
         const d = await r.json();
+
+        // Pending users banner (admin only)
+        const pendingBanner = document.getElementById('pending-banner');
+        if (pendingBanner) {
+            const pc = d.pending_users || 0;
+            if (pc > 0) {
+                pendingBanner.style.display = 'flex';
+                document.getElementById('pending-banner-text').textContent =
+                    pc === 1 ? '1 access request is pending approval' : pc + ' access requests are pending approval';
+            } else {
+                pendingBanner.style.display = 'none';
+            }
+        }
 
         // Stat cards
         const fs = d.feeders || {};

@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.50",
+    "date": "2026-02-22",
+    "notes": "Added self-registration with access request workflow. New users register via 'Request Access' on the login page, enter a pending state, and see a holding screen until approved. Admins see pending requests in Users page with approve/deny/role controls, and a banner on the dashboard when requests are waiting."
+  },
+  {
     "version": "1.0.49",
     "date": "2026-02-22",
     "notes": "Map page now fills full available height with no blank space. README rewritten: NetBird as primary VPN, Tailscale references minimized, irrelevant content removed, feeder beast_out requirement documented."

@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.49
+-- TAKNET-PS Aggregator Database Schema v1.0.50
 
 -- Users (authentication)
 CREATE TABLE IF NOT EXISTS users (
@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'viewer',         -- 'admin', 'network_admin', 'viewer'
+    status TEXT NOT NULL DEFAULT 'active',       -- 'active', 'pending', 'denied'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

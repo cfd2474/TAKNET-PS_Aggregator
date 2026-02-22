@@ -30,7 +30,8 @@ def updates():
 @admin_required
 def users():
     all_users = UserModel.get_all()
-    return render_template("config/users.html", users=all_users, roles=UserModel.ROLES)
+    pending_users = UserModel.get_pending()
+    return render_template("config/users.html", users=all_users, pending_users=pending_users, roles=UserModel.ROLES)
 
 
 # ── User management API (admin only) ─────────────────────────────────────────
@@ -86,3 +87,19 @@ def users_delete(user_id):
         return jsonify({"error": "Cannot delete your own account"}), 400
     UserModel.delete(user_id)
     return jsonify({"success": True})
+
+
+@bp.route("/users/<int:user_id>/approve", methods=["POST"])
+@admin_required
+def users_approve(user_id):
+    data = request.get_json(silent=True) or {}
+    role = data.get("role", "viewer")
+    ok, msg = UserModel.approve(user_id, role)
+    return jsonify({"success": ok, "message": msg})
+
+
+@bp.route("/users/<int:user_id>/deny", methods=["POST"])
+@admin_required
+def users_deny(user_id):
+    ok, msg = UserModel.deny(user_id)
+    return jsonify({"success": ok, "message": msg})

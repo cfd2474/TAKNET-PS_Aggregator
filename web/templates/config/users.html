@@ -2,7 +2,46 @@
 {% block page_title %}User Management{% endblock %}
 {% block content %}
 
-<!-- Users table -->
+<!-- Pending Requests -->
+{% if pending_users %}
+<div class="card" style="max-width:800px;margin-bottom:20px;border-color:rgba(234,179,8,0.4);">
+    <div class="card-header" style="background:rgba(234,179,8,0.06);">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">⚠️</span>
+            <h3 style="color:#eab308;">Pending Access Requests</h3>
+        </div>
+        <span style="font-size:12px;color:var(--text-muted);">{{ pending_users|length }} pending</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Username</th><th>Requested</th><th>Approve As</th><th style="text-align:right;">Actions</th></tr></thead>
+            <tbody>
+            {% for u in pending_users %}
+            <tr id="pending-row-{{ u.id }}">
+                <td style="font-weight:500;color:var(--text-primary);font-family:monospace;">{{ u.username }}</td>
+                <td style="font-size:12px;color:var(--text-muted);">{{ u.created_at[:16] }}</td>
+                <td>
+                    <select id="pending-role-{{ u.id }}" class="form-control" style="padding:4px 8px;font-size:12px;width:auto;">
+                        {% for r in roles %}
+                        <option value="{{ r }}">{{ r }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;">
+                    <button class="btn" style="font-size:11px;padding:4px 12px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#22c55e;"
+                            onclick="approveUser({{ u.id }})">Approve</button>
+                    <button class="btn btn-danger" style="font-size:11px;padding:4px 12px;"
+                            onclick="denyUser({{ u.id }}, '{{ u.username }}')">Deny</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Active Users -->
 <div class="card" style="max-width:800px;">
     <div class="card-header">
         <h3>Users</h3>
@@ -49,20 +88,12 @@
         </div>
         <div class="modal-body">
             <div id="add-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-bottom:14px;"></div>
-            <div class="form-group">
-                <label>Username</label>
-                <input class="form-control" type="text" id="add-username" autocomplete="off">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input class="form-control" type="password" id="add-password" autocomplete="new-password">
-            </div>
+            <div class="form-group"><label>Username</label><input class="form-control" type="text" id="add-username" autocomplete="off"></div>
+            <div class="form-group"><label>Password</label><input class="form-control" type="password" id="add-password" autocomplete="new-password"></div>
             <div class="form-group">
                 <label>Role</label>
                 <select class="form-control" id="add-role">
-                    {% for r in roles %}
-                    <option value="{{ r }}">{{ r }}</option>
-                    {% endfor %}
+                    {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
                 </select>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
@@ -82,17 +113,11 @@
         </div>
         <div class="modal-body">
             <div id="reset-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-bottom:14px;"></div>
-            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
-                Set new password for <strong id="reset-username" style="color:var(--text-primary);"></strong>
-            </p>
-            <input type="hidden" id="reset-user-id">
-            <div class="form-group">
-                <label>New Password</label>
-                <input class="form-control" type="password" id="reset-password" autocomplete="new-password" minlength="6">
-            </div>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Set new password for <strong id="reset-username"></strong></p>
+            <div class="form-group"><label>New Password</label><input class="form-control" type="password" id="reset-password" autocomplete="new-password"></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
                 <button class="btn" onclick="closeModal('reset-modal')">Cancel</button>
-                <button class="btn btn-primary" onclick="resetPassword()">Update Password</button>
+                <button class="btn btn-primary" onclick="resetPassword()">Reset Password</button>
             </div>
         </div>
     </div>
@@ -102,26 +127,28 @@
 
 {% block extra_scripts %}
 <script>
-function showAddModal() {
-    document.getElementById('add-username').value = '';
-    document.getElementById('add-password').value = '';
-    document.getElementById('add-role').value = 'viewer';
-    document.getElementById('add-error').style.display = 'none';
-    document.getElementById('add-modal').classList.add('show');
-    document.getElementById('add-username').focus();
+let resetTargetId = null;
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function showAddModal() { document.getElementById('add-error').style.display='none'; document.getElementById('add-username').value=''; document.getElementById('add-password').value=''; document.getElementById('add-modal').classList.add('show'); }
+function showResetModal(id, name) { resetTargetId = id; document.getElementById('reset-username').textContent = name; document.getElementById('reset-password').value = ''; document.getElementById('reset-error').style.display='none'; document.getElementById('reset-modal').classList.add('show'); }
+
+async function approveUser(id) {
+    const role = document.getElementById('pending-role-' + id).value;
+    const r = await fetch('/config/users/' + id + '/approve', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({role}) });
+    const d = await r.json();
+    if (d.success) {
+        document.getElementById('pending-row-' + id).remove();
+        location.reload();
+    } else { alert('Error: ' + d.error); }
 }
 
-function showResetModal(id, username) {
-    document.getElementById('reset-user-id').value = id;
-    document.getElementById('reset-username').textContent = username;
-    document.getElementById('reset-password').value = '';
-    document.getElementById('reset-error').style.display = 'none';
-    document.getElementById('reset-modal').classList.add('show');
-    document.getElementById('reset-password').focus();
-}
-
-function closeModal(id) {
-    document.getElementById(id).classList.remove('show');
+async function denyUser(id, name) {
+    if (!confirm('Deny access request for "' + name + '"? They will be unable to log in.')) return;
+    const r = await fetch('/config/users/' + id + '/deny', { method: 'POST' });
+    const d = await r.json();
+    if (d.success) { document.getElementById('pending-row-' + id).remove(); }
+    else { alert('Error: ' + d.error); }
 }
 
 async function createUser() {
@@ -129,89 +156,35 @@ async function createUser() {
     const password = document.getElementById('add-password').value;
     const role = document.getElementById('add-role').value;
     const errEl = document.getElementById('add-error');
-
-    if (!username || !password) {
-        showErr(errEl, 'Username and password are required.');
-        return;
-    }
-
-    try {
-        const r = await fetch('/config/users/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username, password, role})
-        });
-        const d = await r.json();
-        if (d.success) {
-            closeModal('add-modal');
-            location.reload();
-        } else {
-            showErr(errEl, d.error || 'Failed to create user.');
-        }
-    } catch(e) {
-        showErr(errEl, 'Request failed: ' + e);
-    }
+    if (!username || !password) { errEl.textContent = 'Username and password required.'; errEl.style.display='block'; return; }
+    const r = await fetch('/config/users/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password, role}) });
+    const d = await r.json();
+    if (d.success) { location.reload(); }
+    else { errEl.textContent = d.error || 'Error creating user'; errEl.style.display='block'; }
 }
 
-async function changeRole(userId, role) {
-    try {
-        const r = await fetch(`/config/users/${userId}/role`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({role})
-        });
-        const d = await r.json();
-        if (!d.success) alert(d.error || 'Failed to update role.');
-    } catch(e) {
-        alert('Request failed: ' + e);
-    }
+async function changeRole(id, role) {
+    const r = await fetch('/config/users/' + id + '/role', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({role}) });
+    const d = await r.json();
+    if (!d.success) { alert('Error: ' + (d.error || 'Could not update role')); location.reload(); }
 }
 
 async function resetPassword() {
-    const userId = document.getElementById('reset-user-id').value;
     const password = document.getElementById('reset-password').value;
     const errEl = document.getElementById('reset-error');
-
-    if (password.length < 6) {
-        showErr(errEl, 'Password must be at least 6 characters.');
-        return;
-    }
-
-    try {
-        const r = await fetch(`/config/users/${userId}/reset-password`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({password})
-        });
-        const d = await r.json();
-        if (d.success) {
-            closeModal('reset-modal');
-        } else {
-            showErr(errEl, d.error || 'Failed to reset password.');
-        }
-    } catch(e) {
-        showErr(errEl, 'Request failed: ' + e);
-    }
+    if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display='block'; return; }
+    const r = await fetch('/config/users/' + resetTargetId + '/reset-password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password}) });
+    const d = await r.json();
+    if (d.success) { closeModal('reset-modal'); }
+    else { errEl.textContent = d.error || 'Error resetting password'; errEl.style.display='block'; }
 }
 
-async function deleteUser(userId, username) {
-    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
-    try {
-        const r = await fetch(`/config/users/${userId}/delete`, {method: 'POST'});
-        const d = await r.json();
-        if (d.success) {
-            document.getElementById('user-row-' + userId).remove();
-        } else {
-            alert(d.error || 'Failed to delete user.');
-        }
-    } catch(e) {
-        alert('Request failed: ' + e);
-    }
-}
-
-function showErr(el, msg) {
-    el.textContent = msg;
-    el.style.display = 'block';
+async function deleteUser(id, name) {
+    if (!confirm('Delete user "' + name + '"? This cannot be undone.')) return;
+    const r = await fetch('/config/users/' + id + '/delete', { method:'POST' });
+    const d = await r.json();
+    if (d.success) { document.getElementById('user-row-' + id).remove(); }
+    else { alert('Error: ' + d.error); }
 }
 </script>
 {% endblock %}
