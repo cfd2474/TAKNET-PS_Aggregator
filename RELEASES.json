@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.41",
+    "date": "2026-02-21",
+    "notes": "Removed READSB_MAX_RANGE limit. Aggregator now accepts aircraft data from feeders at any distance, enabling nationwide and international deployments."
+  },
+  {
     "version": "1.0.40",
     "date": "2026-02-21",
     "notes": "About page now accessible to all authenticated users (admin, network_admin, viewer)."
