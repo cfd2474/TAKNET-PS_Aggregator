@@ -3,44 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — TAKNET-PS Aggregator</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>Login — TAKNET-PS</title>
     <style>
-        body { display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:var(--bg-primary); }
-        .login-box { width:100%; max-width:380px; padding:0 16px; }
-        .login-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px; padding:40px; }
-        .login-logo { text-align:center; margin-bottom:32px; }
-        .login-logo h1 { font-size:20px; font-weight:700; color:var(--text-primary); margin:0 0 4px; }
-        .login-logo p  { font-size:13px; color:var(--text-muted); margin:0; }
-        .form-group { margin-bottom:16px; }
-        .form-group label { display:block; font-size:12px; font-weight:500; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
-        .form-group input { width:100%; box-sizing:border-box; }
-        .btn-login { width:100%; margin-top:8px; padding:10px; font-size:14px; font-weight:600; }
-        .error-msg { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:10px 14px; font-size:13px; color:var(--red); margin-bottom:16px; }
+        :root {
+            --bg-primary: #0f1923;
+            --bg-secondary: #1a2634;
+            --bg-card: #1e2d3d;
+            --bg-input: #162029;
+            --border: #2a3a4a;
+            --text-primary: #e8edf2;
+            --text-secondary: #8899aa;
+            --text-muted: #5a6a7a;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --red: #ef4444;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .login-wrap {
+            width: 100%;
+            max-width: 400px;
+        }
+        .logo-wrap {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .logo-wrap img {
+            width: 100%;
+            max-width: 360px;
+            height: auto;
+            /* image has black bg — blend it into our dark background */
+            mix-blend-mode: lighten;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+        }
+        .card-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border-color .15s;
+        }
+        .form-group input:focus {
+            border-color: var(--accent);
+        }
+        .btn-login {
+            width: 100%;
+            margin-top: 8px;
+            padding: 11px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s;
+        }
+        .btn-login:hover { background: var(--accent-hover); }
+        .error-msg {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--red);
+            margin-bottom: 16px;
+        }
+        .footer-note {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
-<div class="login-box">
-    <div class="login-card">
-        <div class="login-logo">
-            <h1>TAKNET-PS</h1>
-            <p>Aggregator Dashboard</p>
-        </div>
+<div class="login-wrap">
+    <div class="logo-wrap">
+        <img src="/static/img/taknetps.png" alt="TAKNET-PS">
+    </div>
+    <div class="card">
+        <div class="card-label">Aggregator Dashboard</div>
         {% if error %}
         <div class="error-msg">{{ error }}</div>
         {% endif %}
         <form method="POST">
             <div class="form-group">
                 <label>Username</label>
-                <input class="form-control" type="text" name="username" autocomplete="username" autofocus required>
+                <input type="text" name="username" autocomplete="username" autofocus required>
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <input class="form-control" type="password" name="password" autocomplete="current-password" required>
+                <input type="password" name="password" autocomplete="current-password" required>
             </div>
-            <button class="btn btn-primary btn-login" type="submit">Sign In</button>
+            <button class="btn-login" type="submit">Sign In</button>
         </form>
     </div>
+    <div class="footer-note">TAKNET-PS v{{ version }}</div>
 </div>
 </body>
 </html>

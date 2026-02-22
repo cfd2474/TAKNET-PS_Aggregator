@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.45",
+    "date": "2026-02-21",
+    "notes": "Login page restyled to match dashboard dark theme. TAKNET-PS logo added as splash above login fields."
+  },
+  {
     "version": "1.0.44",
     "date": "2026-02-21",
     "notes": "Fixed updates page showing stale 'update available' after web update completes. Version status now refreshes automatically after the modal closes."
