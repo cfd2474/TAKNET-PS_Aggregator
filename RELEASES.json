@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.43",
+    "date": "2026-02-21",
+    "notes": "Removed LAT/LONG from tar1090 config. Combined with v1.0.41-42 fixes, aggregator now displays aircraft from feeders at any location without range filtering at any layer."
+  },
+  {
     "version": "1.0.42",
     "date": "2026-02-21",
     "notes": "Removed fixed READSB_LAT/LON from readsb config. With READSB_NET_RECEIVER_ID enabled, readsb uses each feeder's own position for CPR decoding, fixing position loss for remote feeders."

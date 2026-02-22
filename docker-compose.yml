@@ -104,8 +104,6 @@ services:
       - TZ=${TZ:-America/Los_Angeles}
       - BEASTHOST=readsb
       - BEASTPORT=30005
-      - LAT=${SITE_LAT:-33.8753}
-      - LONG=${SITE_LON:--117.5664}
       - TAR1090_DEFAULTCENTERLAT=${SITE_LAT:-33.8753}
       - TAR1090_DEFAULTCENTERLON=${SITE_LON:--117.5664}
       - TAR1090_DEFAULTZOOM=9
