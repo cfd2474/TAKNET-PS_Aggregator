@@ -64,7 +64,7 @@ def create_app():
 
     @app.context_processor
     def inject_globals():
-        version = "1.0.51"
+        version = "1.0.52"
         try:
             vpath = os.path.join(os.path.dirname(__file__), "VERSION")
             if os.path.exists(vpath):

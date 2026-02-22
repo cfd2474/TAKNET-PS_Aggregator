@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.52",
+    "date": "2026-02-22",
+    "notes": "NetBird enrollment card: shows a green hi-vis banner when connected, hides setup key field and re-enroll button. Enrollment form only appears when not connected. Disconnect button moves into the connected banner."
+  },
+  {
     "version": "1.0.51",
     "date": "2026-02-22",
     "notes": "VPN page peer tables now collapse by default. Click the card header to expand/collapse Tailscale or NetBird peer lists. Peer counts remain visible in the header at all times."
