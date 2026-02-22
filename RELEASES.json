@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.54",
+    "date": "2026-02-22",
+    "notes": "NetBird peer table now shows peer name instead of system hostname."
+  },
+  {
     "version": "1.0.53",
     "date": "2026-02-22",
     "notes": "Updates page now shows release notes for all versions included in an available update, displayed inside the update banner before you run it."

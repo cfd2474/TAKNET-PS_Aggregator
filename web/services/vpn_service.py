@@ -102,7 +102,7 @@ def get_netbird_status():
             peers = []
             for p in raw_peers:
                 peers.append({
-                    "hostname": p.get("hostname", p.get("name", "")),
+                    "hostname": p.get("name", p.get("hostname", "")),
                     "ip": p.get("ip", ""),
                     "connected": p.get("connected", False),
                     "os": p.get("os", ""),
