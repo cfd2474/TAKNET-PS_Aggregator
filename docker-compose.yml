@@ -50,8 +50,6 @@ services:
       - READSB_NET_RECEIVER_ID=true
       - READSB_STATS_EVERY=60
       - READSB_JSON_INTERVAL=1.0
-      - READSB_LAT=${SITE_LAT:-33.8753}
-      - READSB_LON=${SITE_LON:--117.5664}
     ports:
       - "${SBS_PORT:-30003}:30003/tcp"
     volumes:

@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.41
+-- TAKNET-PS Aggregator Database Schema v1.0.42
 
 -- Users (authentication)
 CREATE TABLE IF NOT EXISTS users (
