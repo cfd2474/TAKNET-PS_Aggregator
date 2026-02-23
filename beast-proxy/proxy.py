@@ -420,7 +420,7 @@ async def _handle_output_client(reader, writer):
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.74")
+    print("TAKNET-PS Beast Proxy v1.0.75")
     print(f"  Feeder listener:  {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Output listener:  {LISTEN_HOST}:{OUTPUT_LISTEN_PORT}")
     print(f"  Forwarding to:    {READSB_HOST}:{READSB_PORT}")

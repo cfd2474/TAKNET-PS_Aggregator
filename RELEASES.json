@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.75",
+    "date": "2026-02-23",
+    "notes": "Output API key modal now shows beginner-friendly connection instructions with the full URL/host (adsb.tak-solutions.com) and step-by-step guidance for both beast raw TCP and JSON HTTP. Edit modal now locks name/type/mode fields once an API key has been generated — only notes remains editable. Button changes to 'Save Notes' to reflect this."
+  },
+  {
     "version": "1.0.74",
     "date": "2026-02-23",
     "notes": "Fixed update modal — gunicorn was running 2 worker processes, so the update thread (Worker A) wrote to an in-memory queue that the SSE stream (Worker B) could never see. Reduced to 1 worker — the dashboard is a single-admin tool and doesn't need multiple workers."
