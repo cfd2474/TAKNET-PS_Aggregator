@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.68",
+    "date": "2026-02-22",
+    "notes": "Fixed update modal showing 'Connection lost unexpectedly' instead of reconnecting gracefully. Root cause: pre_restart signal was queued before the docker:cli container started, but gunicorn buffering meant the browser didn't receive it before containers restarted. Signal is now emitted from inside the shell script right before docker compose up runs, guaranteeing the browser has received all prior log lines first."
+  },
+  {
     "version": "1.0.67",
     "date": "2026-02-22",
     "notes": "Corrected outputs access model: viewers have no access to outputs at all. Outputs page and API are restricted to admin and network_admin only. Removed is_public concept entirely."

@@ -81,24 +81,21 @@ echo "Files updated on host."
 echo "Pulling updated images..."
 cd {INSTALL_DIR}
 docker compose pull 2>&1
+echo "PRE_RESTART"
 echo "Restarting containers..."
 docker compose up -d --build 2>&1
 echo "DONE:$NEW_VER"
 """
 
         log("Starting update via docker:cli ...")
-        log("(Dashboard will reconnect automatically after containers restart)", "pre_restart")
-
-        import time
-        time.sleep(1)  # give SSE a moment to flush pre_restart to browser
 
         compose_container = client.containers.create(
             "docker:cli",
             command=["sh", "-c", script],
-            volumes={
-                "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
-                INSTALL_DIR: {"bind": INSTALL_DIR, "mode": "rw"},
-            },
+            volumes={{
+                "/var/run/docker.sock": {{"bind": "/var/run/docker.sock", "mode": "rw"}},
+                INSTALL_DIR: {{"bind": INSTALL_DIR, "mode": "rw"}},
+            }},
             working_dir=INSTALL_DIR,
         )
         compose_container.start()
@@ -107,6 +104,8 @@ echo "DONE:$NEW_VER"
             line = chunk.decode("utf-8", errors="replace").strip()
             if line.startswith("DONE:"):
                 new_ver = line.split(":", 1)[1]
+            elif line == "PRE_RESTART":
+                log("Dashboard will reconnect automatically after containers restart", "pre_restart")
             elif line:
                 log(line)
 
