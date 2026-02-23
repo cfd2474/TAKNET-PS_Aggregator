@@ -728,8 +728,10 @@ def output_update(output_id):
 @network_admin_required
 def output_delete(output_id):
     from flask_login import current_user
+    from models import signal_drop_output
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
+    signal_drop_output(output_id)  # drop any active beast connection first
     OutputModel.delete(output_id)
     return jsonify({"success": True})
 

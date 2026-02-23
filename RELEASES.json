@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.73",
+    "date": "2026-02-23",
+    "notes": "Fixed misleading API key modal text — key is visible in the outputs list, not one-time only. Deleting an output now emits a drop signal before deletion, terminating any active beast connection using that output's key."
+  },
+  {
     "version": "1.0.72",
     "date": "2026-02-23",
     "notes": "Fixed update modal showing 'Connection lost unexpectedly' even when update succeeded. Three-part fix: (1) Added 3s sleep in shell script between PRE_RESTART signal and docker compose up, giving browser time to receive the event; (2) Added SSE padding comments after pre_restart to force gunicorn to flush the chunk immediately; (3) Added 500ms grace period in JS onerror handler to handle race between pre_restart processing and connection drop. Also removed --build flag from docker compose up since pull already fetches updated images."
