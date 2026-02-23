@@ -302,6 +302,14 @@ async def stats_flusher():
 
         vpn_resolver.refresh_caches()
 
+        # Auto-purge feeders not seen in 24 hours
+        try:
+            purged = db.purge_old_feeders(hours=24)
+            if purged:
+                print(f"[proxy] Auto-purged {purged} feeder(s) not seen in 24h")
+        except Exception as e:
+            print(f"[proxy] Auto-purge error: {e}")
+
         # Check for key-regen drop signals
         try:
             for oid in db.pop_drop_signals():
@@ -420,7 +428,7 @@ async def _handle_output_client(reader, writer):
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.75")
+    print("TAKNET-PS Beast Proxy v1.0.76")
     print(f"  Feeder listener:  {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Output listener:  {LISTEN_HOST}:{OUTPUT_LISTEN_PORT}")
     print(f"  Forwarding to:    {READSB_HOST}:{READSB_PORT}")

@@ -126,6 +126,31 @@ class FeederModel:
         conn.execute("DELETE FROM feeders WHERE id = ?", (feeder_id,))
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def purge_old(hours=24):
+        """Delete feeders not seen in the last N hours. Returns count deleted."""
+        conn = get_db()
+        cur = conn.execute(
+            "DELETE FROM feeders WHERE last_seen < datetime('now', ?)",
+            (f"-{hours} hours",)
+        )
+        count = cur.rowcount
+        conn.commit()
+        conn.close()
+        return count
+
+    @staticmethod
+    def purge_inactive():
+        """Delete all feeders that are not currently active. Returns count deleted."""
+        conn = get_db()
+        cur = conn.execute(
+            "DELETE FROM feeders WHERE status != 'active'"
+        )
+        count = cur.rowcount
+        conn.commit()
+        conn.close()
+        return count
         return True
 
 

@@ -34,6 +34,9 @@
             <option value="public">Public</option>
         </select>
         <input type="text" class="form-control" id="filter-search" placeholder="Search by name or IP..." style="width:auto;min-width:200px;flex:1;">
+        {% if current_user.role == 'admin' %}
+        <button class="btn" style="white-space:nowrap;font-size:12px;color:var(--red);border-color:rgba(239,68,68,0.3);" onclick="resetFeederList()">Reset Feeder List</button>
+        {% endif %}
     </div>
 </div>
 
@@ -127,6 +130,19 @@ function renderTable() {
 document.getElementById('filter-status').addEventListener('change', loadFeeders);
 document.getElementById('filter-type').addEventListener('change', loadFeeders);
 document.getElementById('filter-search').addEventListener('input', renderTable);
+
+async function resetFeederList() {
+    if (!confirm('Remove all non-active feeders (stale, offline)? This cannot be undone.')) return;
+    const r = await fetch('/api/feeders/purge-inactive', { method: 'POST' });
+    const d = await r.json();
+    if (d.success) {
+        await loadFeeders();
+        const msg = d.deleted > 0 ? `Removed ${d.deleted} inactive feeder(s).` : 'No inactive feeders to remove.';
+        alert(msg);
+    } else {
+        alert(d.error || 'Purge failed');
+    }
+}
 
 loadFeeders();
 setInterval(loadFeeders, 15000);

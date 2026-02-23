@@ -321,6 +321,22 @@ def feeder_merge(feeder_id):
         conn.close()
 
 
+@bp.route("/feeders/purge-inactive", methods=["POST"])
+@admin_required
+def feeders_purge_inactive():
+    """Delete all non-active feeders (stale, offline)."""
+    count = FeederModel.purge_inactive()
+    return jsonify({"success": True, "deleted": count})
+
+
+@bp.route("/feeders/purge-old", methods=["POST"])
+@admin_required
+def feeders_purge_old():
+    """Delete feeders not seen in the last 24 hours."""
+    count = FeederModel.purge_old(hours=24)
+    return jsonify({"success": True, "deleted": count})
+
+
 @bp.route("/feeders/<int:feeder_id>/connections")
 @network_admin_required
 def feeder_connections(feeder_id):

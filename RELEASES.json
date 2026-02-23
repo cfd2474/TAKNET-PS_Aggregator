@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.76",
+    "date": "2026-02-23",
+    "notes": "Feeder list auto-cleanup: beast-proxy now purges feeders not seen in 24 hours on every stats cycle. Added 'Reset Feeder List' button (admin only) to the feeder list filter bar that removes all non-active (stale/offline) feeders on demand."
+  },
+  {
     "version": "1.0.75",
     "date": "2026-02-23",
     "notes": "Output API key modal now shows beginner-friendly connection instructions with the full URL/host (adsb.tak-solutions.com) and step-by-step guidance for both beast raw TCP and JSON HTTP. Edit modal now locks name/type/mode fields once an API key has been generated — only notes remains editable. Button changes to 'Save Notes' to reflect this."

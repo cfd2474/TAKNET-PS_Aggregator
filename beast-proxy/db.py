@@ -292,3 +292,16 @@ def pop_drop_signals() -> list:
         conn.commit()
     conn.close()
     return ids
+
+
+def purge_old_feeders(hours: int = 24) -> int:
+    """Delete feeders not seen in the last N hours. Returns count deleted."""
+    conn = _get_conn()
+    cur = conn.execute(
+        "DELETE FROM feeders WHERE last_seen < datetime('now', ?)",
+        (f"-{hours} hours",)
+    )
+    count = cur.rowcount
+    conn.commit()
+    conn.close()
+    return count
