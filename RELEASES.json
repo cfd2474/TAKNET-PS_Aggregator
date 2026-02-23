@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.63",
+    "date": "2026-02-22",
+    "notes": "Fixed feeder detail page JS silently breaking when tar1090/graphs1090 URLs contained special characters (e.g. & in query strings). Raw Jinja URL values inside JS strings replaced with tojson filter. This also fixes the 'From Location' button appearing to do nothing."
+  },
+  {
     "version": "1.0.62",
     "date": "2026-02-22",
     "notes": "Feeder detail page: added '📍 From Location' button that auto-populates the name field in CC-ST-City format (e.g. US-TN-nashville). Uses MLAT GPS coordinates via Nominatim reverse geocode if available, falls back to IP geolocation via ip-api.com. Name is previewed in the field; user confirms by clicking Save Changes."

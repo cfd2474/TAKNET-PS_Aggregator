@@ -322,8 +322,8 @@ function openFeederView(type) {
     const titles = { map: 'Feeder Map (via NetBird)', graphs: 'Feeder Stats (via NetBird)' };
     const proxyUrl = '/api/feeder-proxy/' + feederId + '/' + type;
     const directUrls = {
-        map:    '{{ feeder.tar1090_url or "" }}',
-        graphs: '{{ feeder.graphs1090_url or "" }}'
+        map:    {{ feeder.tar1090_url | tojson }},
+        graphs: {{ feeder.graphs1090_url | tojson }}
     };
     document.getElementById('proxy-modal-title').textContent = titles[type] || type;
     document.getElementById('proxy-direct-link').href = directUrls[type] || proxyUrl;
