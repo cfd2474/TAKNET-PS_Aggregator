@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.62",
+    "date": "2026-02-22",
+    "notes": "Feeder detail page: added '📍 From Location' button that auto-populates the name field in CC-ST-City format (e.g. US-TN-nashville). Uses MLAT GPS coordinates via Nominatim reverse geocode if available, falls back to IP geolocation via ip-api.com. Name is previewed in the field; user confirms by clicking Save Changes."
+  },
+  {
     "version": "1.0.61",
     "date": "2026-02-22",
     "notes": "Fixed duplicate feeder records when same feeder connects via both public IP and NetBird IP. beast-proxy now detects when a NetBird feeder's hostname matches an existing public-IP record and merges them on reconnect. Added 'Merge Duplicate' button on feeder detail page to manually collapse existing duplicates and re-parent their connection history."

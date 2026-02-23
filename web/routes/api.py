@@ -190,6 +190,85 @@ def feeder_update(feeder_id):
     return jsonify({"error": "Update failed"}), 400
 
 
+@bp.route("/feeders/<int:feeder_id>/suggest-name")
+@network_admin_required
+def feeder_suggest_name(feeder_id):
+    """Return a suggested name in CC-ST-City format.
+    Uses MLAT GPS coordinates if available, falls back to IP geolocation.
+    """
+    feeder = FeederModel.get_by_id(feeder_id)
+    if not feeder:
+        return jsonify({"error": "Feeder not found"}), 404
+
+    lat  = feeder.get("latitude")
+    lon  = feeder.get("longitude")
+    ip   = feeder.get("ip_address", "")
+
+    def _format_name(country, state, city):
+        """Build CC-ST-City slug from raw strings."""
+        country = (country or "").upper().strip()[:2]
+        state   = (state   or "").upper().strip()
+        city    = (city    or "").strip()
+        # Slugify city: lowercase, spaces→hyphens, remove punctuation
+        import re
+        city_slug = re.sub(r"[^a-z0-9\-]", "", city.lower().replace(" ", "-"))
+        parts = [p for p in [country, state, city_slug] if p]
+        return "-".join(parts)
+
+    # ── Method 1: GPS coordinates via Nominatim reverse geocode ──────────────
+    if lat is not None and lon is not None:
+        try:
+            resp = http_requests.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"lat": lat, "lon": lon, "format": "json", "zoom": 10},
+                headers={"User-Agent": "TAKNET-PS-Aggregator/1.0"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                addr = resp.json().get("address", {})
+                country = addr.get("country_code", "").upper()
+                state   = (addr.get("ISO3166-2-lvl4") or "").split("-")[-1]  # e.g. "US-TN" → "TN"
+                city    = (addr.get("city") or addr.get("town") or
+                           addr.get("village") or addr.get("county") or "")
+                name = _format_name(country, state, city)
+                if name:
+                    return jsonify({"name": name, "source": "gps"})
+        except Exception as e:
+            pass  # fall through to IP lookup
+
+    # ── Method 2: IP geolocation via ip-api.com (free, no key) ──────────────
+    # Skip private/RFC1918 and NetBird ranges
+    import ipaddress as _ipaddress
+    try:
+        addr_obj = _ipaddress.ip_address(ip)
+        if addr_obj.is_private or addr_obj.is_loopback:
+            return jsonify({"error": "No GPS coordinates and IP is private — cannot geolocate"}), 422
+    except ValueError:
+        return jsonify({"error": "Invalid IP address"}), 422
+
+    try:
+        resp = http_requests.get(
+            f"http://ip-api.com/json/{ip}",
+            params={"fields": "countryCode,regionCode,city,status,message"},
+            timeout=8,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") == "success":
+                name = _format_name(
+                    data.get("countryCode", ""),
+                    data.get("regionCode", ""),
+                    data.get("city", ""),
+                )
+                if name:
+                    return jsonify({"name": name, "source": "ip"})
+            return jsonify({"error": data.get("message", "IP geolocation failed")}), 422
+    except Exception as e:
+        return jsonify({"error": f"IP geolocation failed: {e}"}), 500
+
+    return jsonify({"error": "Could not determine location"}), 422
+
+
 @bp.route("/feeders/<int:feeder_id>", methods=["DELETE"])
 @admin_required
 def feeder_delete(feeder_id):

@@ -83,7 +83,11 @@
         <div class="card-grid card-grid-2">
             <div class="form-group">
                 <label>Name</label>
-                <input type="text" class="form-control" name="name" value="{{ feeder.name or '' }}">
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" class="form-control" name="name" id="edit-name" value="{{ feeder.name or '' }}">
+                    <button type="button" class="btn" style="white-space:nowrap;font-size:12px;padding:6px 12px;" onclick="populateName()" id="btn-populate-name" title="Auto-fill from GPS coordinates or IP geolocation">📍 From Location</button>
+                </div>
+                <div id="populate-name-msg" style="font-size:11px;margin-top:4px;display:none;"></div>
             </div>
             <div class="form-group">
                 <label>tar1090 URL</label>
@@ -238,6 +242,35 @@ async function saveFeeder(e) {
             alert('Save failed');
         }
     } catch(e) { alert('Error: ' + e); }
+}
+
+async function populateName() {
+    const btn = document.getElementById('btn-populate-name');
+    const msg = document.getElementById('populate-name-msg');
+    btn.disabled = true;
+    btn.textContent = 'Looking up…';
+    msg.style.display = 'none';
+    try {
+        const r = await fetch('/api/feeders/' + feederId + '/suggest-name');
+        const d = await r.json();
+        if (d.name) {
+            document.getElementById('edit-name').value = d.name;
+            const src = d.source === 'gps' ? '📡 from GPS coordinates' : '🌐 from IP geolocation';
+            msg.textContent = '✓ Name populated ' + src + ' — click Save Changes to apply.';
+            msg.style.color = 'var(--green)';
+            msg.style.display = 'block';
+        } else {
+            msg.textContent = '✗ ' + (d.error || 'Could not determine location');
+            msg.style.color = 'var(--red)';
+            msg.style.display = 'block';
+        }
+    } catch(e) {
+        msg.textContent = '✗ Request failed: ' + e;
+        msg.style.color = 'var(--red)';
+        msg.style.display = 'block';
+    }
+    btn.disabled = false;
+    btn.textContent = '📍 From Location';
 }
 
 async function showMergeModal() {
