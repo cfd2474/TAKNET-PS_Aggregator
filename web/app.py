@@ -66,11 +66,16 @@ def create_app():
     with app.app_context():
         from models import get_db
         conn = get_db()
-        try:
-            conn.execute("ALTER TABLE outputs ADD COLUMN mode TEXT NOT NULL DEFAULT 'api'")
-            conn.commit()
-        except Exception:
-            pass
+        for stmt in [
+            "ALTER TABLE outputs ADD COLUMN mode TEXT NOT NULL DEFAULT 'api'",
+            "ALTER TABLE output_api_keys ADD COLUMN status TEXT NOT NULL DEFAULT 'ready'",
+            "ALTER TABLE output_api_keys ADD COLUMN key_display TEXT NOT NULL DEFAULT ''",
+        ]:
+            try:
+                conn.execute(stmt)
+                conn.commit()
+            except Exception:
+                pass
         conn.close()
 
     @app.context_processor

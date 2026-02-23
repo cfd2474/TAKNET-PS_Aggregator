@@ -482,27 +482,24 @@ class OutputModel:
         conn.close()
 
 
+
 class OutputKeyModel:
     """API key management for outputs."""
 
     @staticmethod
-    def _hash(key: str) -> str:
-        import hashlib
-        return hashlib.sha256(key.encode()).hexdigest()
-
-    @staticmethod
     def generate(output_id: int) -> str:
-        """Generate a new key, store its hash, return the raw key (shown once)."""
-        import secrets
-        import hashlib
+        """Generate a new key, store hash + display copy, return the raw key."""
+        import secrets, hashlib
         raw = "tak-" + secrets.token_urlsafe(32)
         key_hash = hashlib.sha256(raw.encode()).hexdigest()
         prefix = raw[:12]
         conn = get_db()
         conn.execute("DELETE FROM output_api_keys WHERE output_id = ?", (output_id,))
         conn.execute(
-            "INSERT INTO output_api_keys (output_id, key_hash, key_prefix) VALUES (?, ?, ?)",
-            (output_id, key_hash, prefix)
+            """INSERT INTO output_api_keys
+               (output_id, key_hash, key_prefix, key_display, status)
+               VALUES (?, ?, ?, ?, 'ready')""",
+            (output_id, key_hash, prefix, raw)
         )
         conn.commit()
         conn.close()
@@ -510,33 +507,57 @@ class OutputKeyModel:
 
     @staticmethod
     def get_for_output(output_id: int):
-        """Return key metadata (never the raw key) for an output."""
+        """Return key metadata including display key and status."""
         conn = get_db()
         row = conn.execute(
-            "SELECT id, key_prefix, created_at, last_used FROM output_api_keys WHERE output_id = ?",
+            """SELECT id, key_prefix, key_display, status, created_at, last_used
+               FROM output_api_keys WHERE output_id = ?""",
             (output_id,)
         ).fetchone()
         conn.close()
         return dict(row) if row else None
 
     @staticmethod
-    def validate(raw_key: str):
-        """Validate a raw key. Returns output dict or None."""
+    def consume(raw_key: str):
+        """Validate a ready key and mark it used (single-use auth).
+        Returns output dict if valid and ready, None otherwise."""
         import hashlib
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
         conn = get_db()
         row = conn.execute(
-            """SELECT o.*, k.id as key_id FROM output_api_keys k
+            """SELECT o.*, k.id as key_id, k.status as key_status
+               FROM output_api_keys k
                JOIN outputs o ON k.output_id = o.id
                WHERE k.key_hash = ? AND o.status = 'active'""",
             (key_hash,)
         ).fetchone()
-        if row:
-            conn.execute(
-                "UPDATE output_api_keys SET last_used = datetime('now') WHERE id = ?",
-                (row["key_id"],)
-            )
-            conn.commit()
+        if not row:
+            conn.close()
+            return None
+        if row["key_status"] != "ready":
+            conn.close()
+            return None  # already used
+        conn.execute(
+            "UPDATE output_api_keys SET status = 'used', last_used = datetime('now') WHERE id = ?",
+            (row["key_id"],)
+        )
+        conn.commit()
+        conn.close()
+        return dict(row)
+
+    @staticmethod
+    def validate(raw_key: str):
+        """Non-consuming validate for JSON API (stateless HTTP)."""
+        import hashlib
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        conn = get_db()
+        row = conn.execute(
+            """SELECT o.*, k.id as key_id, k.status as key_status
+               FROM output_api_keys k
+               JOIN outputs o ON k.output_id = o.id
+               WHERE k.key_hash = ? AND o.status = 'active'""",
+            (key_hash,)
+        ).fetchone()
         conn.close()
         return dict(row) if row else None
 
@@ -546,3 +567,14 @@ class OutputKeyModel:
         conn.execute("DELETE FROM output_api_keys WHERE output_id = ?", (output_id,))
         conn.commit()
         conn.close()
+
+
+def signal_drop_output(output_id: int):
+    """Signal beast-proxy to drop active connections for this output_id."""
+    conn = get_db()
+    conn.execute(
+        "INSERT OR REPLACE INTO output_drop_signals (output_id) VALUES (?)",
+        (output_id,)
+    )
+    conn.commit()
+    conn.close()

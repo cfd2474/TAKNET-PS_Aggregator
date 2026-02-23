@@ -302,15 +302,24 @@ async def stats_flusher():
 
         vpn_resolver.refresh_caches()
 
+        # Check for key-regen drop signals
+        try:
+            for oid in db.pop_drop_signals():
+                _drop_output_ids.add(oid)
+                print(f"[output] Drop signal received for output_id={oid}")
+        except Exception as e:
+            print(f"[output] Drop signal check error: {e}")
+
 
 # ── Beast Output Listener ─────────────────────────────────────────────────────
 # Clients connect, send their API key as the first line, then receive a
 # continuous beast raw stream sourced from readsb. Multiple simultaneous
 # connections are supported via asyncio tasks.
 
-# Set of (asyncio.Queue) for each connected output client
-_output_clients: set = set()
-_output_lock = asyncio.Lock() if False else None  # initialised in main()
+# Dict of output_id -> set of asyncio.Queue (one per active connection)
+_output_clients: dict = {}
+# Set of output_ids whose connections should be dropped (regen signal)
+_drop_output_ids: set = set()
 
 
 async def _broadcast_beast_to_output_clients():
@@ -323,14 +332,14 @@ async def _broadcast_beast_to_output_clients():
                 data = await reader.read(4096)
                 if not data:
                     break
-                dead = set()
-                for q in list(_output_clients):
-                    try:
-                        q.put_nowait(data)
-                    except asyncio.QueueFull:
-                        dead.add(q)
-                for q in dead:
-                    _output_clients.discard(q)
+                for output_id, queues in list(_output_clients.items()):
+                    dead = set()
+                    for q in list(queues):
+                        try:
+                            q.put_nowait(data)
+                        except asyncio.QueueFull:
+                            dead.add(q)
+                    queues -= dead
         except Exception as e:
             print(f"[output] readsb connection lost: {e} — retrying in 5s")
             await asyncio.sleep(5)
@@ -353,10 +362,10 @@ async def _handle_output_client(reader, writer):
             writer.close()
             return
 
-        # Validate key against DB
+        # Validate and consume key
         output = db.validate_output_key(raw_key)
         if not output:
-            print(f"[output] {peer[0]} invalid key — rejected")
+            print(f"[output] {peer[0]} invalid or already-used key — rejected")
             writer.write(b"REJECTED\n")
             await writer.drain()
             writer.close()
@@ -369,21 +378,34 @@ async def _handle_output_client(reader, writer):
             writer.close()
             return
 
+        output_id = output["id"]
         print(f"[output] {peer[0]} authenticated as '{output.get('name')}' — streaming")
         writer.write(b"OK\n")
         await writer.drain()
 
         q: asyncio.Queue = asyncio.Queue(maxsize=256)
-        _output_clients.add(q)
+        if output_id not in _output_clients:
+            _output_clients[output_id] = set()
+        _output_clients[output_id].add(q)
+
         try:
             while True:
-                data = await asyncio.wait_for(q.get(), timeout=30)
-                writer.write(data)
-                await writer.drain()
-        except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
+                # Check if this output's key was regenerated (drop signal)
+                if output_id in _drop_output_ids:
+                    print(f"[output] {peer[0]} dropped — key regenerated for output {output_id}")
+                    break
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=5)
+                    writer.write(data)
+                    await writer.drain()
+                except asyncio.TimeoutError:
+                    continue  # loop back to check drop signal
+        except (ConnectionResetError, BrokenPipeError):
             pass
         finally:
-            _output_clients.discard(q)
+            if output_id in _output_clients:
+                _output_clients[output_id].discard(q)
+            _drop_output_ids.discard(output_id)
             print(f"[output] {peer[0]} disconnected")
 
     except Exception as e:
@@ -398,7 +420,7 @@ async def _handle_output_client(reader, writer):
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.70")
+    print("TAKNET-PS Beast Proxy v1.0.71")
     print(f"  Feeder listener:  {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Output listener:  {LISTEN_HOST}:{OUTPUT_LISTEN_PORT}")
     print(f"  Forwarding to:    {READSB_HOST}:{READSB_PORT}")

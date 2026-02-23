@@ -656,7 +656,11 @@ def _get_system_info():
 @login_required_any
 def outputs_list():
     from flask_login import current_user
+    from models import OutputKeyModel
     items = OutputModel.get_for_user(current_user.id, current_user.role)
+    for item in items:
+        if item.get("mode") == "api":
+            item["key_meta"] = OutputKeyModel.get_for_output(item["id"])
     return jsonify({"outputs": items})
 
 
@@ -728,7 +732,7 @@ def output_delete(output_id):
 @network_admin_required
 def output_regenerate_key(output_id):
     from flask_login import current_user
-    from models import OutputKeyModel
+    from models import OutputKeyModel, signal_drop_output
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
     item = OutputModel.get_by_id(output_id, current_user.id, current_user.role)
@@ -736,6 +740,9 @@ def output_regenerate_key(output_id):
         return jsonify({"error": "Not found"}), 404
     if item.get("mode") != "api":
         return jsonify({"error": "Output is not in API mode"}), 400
+    # Signal beast-proxy to drop any active connection using the old key
+    signal_drop_output(output_id)
+    # Generate new key (deletes old one)
     raw_key = OutputKeyModel.generate(output_id)
     return jsonify({"success": True, "api_key": raw_key})
 

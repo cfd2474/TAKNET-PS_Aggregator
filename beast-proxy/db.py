@@ -231,21 +231,64 @@ def mark_inactive_feeders(active_feeder_ids):
 
 
 def validate_output_key(raw_key: str):
-    """Validate a beast output API key. Returns output row dict or None."""
+    """Validate and consume a beast output API key (single-use auth).
+    Returns output row dict if key is valid and status='ready', else None."""
     import hashlib
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     conn = _get_conn()
     row = conn.execute(
-        """SELECT o.id, o.name, o.output_type, o.mode, o.status
+        """SELECT o.id, o.name, o.output_type, o.mode, o.status as output_status,
+                  k.id as key_id, k.status as key_status
            FROM output_api_keys k
            JOIN outputs o ON k.output_id = o.id
            WHERE k.key_hash = ? AND o.status = 'active' AND o.mode = 'api'""",
         (key_hash,)
     ).fetchone()
-    if row:
-        conn.execute(
-            "UPDATE output_api_keys SET last_used = datetime('now') WHERE key_hash = ?",
-            (key_hash,)
-        )
+    if not row:
+        conn.close()
+        return None
+    if row["key_status"] != "ready":
+        conn.close()
+        return None  # already consumed
+    # Consume — mark used atomically
+    conn.execute(
+        "UPDATE output_api_keys SET status = 'used', last_used = datetime('now') WHERE id = ?",
+        (row["key_id"],)
+    )
+    conn.commit()
+    conn.close()
+    result = dict(row)
+    result["status"] = result.pop("output_status")
+    return result
+
+
+def reset_output_key_status(output_id: int):
+    """Called when a key is regenerated — used to signal active connections to drop.
+    The new key will be 'ready'; this just ensures the old hash is gone."""
+    conn = _get_conn()
+    conn.execute("DELETE FROM output_api_keys WHERE output_id = ?", (output_id,))
+    conn.commit()
+    conn.close()
+
+
+def signal_drop_output(output_id: int):
+    """Write a drop signal so beast-proxy drops active connections for this output."""
+    conn = _get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO output_drop_signals (output_id) VALUES (?)",
+        (output_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def pop_drop_signals() -> list:
+    """Fetch and clear all pending drop signals. Returns list of output_ids."""
+    conn = _get_conn()
+    rows = conn.execute("SELECT output_id FROM output_drop_signals").fetchall()
+    ids = [r["output_id"] for r in rows]
+    if ids:
+        conn.execute("DELETE FROM output_drop_signals")
         conn.commit()
-    return dict(row) if row else None
+    conn.close()
+    return ids

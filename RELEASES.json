@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.71",
+    "date": "2026-02-23",
+    "notes": "Output API keys are now single-use per session: key is consumed on first successful beast auth, marked 'used', and rejected for any subsequent connections. Key and status (ready/used) are visible in the outputs list. Regenerating a key drops any active beast connection using the old key (via DB signal table polled by beast-proxy), deletes the old key, and issues a new 'ready' key. Key display stored in DB and shown persistently in the UI."
+  },
+  {
     "version": "1.0.70",
     "date": "2026-02-23",
     "notes": "Fixed update error 'unhashable type: dict' — docker volumes dict was incorrectly embedded inside the f-string using {{ }} escaping, causing Python to evaluate it as a dict literal with a dict value as a key. Moved volumes dict outside the f-string."
