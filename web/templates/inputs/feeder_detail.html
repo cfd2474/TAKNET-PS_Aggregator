@@ -311,6 +311,7 @@ async function confirmMerge() {
 }
 
 
+async function deleteFeeder() {
     if (!confirm('Delete this feeder? This cannot be undone.')) return;
     try {
         await fetch('/api/feeders/' + feederId, { method: 'DELETE' });
