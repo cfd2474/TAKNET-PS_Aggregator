@@ -198,6 +198,43 @@ def feeder_delete(feeder_id):
     return jsonify({"success": True})
 
 
+@bp.route("/feeders/<int:feeder_id>/merge", methods=["POST"])
+@admin_required
+def feeder_merge(feeder_id):
+    """Merge a duplicate feeder record into a target feeder, then delete it.
+    Body: { "into": <target_feeder_id> }
+    Moves connection history to the target, then deletes this record.
+    """
+    data = request.get_json(silent=True) or {}
+    into_id = data.get("into")
+    if not into_id:
+        return jsonify({"error": "Missing 'into' feeder id"}), 400
+    if int(into_id) == feeder_id:
+        return jsonify({"error": "Cannot merge a feeder into itself"}), 400
+
+    from models import get_db
+    conn = get_db()
+    try:
+        # Re-parent connection history
+        conn.execute(
+            "UPDATE connections SET feeder_id = ? WHERE feeder_id = ?",
+            (into_id, feeder_id)
+        )
+        # Re-parent activity log
+        conn.execute(
+            "UPDATE activity_log SET feeder_id = ? WHERE feeder_id = ?",
+            (into_id, feeder_id)
+        )
+        # Delete the duplicate
+        conn.execute("DELETE FROM feeders WHERE id = ?", (feeder_id,))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route("/feeders/<int:feeder_id>/connections")
 @network_admin_required
 def feeder_connections(feeder_id):

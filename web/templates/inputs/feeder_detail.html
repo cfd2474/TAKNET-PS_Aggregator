@@ -111,6 +111,7 @@
         <div style="display:flex;gap:8px;">
             <button type="submit" class="btn btn-primary">Save Changes</button>
             <button type="button" class="btn btn-danger" onclick="deleteFeeder()">Delete Feeder</button>
+            <button type="button" class="btn" style="margin-left:auto;font-size:12px;" onclick="showMergeModal()">Merge Duplicate…</button>
         </div>
     </form>
 </div>
@@ -135,6 +136,32 @@
     </div>
 </div>
 
+<!-- Merge Duplicate Modal -->
+<div class="modal-overlay" id="merge-modal">
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header">
+            <h3>Merge Duplicate Feeder</h3>
+            <button class="modal-close" onclick="closeModal('merge-modal')">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+                This will move all connection history from this record into the selected feeder, then delete this record. Use this to collapse two records for the same physical feeder (e.g. one public IP + one NetBird IP).
+            </p>
+            <div id="merge-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-bottom:14px;"></div>
+            <div class="form-group">
+                <label>Merge this record INTO</label>
+                <select class="form-control" id="merge-target">
+                    <option value="">Loading feeders…</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="closeModal('merge-modal')">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmMerge()">Merge &amp; Delete This Record</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Feeder Proxy Modal -->
 <div class="modal-overlay" id="feeder-proxy-modal" style="z-index:1000;" onclick="if(event.target===this)closeProxyModal()">
     <div class="modal" style="width:95vw;max-width:1400px;height:90vh;display:flex;flex-direction:column;padding:0;">
@@ -156,6 +183,8 @@
 {% block extra_scripts %}
 <script>
 const feederId = {{ feeder.id }};
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // Set type badge
 document.getElementById('fd-type').innerHTML = typeBadge('{{ feeder.conn_type }}');
@@ -211,7 +240,44 @@ async function saveFeeder(e) {
     } catch(e) { alert('Error: ' + e); }
 }
 
-async function deleteFeeder() {
+async function showMergeModal() {
+    document.getElementById('merge-error').style.display = 'none';
+    const sel = document.getElementById('merge-target');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    document.getElementById('merge-modal').classList.add('show');
+    try {
+        const r = await fetch('/api/feeders');
+        const d = await r.json();
+        const others = (d.feeders || []).filter(f => f.id !== feederId);
+        sel.innerHTML = others.map(f =>
+            `<option value="${f.id}">${f.name} (${f.conn_type} — ${f.ip_address})</option>`
+        ).join('');
+        if (!others.length) sel.innerHTML = '<option value="">No other feeders</option>';
+    } catch(e) {
+        sel.innerHTML = '<option value="">Error loading feeders</option>';
+    }
+}
+
+async function confirmMerge() {
+    const into = document.getElementById('merge-target').value;
+    const errEl = document.getElementById('merge-error');
+    if (!into) { errEl.textContent = 'Select a target feeder.'; errEl.style.display = 'block'; return; }
+    if (!confirm('This will merge this feeder record into the selected one and cannot be undone. Continue?')) return;
+    const r = await fetch('/api/feeders/' + feederId + '/merge', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({into: parseInt(into)})
+    });
+    const d = await r.json();
+    if (d.success) {
+        location.href = '/inputs/feeder/' + into;
+    } else {
+        errEl.textContent = d.error || 'Merge failed';
+        errEl.style.display = 'block';
+    }
+}
+
+
     if (!confirm('Delete this feeder? This cannot be undone.')) return;
     try {
         await fetch('/api/feeders/' + feederId, { method: 'DELETE' });

@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.61",
+    "date": "2026-02-22",
+    "notes": "Fixed duplicate feeder records when same feeder connects via both public IP and NetBird IP. beast-proxy now detects when a NetBird feeder's hostname matches an existing public-IP record and merges them on reconnect. Added 'Merge Duplicate' button on feeder detail page to manually collapse existing duplicates and re-parent their connection history."
+  },
+  {
     "version": "1.0.60",
     "date": "2026-02-22",
     "notes": "Fixed broken web interface caused by corrupted nginx config (duplicate location blocks outside server context from a failed str_replace in v1.0.59). Config rewritten clean with single server block."

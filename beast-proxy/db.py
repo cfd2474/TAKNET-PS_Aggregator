@@ -47,10 +47,33 @@ def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=
     nb_tar1090 = f"http://{ip_address}:8080" if conn_type == "netbird" else None
     nb_graphs  = f"http://{ip_address}:8080/graphs1090/" if conn_type == "netbird" else None
 
-    # Try to find existing feeder by IP
+    # Try to find existing feeder by IP first
     row = conn.execute(
         "SELECT id, name FROM feeders WHERE ip_address = ?", (ip_address,)
     ).fetchone()
+
+    # If not found by IP but we have a hostname, check for a stale record
+    # from a different IP (e.g. same feeder previously connected via public IP).
+    # When a NetBird connection arrives with a known hostname, absorb the old record.
+    if not row and hostname and conn_type == "netbird":
+        stale = conn.execute(
+            "SELECT id, name FROM feeders WHERE hostname = ? AND ip_address != ?",
+            (hostname, ip_address)
+        ).fetchone()
+        if stale:
+            # Re-home the stale record to the NetBird IP and reclassify it
+            print(f"[db] Merging stale public record (id={stale['id']}, hostname={hostname}) → NetBird IP {ip_address}")
+            conn.execute(
+                """UPDATE feeders SET
+                    ip_address = ?, conn_type = 'netbird',
+                    tar1090_url    = CASE WHEN (tar1090_url IS NULL OR tar1090_url = '') THEN ? ELSE tar1090_url END,
+                    graphs1090_url = CASE WHEN (graphs1090_url IS NULL OR graphs1090_url = '') THEN ? ELSE graphs1090_url END,
+                    last_seen = ?, status = 'active', updated_at = ?
+                WHERE id = ?""",
+                (ip_address, nb_tar1090, nb_graphs, ts, ts, stale["id"])
+            )
+            conn.commit()
+            return stale["id"]
 
     if row:
         feeder_id = row["id"]
