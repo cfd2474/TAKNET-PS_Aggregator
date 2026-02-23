@@ -89,13 +89,14 @@ echo "DONE:$NEW_VER"
 
         log("Starting update via docker:cli ...")
 
+        volumes = {
+            "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
+            INSTALL_DIR:            {"bind": INSTALL_DIR,            "mode": "rw"},
+        }
         compose_container = client.containers.create(
             "docker:cli",
             command=["sh", "-c", script],
-            volumes={{
-                "/var/run/docker.sock": {{"bind": "/var/run/docker.sock", "mode": "rw"}},
-                INSTALL_DIR: {{"bind": INSTALL_DIR, "mode": "rw"}},
-            }},
+            volumes=volumes,
             working_dir=INSTALL_DIR,
         )
         compose_container.start()
