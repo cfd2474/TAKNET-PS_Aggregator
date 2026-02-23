@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.65",
+    "date": "2026-02-22",
+    "notes": "Fixed 'From Location' name format: country is now 3-letter ISO alpha-3 (e.g. USA), state/province is full name (e.g. Tennessee), city is full name (e.g. nashville). Added pycountry library for alpha-2 to alpha-3 conversion. Example output: usa-tennessee-nashville."
+  },
+  {
     "version": "1.0.64",
     "date": "2026-02-22",
     "notes": "Fixed feeder detail page JS broken in v1.0.63 — async function deleteFeeder() declaration was accidentally removed by a str_replace, leaving a bare return statement at script top-level that killed all subsequent function definitions (populateName, openFeederView, onProxyLoad, etc.)."

@@ -5,3 +5,4 @@ psutil==6.1.0
 APScheduler==3.10.4
 docker==7.1.0
 flask-login==0.6.3
+pycountry==24.6.1

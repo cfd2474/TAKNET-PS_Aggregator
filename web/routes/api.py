@@ -204,15 +204,20 @@ def feeder_suggest_name(feeder_id):
     lon  = feeder.get("longitude")
     ip   = feeder.get("ip_address", "")
 
-    def _format_name(country, state, city):
-        """Build CC-ST-City slug from raw strings."""
-        country = (country or "").upper().strip()[:2]
-        state   = (state   or "").upper().strip()
-        city    = (city    or "").strip()
-        # Slugify city: lowercase, spaces→hyphens, remove punctuation
+    def _alpha3(alpha2):
+        try:
+            import pycountry
+            c = pycountry.countries.get(alpha_2=(alpha2 or "").upper())
+            return c.alpha_3 if c else (alpha2 or "").upper()
+        except Exception:
+            return (alpha2 or "").upper()
+
+    def _format_name(country_a2, state, city):
+        """Build AAA-FullState-FullCity slug."""
         import re
-        city_slug = re.sub(r"[^a-z0-9\-]", "", city.lower().replace(" ", "-"))
-        parts = [p for p in [country, state, city_slug] if p]
+        def slugify(s):
+            return re.sub(r"[^a-z0-9\-]", "", (s or "").lower().replace(" ", "-"))
+        parts = [p for p in [slugify(_alpha3(country_a2)), slugify(state), slugify(city)] if p]
         return "-".join(parts)
 
     # ── Method 1: GPS coordinates via Nominatim reverse geocode ──────────────
@@ -226,14 +231,15 @@ def feeder_suggest_name(feeder_id):
             )
             if resp.status_code == 200:
                 addr = resp.json().get("address", {})
-                country = addr.get("country_code", "").upper()
-                state   = (addr.get("ISO3166-2-lvl4") or "").split("-")[-1]  # e.g. "US-TN" → "TN"
-                city    = (addr.get("city") or addr.get("town") or
-                           addr.get("village") or addr.get("county") or "")
-                name = _format_name(country, state, city)
+                country_a2 = addr.get("country_code", "")
+                state      = (addr.get("state") or addr.get("province") or
+                              addr.get("region") or "")
+                city       = (addr.get("city") or addr.get("town") or
+                              addr.get("village") or addr.get("county") or "")
+                name = _format_name(country_a2, state, city)
                 if name:
                     return jsonify({"name": name, "source": "gps"})
-        except Exception as e:
+        except Exception:
             pass  # fall through to IP lookup
 
     # ── Method 2: IP geolocation via ip-api.com (free, no key) ──────────────
@@ -249,7 +255,7 @@ def feeder_suggest_name(feeder_id):
     try:
         resp = http_requests.get(
             f"http://ip-api.com/json/{ip}",
-            params={"fields": "countryCode,regionCode,city,status,message"},
+            params={"fields": "countryCode,region,city,status,message"},
             timeout=8,
         )
         if resp.status_code == 200:
@@ -257,7 +263,7 @@ def feeder_suggest_name(feeder_id):
             if data.get("status") == "success":
                 name = _format_name(
                     data.get("countryCode", ""),
-                    data.get("regionCode", ""),
+                    data.get("region", ""),   # full state/province name
                     data.get("city", ""),
                 )
                 if name:
