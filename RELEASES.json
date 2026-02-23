@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.77",
+    "date": "2026-02-23",
+    "notes": "Fixed updater not applying code changes — dashboard/beast-proxy/mlat-server are locally built images that docker compose pull skips. Update script now explicitly runs 'docker compose build' for these services before bringing containers up, ensuring new code is always applied."
+  },
+  {
     "version": "1.0.76",
     "date": "2026-02-23",
     "notes": "Feeder list auto-cleanup: beast-proxy now purges feeders not seen in 24 hours on every stats cycle. Added 'Reset Feeder List' button (admin only) to the feeder list filter bar that removes all non-active (stale/offline) feeders on demand."
