@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.72",
+    "date": "2026-02-23",
+    "notes": "Fixed update modal showing 'Connection lost unexpectedly' even when update succeeded. Three-part fix: (1) Added 3s sleep in shell script between PRE_RESTART signal and docker compose up, giving browser time to receive the event; (2) Added SSE padding comments after pre_restart to force gunicorn to flush the chunk immediately; (3) Added 500ms grace period in JS onerror handler to handle race between pre_restart processing and connection drop. Also removed --build flag from docker compose up since pull already fetches updated images."
+  },
+  {
     "version": "1.0.71",
     "date": "2026-02-23",
     "notes": "Output API keys are now single-use per session: key is consumed on first successful beast auth, marked 'used', and rejected for any subsequent connections. Key and status (ready/used) are visible in the outputs list. Regenerating a key drops any active beast connection using the old key (via DB signal table polled by beast-proxy), deletes the old key, and issues a new 'ready' key. Key display stored in DB and shown persistently in the UI."

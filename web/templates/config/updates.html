@@ -151,12 +151,16 @@ function startStream() {
     };
     eventSource.onerror = function() {
         eventSource.close();
-        if (preRestartSeen) {
-            setModalStatus('Dashboard restarting — reconnecting...', '#eab308');
-            pollUntilBack();
-        } else {
-            setModalError('Connection lost unexpectedly. Check server logs.');
-        }
+        // Give a 500ms grace period — pre_restart event and onerror can race
+        // if the container restarts before the browser fully processes the event.
+        setTimeout(function() {
+            if (preRestartSeen) {
+                setModalStatus('Dashboard restarting — reconnecting...', '#eab308');
+                pollUntilBack();
+            } else {
+                setModalError('Connection lost unexpectedly. Check server logs.');
+            }
+        }, 500);
     };
 }
 

@@ -82,8 +82,9 @@ echo "Pulling updated images..."
 cd {INSTALL_DIR}
 docker compose pull 2>&1
 echo "PRE_RESTART"
+sleep 3
 echo "Restarting containers..."
-docker compose up -d --build 2>&1
+docker compose up -d 2>&1
 echo "DONE:$NEW_VER"
 """
 
@@ -522,6 +523,11 @@ def updates_stream():
             try:
                 item = _update_queue.get(timeout=90)
                 yield f"data: {json.dumps(item)}\n\n"
+                # After pre_restart, pad with comments to force gunicorn to flush
+                # the chunk before the container restarts and kills the connection.
+                if item.get("type") == "pre_restart":
+                    for _ in range(8):
+                        yield ": keepalive\n\n"
                 if item.get("type") in ("done", "error"):
                     break
             except Exception:
