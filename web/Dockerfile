@@ -14,4 +14,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "2", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "1", "--timeout", "120", "--keep-alive", "75", "app:app"]

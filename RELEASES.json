@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.74",
+    "date": "2026-02-23",
+    "notes": "Fixed update modal — gunicorn was running 2 worker processes, so the update thread (Worker A) wrote to an in-memory queue that the SSE stream (Worker B) could never see. Reduced to 1 worker — the dashboard is a single-admin tool and doesn't need multiple workers."
+  },
+  {
     "version": "1.0.73",
     "date": "2026-02-23",
     "notes": "Fixed misleading API key modal text — key is visible in the outputs list, not one-time only. Deleting an output now emits a drop signal before deletion, terminating any active beast connection using that output's key."
