@@ -378,3 +378,105 @@ class UserModel:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         conn.close()
+
+
+class OutputModel:
+    """Outputs — scoped by creator. Admins see all; network_admins see only their own."""
+
+    @staticmethod
+    def _row_to_dict(row):
+        if row is None:
+            return None
+        return dict(row)
+
+    @staticmethod
+    def get_for_user(user_id, role):
+        """Return outputs visible to this user based on role."""
+        conn = get_db()
+        if role == "admin":
+            rows = conn.execute(
+                """SELECT o.*, u.username as creator_name
+                   FROM outputs o JOIN users u ON o.created_by = u.id
+                   ORDER BY o.created_at DESC"""
+            ).fetchall()
+        else:  # network_admin
+            rows = conn.execute(
+                """SELECT o.*, u.username as creator_name
+                   FROM outputs o JOIN users u ON o.created_by = u.id
+                   WHERE o.created_by = ?
+                   ORDER BY o.created_at DESC""",
+                (user_id,)
+            ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    @staticmethod
+    def get_by_id(output_id, user_id, role):
+        """Return a single output if the user is allowed to see it."""
+        conn = get_db()
+        row = conn.execute(
+            "SELECT o.*, u.username as creator_name FROM outputs o JOIN users u ON o.created_by = u.id WHERE o.id = ?",
+            (output_id,)
+        ).fetchone()
+        conn.close()
+        if row is None:
+            return None
+        row = dict(row)
+        if role == "admin":
+            return row
+        if role == "network_admin" and row["created_by"] == user_id:
+            return row
+        return None
+
+    @staticmethod
+    def can_modify(output_id, user_id, role):
+        """Return True if this user can create/edit/delete this output."""
+        if role == "admin":
+            return True
+        if role != "network_admin":
+            return False
+        conn = get_db()
+        row = conn.execute("SELECT created_by FROM outputs WHERE id = ?", (output_id,)).fetchone()
+        conn.close()
+        return row is not None and row["created_by"] == user_id
+
+    @staticmethod
+    def create(name, output_type, config, created_by, notes=None):
+        conn = get_db()
+        cursor = conn.execute(
+            """INSERT INTO outputs (name, output_type, config, created_by, notes)
+               VALUES (?, ?, ?, ?, ?)""",
+            (name, output_type, config, created_by, notes)
+        )
+        output_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return output_id
+
+    @staticmethod
+    def update(output_id, data):
+        allowed = {"name", "output_type", "config", "is_public", "status", "notes"}
+        fields = {k: v for k, v in data.items() if k in allowed}
+        if not fields:
+            return False
+        fields["updated_at"] = "datetime('now')"
+        set_clause = ", ".join(
+            f"{k} = datetime('now')" if v == "datetime('now')" else f"{k} = ?"
+            for k, v in fields.items()
+        )
+        values = [v for v in fields.values() if v != "datetime('now')"]
+        conn = get_db()
+        conn.execute(
+            f"UPDATE outputs SET {set_clause} WHERE id = ?",
+            (*values, output_id)
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+    @staticmethod
+    def delete(output_id):
+        conn = get_db()
+        conn.execute("DELETE FROM outputs WHERE id = ?", (output_id,))
+        conn.commit()
+        conn.close()

@@ -2,24 +2,184 @@
 {% block page_title %}Outputs{% endblock %}
 
 {% block content %}
-<div class="card" style="text-align:center;padding:60px 20px;">
-    <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" style="width:64px;height:64px;margin:0 auto 16px;">
-        <polyline points="17 1 21 5 17 9"/>
-        <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-        <polyline points="7 23 3 19 7 15"/>
-        <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-    </svg>
-    <h3 style="font-size:18px;margin-bottom:8px;">Outgoing Feed Management</h3>
-    <p style="color:var(--text-secondary);font-size:14px;max-width:400px;margin:0 auto 24px;">
-        Configure data sharing to external services from here. This feature is planned for a future release.
-    </p>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:24px;">
-        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">FlightAware</span>
-        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">adsb.fi</span>
-        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">adsb.lol</span>
-        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">airplanes.live</span>
-        <span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);padding:6px 12px;font-size:12px;">ADSBCot / TAK</span>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <div>
+        <h2 style="font-size:18px;font-weight:600;margin:0;">Outputs</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">Outgoing data feeds you manage</p>
     </div>
-    <button class="btn" disabled style="opacity:0.5;">Add Output (Coming Soon)</button>
+    <button class="btn btn-primary" onclick="openCreateModal()" style="font-size:13px;">+ Add Output</button>
 </div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    {% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="outputs-tbody">
+                <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:30px;">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Create / Edit Modal -->
+<div class="modal-overlay" id="output-modal">
+    <div class="modal" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 id="modal-title">Add Output</h3>
+            <button class="modal-close" onclick="closeOutputModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="modal-output-id" value="">
+            <div class="form-group">
+                <label>Name</label>
+                <input class="form-control" id="modal-name" placeholder="e.g. TAK Server Feed">
+            </div>
+            <div class="form-group">
+                <label>Type</label>
+                <select class="form-control" id="modal-type">
+                    <option value="beast_out">Beast Out</option>
+                    <option value="sbs">SBS / BaseStation</option>
+                    <option value="json_feed">JSON Feed</option>
+                    <option value="adsbcot">ADSBCot / TAK</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea class="form-control" id="modal-notes" rows="2" placeholder="Optional description"></textarea>
+            </div>
+            <div id="modal-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-top:12px;"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="closeOutputModal()">Cancel</button>
+                <button class="btn btn-primary" id="modal-save-btn" onclick="saveOutput()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const userRole = '{{ current_user.role }}';
+
+async function loadOutputs() {
+    const tbody = document.getElementById('outputs-tbody');
+    try {
+        const r = await fetch('/api/outputs');
+        const d = await r.json();
+        const items = d.outputs || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:30px;">No outputs configured yet. Click <strong>+ Add Output</strong> to create one.</td></tr>';
+            return;
+        }
+        let html = '';
+        items.forEach(o => {
+            const canEdit = userRole === 'admin' || userRole === 'network_admin';
+            const statusHtml = o.status === 'active'
+                ? '<span class="badge badge-live">active</span>'
+                : `<span class="badge">${o.status}</span>`;
+            html += '<tr>';
+            html += `<td style="font-weight:500;">${o.name}</td>`;
+            html += `<td><span class="badge badge-vpn" style="font-size:11px;">${o.output_type}</span></td>`;
+            html += `<td>${statusHtml}</td>`;
+            if (userRole === 'admin') html += `<td style="color:var(--text-muted);font-size:12px;">${o.creator_name}</td>`;
+            html += `<td style="font-size:12px;color:var(--text-muted);">${fmtTime(o.created_at)}</td>`;
+            if (canEdit) {
+                html += `<td style="text-align:right;">
+                    <button class="btn" style="font-size:11px;padding:4px 10px;margin-right:4px;" onclick="openEditModal(${o.id})">Edit</button>
+                    <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;" onclick="deleteOutput(${o.id}, '${o.name.replace(/'/g,"\\'")}')">Delete</button>
+                </td>`;
+            } else {
+                html += '<td></td>';
+            }
+            html += '</tr>';
+        });
+        tbody.innerHTML = html;
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red);text-align:center;padding:20px;">Failed to load outputs</td></tr>';
+    }
+}
+
+function openCreateModal() {
+    document.getElementById('modal-title').textContent = 'Add Output';
+    document.getElementById('modal-output-id').value = '';
+    document.getElementById('modal-name').value = '';
+    document.getElementById('modal-type').value = 'beast_out';
+    document.getElementById('modal-notes').value = '';
+    document.getElementById('modal-error').style.display = 'none';
+    document.getElementById('output-modal').classList.add('show');
+}
+
+async function openEditModal(id) {
+    const r = await fetch('/api/outputs/' + id);
+    const d = await r.json();
+    if (!d.output) return;
+    const o = d.output;
+    document.getElementById('modal-title').textContent = 'Edit Output';
+    document.getElementById('modal-output-id').value = o.id;
+    document.getElementById('modal-name').value = o.name;
+    document.getElementById('modal-type').value = o.output_type;
+    document.getElementById('modal-notes').value = o.notes || '';
+    document.getElementById('modal-error').style.display = 'none';
+    document.getElementById('output-modal').classList.add('show');
+}
+
+async function saveOutput() {
+    const errEl = document.getElementById('modal-error');
+    errEl.style.display = 'none';
+    const id = document.getElementById('modal-output-id').value;
+    const payload = {
+        name:        document.getElementById('modal-name').value.trim(),
+        output_type: document.getElementById('modal-type').value,
+        notes:       document.getElementById('modal-notes').value.trim(),
+    };
+    if (!payload.name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+    const btn = document.getElementById('modal-save-btn');
+    btn.disabled = true;
+    try {
+        const r = await fetch(id ? '/api/outputs/' + id : '/api/outputs', {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (d.success || d.id) {
+            closeOutputModal();
+            loadOutputs();
+        } else {
+            errEl.textContent = d.error || 'Save failed';
+            errEl.style.display = 'block';
+        }
+    } catch(e) {
+        errEl.textContent = 'Request failed: ' + e;
+        errEl.style.display = 'block';
+    }
+    btn.disabled = false;
+}
+
+async function deleteOutput(id, name) {
+    if (!confirm(`Delete output "${name}"? This cannot be undone.`)) return;
+    const r = await fetch('/api/outputs/' + id, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.success) loadOutputs();
+    else alert(d.error || 'Delete failed');
+}
+
+function closeOutputModal() {
+    document.getElementById('output-modal').classList.remove('show');
+}
+
+loadOutputs();
+</script>
 {% endblock %}

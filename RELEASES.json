@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.67",
+    "date": "2026-02-22",
+    "notes": "Corrected outputs access model: viewers have no access to outputs at all. Outputs page and API are restricted to admin and network_admin only. Removed is_public concept entirely."
+  },
+  {
+    "version": "1.0.66",
+    "date": "2026-02-22",
+    "notes": "Built outputs access control foundation. Each network_admin can create outputs only they can see and modify. Admins see all outputs across all users with owner column. Viewers see only outputs marked public. New outputs table in DB (auto-migrated), full CRUD API with ownership enforcement, and outputs page with create/edit/delete UI."
+  },
+  {
     "version": "1.0.65",
     "date": "2026-02-22",
     "notes": "Fixed 'From Location' name format: country is now 3-letter ISO alpha-3 (e.g. USA), state/province is full name (e.g. Tennessee), city is full name (e.g. nashville). Added pycountry library for alpha-2 to alpha-3 conversion. Example output: usa-tennessee-nashville."

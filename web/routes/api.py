@@ -10,7 +10,7 @@ import psutil
 import requests as http_requests
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 
-from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel
+from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
@@ -648,6 +648,69 @@ def _get_system_info():
         "uptime_seconds": uptime_seconds,
         "app_uptime_seconds": app_uptime,
     }
+
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+
+@bp.route("/outputs")
+@login_required_any
+def outputs_list():
+    """List outputs visible to the current user."""
+    from flask_login import current_user
+    items = OutputModel.get_for_user(current_user.id, current_user.role)
+    return jsonify({"outputs": items})
+
+
+@bp.route("/outputs/<int:output_id>")
+@login_required_any
+def output_get(output_id):
+    from flask_login import current_user
+    item = OutputModel.get_by_id(output_id, current_user.id, current_user.role)
+    if item is None:
+        return jsonify({"error": "Not found or access denied"}), 404
+    return jsonify({"output": item})
+
+
+@bp.route("/outputs", methods=["POST"])
+@network_admin_required
+def output_create():
+    from flask_login import current_user
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    output_type = (data.get("output_type") or "").strip()
+    if not name or not output_type:
+        return jsonify({"error": "name and output_type are required"}), 400
+    import json as _json
+    config = _json.dumps(data.get("config") or {})
+    output_id = OutputModel.create(
+        name=name,
+        output_type=output_type,
+        config=config,
+        created_by=current_user.id,
+        notes=data.get("notes"),
+    )
+    return jsonify({"success": True, "id": output_id}), 201
+
+
+@bp.route("/outputs/<int:output_id>", methods=["PUT"])
+@network_admin_required
+def output_update(output_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    OutputModel.update(output_id, data)
+    return jsonify({"success": True})
+
+
+@bp.route("/outputs/<int:output_id>", methods=["DELETE"])
+@network_admin_required
+def output_delete(output_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    OutputModel.delete(output_id)
+    return jsonify({"success": True})
 
 
 # ── Feeder Proxy (nginx handles actual proxying, Flask handles auth) ───────────

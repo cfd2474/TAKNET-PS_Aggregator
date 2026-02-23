@@ -82,3 +82,20 @@ CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
 CREATE INDEX IF NOT EXISTS idx_connections_feeder ON connections(feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_connected ON connections(connected_at);
 CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC);
+
+-- Outputs (network_admin-scoped, admin sees all)
+CREATE TABLE IF NOT EXISTS outputs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    output_type TEXT NOT NULL,               -- e.g. 'beast_out', 'sbs', 'json_feed'
+    config TEXT NOT NULL DEFAULT '{}',       -- JSON blob of output-specific settings
+    created_by INTEGER NOT NULL,             -- user id of the network_admin or admin who created it
+    status TEXT NOT NULL DEFAULT 'active',  -- 'active', 'paused', 'error'
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_outputs_created_by ON outputs(created_by);
+CREATE INDEX IF NOT EXISTS idx_outputs_type ON outputs(output_type);
