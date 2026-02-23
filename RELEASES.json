@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.78",
+    "date": "2026-02-23",
+    "notes": "Dashboard outputs stat card now shows live count from /api/outputs instead of hardcoded 0 with 'coming soon'. Count is user-scoped: network_admins see only their own outputs, admins see all — matching the outputs page behavior."
+  },
+  {
     "version": "1.0.77",
     "date": "2026-02-23",
     "notes": "Fixed updater not applying code changes — dashboard/beast-proxy/mlat-server are locally built images that docker compose pull skips. Update script now explicitly runs 'docker compose build' for these services before bringing containers up, ensuring new code is always applied."

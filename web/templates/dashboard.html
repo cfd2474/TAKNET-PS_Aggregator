@@ -32,8 +32,8 @@
     </a>
     <a href="/outputs" class="stat-card">
         <div class="label">Outputs</div>
-        <div class="value">0</div>
-        <div class="sub">coming soon</div>
+        <div class="value" id="stat-outputs">—</div>
+        <div class="sub" id="stat-outputs-sub">configured</div>
     </a>
 </div>
 
@@ -62,8 +62,12 @@
 <script>
 async function loadDashboard() {
     try {
-        const r = await fetch('/api/status');
-        const d = await r.json();
+        const [statusRes, outputsRes] = await Promise.all([
+            fetch('/api/status'),
+            fetch('/api/outputs'),
+        ]);
+        const d = await statusRes.json();
+        const od = await outputsRes.json();
 
         // Pending users banner (admin only)
         const pendingBanner = document.getElementById('pending-banner');
@@ -96,6 +100,13 @@ async function loadDashboard() {
         const sys = d.system || {};
         document.getElementById('stat-uptime').textContent = fmtDuration(sys.uptime_seconds);
         document.getElementById('stat-uptime-sub').textContent = 'app: ' + fmtDuration(sys.app_uptime_seconds);
+
+        // Outputs count (scoped to current user by API)
+        const outputs = od.outputs || [];
+        const activeOutputs = outputs.filter(o => o.status === 'active').length;
+        document.getElementById('stat-outputs').textContent = activeOutputs;
+        document.getElementById('stat-outputs-sub').textContent =
+            outputs.length === 1 ? '1 configured' : outputs.length + ' configured';
 
         // Feeder breakdown
         const breakdown = fs.breakdown || [];
