@@ -228,3 +228,24 @@ def mark_inactive_feeders(active_feeder_ids):
             (ts,),
         )
     conn.commit()
+
+
+def validate_output_key(raw_key: str):
+    """Validate a beast output API key. Returns output row dict or None."""
+    import hashlib
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    conn = _get_conn()
+    row = conn.execute(
+        """SELECT o.id, o.name, o.output_type, o.mode, o.status
+           FROM output_api_keys k
+           JOIN outputs o ON k.output_id = o.id
+           WHERE k.key_hash = ? AND o.status = 'active' AND o.mode = 'api'""",
+        (key_hash,)
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE output_api_keys SET last_used = datetime('now') WHERE key_hash = ?",
+            (key_hash,)
+        )
+        conn.commit()
+    return dict(row) if row else None

@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.69",
+    "date": "2026-02-23",
+    "notes": "Built outputs system. JSON outputs: push (aggregator POSTs to your URL) or API (GET /api/outputs/stream/<key>). Beast raw outputs: push (aggregator connects outbound to host:port) or listener (clients connect to TCP port 30005, send key as first line, receive beast stream). Keys are SHA-256 hashed in DB, shown once on create with regenerate option. Multiple simultaneous connections supported on shared port 30005. Access is network_admin-scoped."
+  },
+  {
     "version": "1.0.68",
     "date": "2026-02-22",
     "notes": "Fixed update modal showing 'Connection lost unexpectedly' instead of reconnecting gracefully. Root cause: pre_restart signal was queued before the docker:cli container started, but gunicorn buffering meant the browser didn't receive it before containers restarted. Signal is now emitted from inside the shell script right before docker compose up runs, guaranteeing the browser has received all prior log lines first."

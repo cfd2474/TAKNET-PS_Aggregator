@@ -62,6 +62,17 @@ def create_app():
         except Exception:
             pass
 
+    # Migrations for existing deployments
+    with app.app_context():
+        from models import get_db
+        conn = get_db()
+        try:
+            conn.execute("ALTER TABLE outputs ADD COLUMN mode TEXT NOT NULL DEFAULT 'api'")
+            conn.commit()
+        except Exception:
+            pass
+        conn.close()
+
     @app.context_processor
     def inject_globals():
         version = "1.0.56"

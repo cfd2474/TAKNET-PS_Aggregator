@@ -87,10 +87,11 @@ CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC
 CREATE TABLE IF NOT EXISTS outputs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    output_type TEXT NOT NULL,               -- e.g. 'beast_out', 'sbs', 'json_feed'
-    config TEXT NOT NULL DEFAULT '{}',       -- JSON blob of output-specific settings
-    created_by INTEGER NOT NULL,             -- user id of the network_admin or admin who created it
-    status TEXT NOT NULL DEFAULT 'active',  -- 'active', 'paused', 'error'
+    output_type TEXT NOT NULL,               -- 'json', 'beast_raw'
+    mode TEXT NOT NULL DEFAULT 'api',        -- 'api' (key-authenticated inbound) or 'push' (outbound)
+    config TEXT NOT NULL DEFAULT '{}',       -- JSON: push_url, push_interval, etc.
+    created_by INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -99,3 +100,16 @@ CREATE TABLE IF NOT EXISTS outputs (
 
 CREATE INDEX IF NOT EXISTS idx_outputs_created_by ON outputs(created_by);
 CREATE INDEX IF NOT EXISTS idx_outputs_type ON outputs(output_type);
+
+-- Output API keys (hashed, shown once on creation)
+CREATE TABLE IF NOT EXISTS output_api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    output_id INTEGER NOT NULL UNIQUE,
+    key_hash TEXT NOT NULL,          -- SHA-256 hex of the raw key
+    key_prefix TEXT NOT NULL,        -- first 8 chars for display/identification
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_used DATETIME,
+    FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_output_keys_hash ON output_api_keys(key_hash);

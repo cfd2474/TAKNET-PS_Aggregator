@@ -654,19 +654,20 @@ def _get_system_info():
 @bp.route("/outputs")
 @login_required_any
 def outputs_list():
-    """List outputs visible to the current user."""
     from flask_login import current_user
     items = OutputModel.get_for_user(current_user.id, current_user.role)
     return jsonify({"outputs": items})
 
 
 @bp.route("/outputs/<int:output_id>")
-@login_required_any
+@network_admin_required
 def output_get(output_id):
     from flask_login import current_user
     item = OutputModel.get_by_id(output_id, current_user.id, current_user.role)
     if item is None:
         return jsonify({"error": "Not found or access denied"}), 404
+    from models import OutputKeyModel
+    item["key_meta"] = OutputKeyModel.get_for_output(output_id)
     return jsonify({"output": item})
 
 
@@ -674,21 +675,31 @@ def output_get(output_id):
 @network_admin_required
 def output_create():
     from flask_login import current_user
+    from models import OutputKeyModel
     data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
+    name        = (data.get("name") or "").strip()
     output_type = (data.get("output_type") or "").strip()
+    mode        = data.get("mode", "api")
     if not name or not output_type:
         return jsonify({"error": "name and output_type are required"}), 400
+    if output_type not in ("json", "beast_raw"):
+        return jsonify({"error": "output_type must be 'json' or 'beast_raw'"}), 400
+    if mode not in ("api", "push"):
+        return jsonify({"error": "mode must be 'api' or 'push'"}), 400
     import json as _json
     config = _json.dumps(data.get("config") or {})
     output_id = OutputModel.create(
         name=name,
         output_type=output_type,
+        mode=mode,
         config=config,
         created_by=current_user.id,
         notes=data.get("notes"),
     )
-    return jsonify({"success": True, "id": output_id}), 201
+    raw_key = None
+    if mode == "api":
+        raw_key = OutputKeyModel.generate(output_id)
+    return jsonify({"success": True, "id": output_id, "api_key": raw_key}), 201
 
 
 @bp.route("/outputs/<int:output_id>", methods=["PUT"])
@@ -710,6 +721,43 @@ def output_delete(output_id):
         return jsonify({"error": "Access denied"}), 403
     OutputModel.delete(output_id)
     return jsonify({"success": True})
+
+
+@bp.route("/outputs/<int:output_id>/regenerate-key", methods=["POST"])
+@network_admin_required
+def output_regenerate_key(output_id):
+    from flask_login import current_user
+    from models import OutputKeyModel
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    item = OutputModel.get_by_id(output_id, current_user.id, current_user.role)
+    if not item:
+        return jsonify({"error": "Not found"}), 404
+    if item.get("mode") != "api":
+        return jsonify({"error": "Output is not in API mode"}), 400
+    raw_key = OutputKeyModel.generate(output_id)
+    return jsonify({"success": True, "api_key": raw_key})
+
+
+@bp.route("/outputs/stream/<string:raw_key>")
+def output_json_stream(raw_key):
+    """Public JSON aircraft stream — authenticated by API key in URL."""
+    from models import OutputKeyModel
+    output = OutputKeyModel.validate(raw_key)
+    if not output:
+        return jsonify({"error": "Invalid or inactive API key"}), 401
+    if output.get("output_type") != "json":
+        return jsonify({"error": "This key is for a beast_raw output, not JSON"}), 400
+
+    # Fetch aircraft from readsb/tar1090
+    try:
+        resp = http_requests.get("http://tar1090/data/aircraft.json", timeout=5)
+        if resp.status_code == 200:
+            return Response(resp.content, content_type="application/json",
+                            headers={"Access-Control-Allow-Origin": "*"})
+        return jsonify({"error": "Upstream data unavailable"}), 503
+    except Exception as e:
+        return jsonify({"error": str(e)}), 503
 
 
 # ── Feeder Proxy (nginx handles actual proxying, Flask handles auth) ───────────

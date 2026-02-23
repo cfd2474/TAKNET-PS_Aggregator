@@ -15,12 +15,13 @@ import db
 import geoip_helper
 import vpn_resolver
 
-LISTEN_HOST = "0.0.0.0"
-LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "30004"))
-READSB_HOST = os.environ.get("READSB_HOST", "readsb")
-READSB_PORT = int(os.environ.get("READSB_PORT", "30006"))
-STATS_INTERVAL = int(os.environ.get("STATS_INTERVAL", "30"))
-MLAT_CLIENTS_PATH = os.environ.get("MLAT_CLIENTS_PATH", "/mlat-work/clients.json")
+LISTEN_HOST        = "0.0.0.0"
+LISTEN_PORT        = int(os.environ.get("LISTEN_PORT",        "30004"))
+OUTPUT_LISTEN_PORT = int(os.environ.get("OUTPUT_LISTEN_PORT", "30005"))
+READSB_HOST        = os.environ.get("READSB_HOST", "readsb")
+READSB_PORT        = int(os.environ.get("READSB_PORT", "30006"))
+STATS_INTERVAL     = int(os.environ.get("STATS_INTERVAL", "30"))
+MLAT_CLIENTS_PATH  = os.environ.get("MLAT_CLIENTS_PATH", "/mlat-work/clients.json")
 
 # Active connections: key = writer id, value = connection info
 active_connections = {}
@@ -302,14 +303,107 @@ async def stats_flusher():
         vpn_resolver.refresh_caches()
 
 
+# ── Beast Output Listener ─────────────────────────────────────────────────────
+# Clients connect, send their API key as the first line, then receive a
+# continuous beast raw stream sourced from readsb. Multiple simultaneous
+# connections are supported via asyncio tasks.
+
+# Set of (asyncio.Queue) for each connected output client
+_output_clients: set = set()
+_output_lock = asyncio.Lock() if False else None  # initialised in main()
+
+
+async def _broadcast_beast_to_output_clients():
+    """Continuously read from readsb beast-out port and broadcast to all output clients."""
+    while True:
+        try:
+            reader, _ = await asyncio.open_connection(READSB_HOST, READSB_PORT)
+            print(f"[output] Connected to readsb beast-out at {READSB_HOST}:{READSB_PORT}")
+            while True:
+                data = await reader.read(4096)
+                if not data:
+                    break
+                dead = set()
+                for q in list(_output_clients):
+                    try:
+                        q.put_nowait(data)
+                    except asyncio.QueueFull:
+                        dead.add(q)
+                for q in dead:
+                    _output_clients.discard(q)
+        except Exception as e:
+            print(f"[output] readsb connection lost: {e} — retrying in 5s")
+            await asyncio.sleep(5)
+
+
+async def _handle_output_client(reader, writer):
+    """Handle one inbound beast output connection."""
+    peer = writer.get_extra_info("peername", ("?", 0))
+    try:
+        # Read API key (first line, max 256 bytes, 10s timeout)
+        try:
+            raw_line = await asyncio.wait_for(reader.readline(), timeout=10)
+        except asyncio.TimeoutError:
+            print(f"[output] {peer[0]} key timeout — closing")
+            writer.close()
+            return
+
+        raw_key = raw_line.decode("utf-8", errors="replace").strip()
+        if not raw_key:
+            writer.close()
+            return
+
+        # Validate key against DB
+        output = db.validate_output_key(raw_key)
+        if not output:
+            print(f"[output] {peer[0]} invalid key — rejected")
+            writer.write(b"REJECTED\n")
+            await writer.drain()
+            writer.close()
+            return
+
+        if output.get("output_type") != "beast_raw":
+            print(f"[output] {peer[0]} key is for non-beast output — rejected")
+            writer.write(b"REJECTED\n")
+            await writer.drain()
+            writer.close()
+            return
+
+        print(f"[output] {peer[0]} authenticated as '{output.get('name')}' — streaming")
+        writer.write(b"OK\n")
+        await writer.drain()
+
+        q: asyncio.Queue = asyncio.Queue(maxsize=256)
+        _output_clients.add(q)
+        try:
+            while True:
+                data = await asyncio.wait_for(q.get(), timeout=30)
+                writer.write(data)
+                await writer.drain()
+        except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
+            pass
+        finally:
+            _output_clients.discard(q)
+            print(f"[output] {peer[0]} disconnected")
+
+    except Exception as e:
+        print(f"[output] {peer[0]} error: {e}")
+    finally:
+        try:
+            writer.close()
+        except Exception:
+            pass
+
+
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.68")
-    print(f"  Listening on {LISTEN_HOST}:{LISTEN_PORT}")
-    print(f"  Forwarding to {READSB_HOST}:{READSB_PORT}")
-    print(f"  Stats interval: {STATS_INTERVAL}s")
-    print(f"  MLAT clients: {MLAT_CLIENTS_PATH}")
+    print("TAKNET-PS Beast Proxy v1.0.69")
+    print(f"  Feeder listener:  {LISTEN_HOST}:{LISTEN_PORT}")
+    print(f"  Output listener:  {LISTEN_HOST}:{OUTPUT_LISTEN_PORT}")
+    print(f"  Forwarding to:    {READSB_HOST}:{READSB_PORT}")
+    print(f"  Stats interval:   {STATS_INTERVAL}s")
+    print(f"  MLAT clients:     {MLAT_CLIENTS_PATH}")
     print(f"  Tailscale: {'enabled' if vpn_resolver.TAILSCALE_ENABLED else 'disabled'}")
     print(f"  NetBird:   {'enabled' if vpn_resolver.NETBIRD_ENABLED else 'disabled'}")
     print(f"  GeoIP:     {'enabled' if geoip_helper.GEOIP_ENABLED else 'disabled'}")
@@ -318,11 +412,19 @@ async def main():
     db.init_db()
     _reclassify_existing_feeders()
 
-    server = await asyncio.start_server(handle_client, LISTEN_HOST, LISTEN_PORT)
-    asyncio.create_task(stats_flusher())
+    # Feeder input server
+    feeder_server = await asyncio.start_server(handle_client, LISTEN_HOST, LISTEN_PORT)
+    # Beast output server
+    output_server = await asyncio.start_server(_handle_output_client, LISTEN_HOST, OUTPUT_LISTEN_PORT)
 
-    async with server:
-        await server.serve_forever()
+    asyncio.create_task(stats_flusher())
+    asyncio.create_task(_broadcast_beast_to_output_clients())
+
+    async with feeder_server, output_server:
+        await asyncio.gather(
+            feeder_server.serve_forever(),
+            output_server.serve_forever(),
+        )
 
 
 if __name__ == "__main__":

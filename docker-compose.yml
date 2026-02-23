@@ -12,6 +12,7 @@ services:
       - READSB_HOST=readsb
       - READSB_PORT=30006
       - LISTEN_PORT=30004
+      - OUTPUT_LISTEN_PORT=30005
       - DB_PATH=/data/aggregator.db
       - TAILSCALE_ENABLED=${TAILSCALE_ENABLED:-true}
       - TAILSCALE_CIDR=${TAILSCALE_CIDR:-100.64.0.0/10}
@@ -24,6 +25,7 @@ services:
       - TAR1090_URL=http://tar1090:80/data/aircraft.json
     ports:
       - "${BEAST_PORT:-30004}:30004/tcp"
+      - "${BEAST_OUTPUT_PORT:-30005}:30005/tcp"
     volumes:
       - db-data:/data
       - /var/run/tailscale:/var/run/tailscale:ro
