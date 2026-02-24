@@ -137,7 +137,8 @@ function startStream() {
     if (eventSource) eventSource.close();
     eventSource = new EventSource('/api/updates/stream');
     eventSource.onmessage = function(e) {
-        const msg = JSON.parse(e.data);
+        let msg;
+        try { msg = JSON.parse(e.data); } catch(_) { return; }
         if (msg.type === 'heartbeat') return;
         if (msg.type === 'pre_restart') {
             preRestartSeen = true;
@@ -169,7 +170,10 @@ function pollUntilBack() {
     reconnectTimer = setTimeout(async function() {
         try {
             const r = await fetch('/api/status', { cache: 'no-store' });
-            if (r.ok) { setModalDone('Update complete. Dashboard is back online.'); }
+            if (r.ok) {
+                setModalDone('Update complete — reloading...');
+                setTimeout(() => window.location.reload(), 1000);
+            }
             else { pollUntilBack(); }
         } catch(e) { pollUntilBack(); }
     }, 2500);

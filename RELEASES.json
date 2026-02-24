@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.85",
+    "date": "2026-02-23",
+    "notes": "Fixed update modal showing JSON parse error after restart. When the container restarts, nginx may send an HTML error page as the last SSE chunk — JSON.parse threw and surfaced the error to the user. Fix: wrapped SSE message parsing in try/catch, silently discarding unparseable frames. Also: page now auto-reloads 1 second after the server comes back online, so manual refresh is no longer needed."
+  },
+  {
     "version": "1.0.84",
     "date": "2026-02-23",
     "notes": "Fixed feeders going stale despite active connections. stats_flusher was crashing after its first cycle with 'Cannot operate on a closed database'. Root cause: _get_conn() returns a cached thread-local connection, but several db functions (validate_output_key, purge_old_feeders, etc.) called conn.close() on it. After close, the cached reference remains but is unusable, causing the next db call in the same thread to fail. stats_flusher task died silently, stopping all last_seen updates. Fix: removed all conn.close() calls from beast-proxy db.py — thread-local connections are long-lived by design and should not be closed."
