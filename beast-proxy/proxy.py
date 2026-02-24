@@ -247,8 +247,10 @@ def get_mlat_clients():
 
 async def stats_flusher():
     """Periodically flush stats for all active connections."""
+    cycles = 0
     while True:
         await asyncio.sleep(STATS_INTERVAL)
+        cycles += 1
 
         # Read MLAT client data (includes coordinates)
         mlat_clients = get_mlat_clients()
@@ -284,7 +286,8 @@ async def stats_flusher():
         # Get aircraft count from readsb
         total_ac, with_pos = get_readsb_aircraft_count()
 
-        # Mark feeders with no active connection as stale/offline
+        # Mark feeders with no active connection as stale
+        # (only if not seen in last 5 minutes — see mark_inactive_feeders)
         active_feeder_ids = {c["feeder_id"] for c in active_connections.values()}
         db.mark_inactive_feeders(active_feeder_ids)
 
@@ -303,13 +306,15 @@ async def stats_flusher():
         vpn_resolver.refresh_caches()
 
         # Auto-purge feeders not seen in 24 hours (skip any that are currently active)
-        try:
-            active_feeder_ids = {c["feeder_id"] for c in active_connections.values()}
-            purged = db.purge_old_feeders(hours=24, exclude_ids=active_feeder_ids)
-            if purged:
-                print(f"[proxy] Auto-purged {purged} feeder(s) not seen in 24h")
-        except Exception as e:
-            print(f"[proxy] Auto-purge error: {e}")
+        # Also skip during startup grace period
+        if cycles > 3:
+            try:
+                active_feeder_ids = {c["feeder_id"] for c in active_connections.values()}
+                purged = db.purge_old_feeders(hours=24, exclude_ids=active_feeder_ids)
+                if purged:
+                    print(f"[proxy] Auto-purged {purged} feeder(s) not seen in 24h")
+            except Exception as e:
+                print(f"[proxy] Auto-purge error: {e}")
 
         # Check for key-regen drop signals
         try:
@@ -429,7 +434,7 @@ async def _handle_output_client(reader, writer):
 async def main():
     """Start the Beast TCP proxy server."""
     print("=" * 60)
-    print("TAKNET-PS Beast Proxy v1.0.81")
+    print("TAKNET-PS Beast Proxy v1.0.82")
     print(f"  Feeder listener:  {LISTEN_HOST}:{LISTEN_PORT}")
     print(f"  Output listener:  {LISTEN_HOST}:{OUTPUT_LISTEN_PORT}")
     print(f"  Forwarding to:    {READSB_HOST}:{READSB_PORT}")

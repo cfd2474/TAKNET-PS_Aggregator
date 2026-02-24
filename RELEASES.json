@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.82",
+    "date": "2026-02-23",
+    "notes": "Fixed feeder count dropping to 0 after service restart. mark_inactive_feeders was marking feeders stale based purely on active_connections snapshot — if a feeder hadn't reconnected yet when the stats cycle ran, it got wrongly marked stale. Fix: only mark a feeder stale if it is both absent from active_connections AND hasn't been seen in the last 5 minutes. This gives feeders a safe reconnection window after restart without requiring a separate grace period counter."
+  },
+  {
     "version": "1.0.81",
     "date": "2026-02-23",
     "notes": "Reverted READSB_LAT/LON added in v1.0.80. A fixed reference point is wrong for a distributed multi-feeder aggregator — it biases local CPR decoding toward one location, causing failures for aircraft far from that point. Without lat/lon, readsb uses global CPR decoding exclusively (requires even+odd frame pair), which works correctly across the entire USA when multiple feeders are providing data."

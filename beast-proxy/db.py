@@ -212,19 +212,25 @@ def update_feeder_mlat(feeder_id, mlat_enabled, lat=None, lon=None, alt=None, ml
 
 
 def mark_inactive_feeders(active_feeder_ids):
-    """Mark feeders not in active_feeder_ids as stale if they were active."""
+    """Mark feeders as stale only if not currently connected AND
+    not seen in the last 5 minutes. Prevents wrong stale marking
+    during service restarts while feeders are reconnecting."""
     conn = _get_conn()
     ts = now_utc()
     if active_feeder_ids:
         placeholders = ",".join("?" for _ in active_feeder_ids)
         conn.execute(
             f"""UPDATE feeders SET status = 'stale', updated_at = ?
-                WHERE status = 'active' AND id NOT IN ({placeholders})""",
+                WHERE status = 'active'
+                AND id NOT IN ({placeholders})
+                AND last_seen < datetime('now', '-5 minutes')""",
             (ts, *active_feeder_ids),
         )
     else:
         conn.execute(
-            "UPDATE feeders SET status = 'stale', updated_at = ? WHERE status = 'active'",
+            """UPDATE feeders SET status = 'stale', updated_at = ?
+               WHERE status = 'active'
+               AND last_seen < datetime('now', '-5 minutes')""",
             (ts,),
         )
     conn.commit()
