@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.84",
+    "date": "2026-02-23",
+    "notes": "Fixed feeders going stale despite active connections. stats_flusher was crashing after its first cycle with 'Cannot operate on a closed database'. Root cause: _get_conn() returns a cached thread-local connection, but several db functions (validate_output_key, purge_old_feeders, etc.) called conn.close() on it. After close, the cached reference remains but is unusable, causing the next db call in the same thread to fail. stats_flusher task died silently, stopping all last_seen updates. Fix: removed all conn.close() calls from beast-proxy db.py — thread-local connections are long-lived by design and should not be closed."
+  },
+  {
     "version": "1.0.83",
     "date": "2026-02-23",
     "notes": "Fixed /api/ routes returning 404 when accessed via adsb.tak-solutions.com. aggregator.conf used server_name _ (catch-all) while netbird.conf had an explicit server_name — nginx prioritizes explicit names, so adsb.tak-solutions.com was being routed to the netbird block which has no /api/ routes. Fix: added adsb.tak-solutions.com explicitly to aggregator.conf server_name."

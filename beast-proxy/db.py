@@ -251,10 +251,8 @@ def validate_output_key(raw_key: str):
         (key_hash,)
     ).fetchone()
     if not row:
-        conn.close()
         return None
     if row["key_status"] != "ready":
-        conn.close()
         return None  # already consumed
     # Consume — mark used atomically
     conn.execute(
@@ -262,7 +260,6 @@ def validate_output_key(raw_key: str):
         (row["key_id"],)
     )
     conn.commit()
-    conn.close()
     result = dict(row)
     result["status"] = result.pop("output_status")
     return result
@@ -274,7 +271,6 @@ def reset_output_key_status(output_id: int):
     conn = _get_conn()
     conn.execute("DELETE FROM output_api_keys WHERE output_id = ?", (output_id,))
     conn.commit()
-    conn.close()
 
 
 def signal_drop_output(output_id: int):
@@ -285,7 +281,6 @@ def signal_drop_output(output_id: int):
         (output_id,)
     )
     conn.commit()
-    conn.close()
 
 
 def pop_drop_signals() -> list:
@@ -296,7 +291,6 @@ def pop_drop_signals() -> list:
     if ids:
         conn.execute("DELETE FROM output_drop_signals")
         conn.commit()
-    conn.close()
     return ids
 
 
@@ -316,5 +310,4 @@ def purge_old_feeders(hours: int = 24, exclude_ids: set = None) -> int:
         )
     count = cur.rowcount
     conn.commit()
-    conn.close()
     return count
