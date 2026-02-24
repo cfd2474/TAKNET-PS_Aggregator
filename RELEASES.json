@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.81",
+    "date": "2026-02-23",
+    "notes": "Reverted READSB_LAT/LON added in v1.0.80. A fixed reference point is wrong for a distributed multi-feeder aggregator — it biases local CPR decoding toward one location, causing failures for aircraft far from that point. Without lat/lon, readsb uses global CPR decoding exclusively (requires even+odd frame pair), which works correctly across the entire USA when multiple feeders are providing data."
+  },
+  {
+    "version": "1.0.80",
+    "date": "2026-02-23",
+    "notes": "Fixed missing distant aircraft on aggregator map. Readsb had no READSB_LAT/LON set, causing it to use 0,0 (Gulf of Guinea) as the CPR decoding reference point. CPR position decoding requires a reference location close to the aircraft — without it, positions for aircraft far from 0,0 fail to decode correctly. Now passes SITE_LAT/SITE_LON from .env into the readsb container."
+  },
+  {
     "version": "1.0.79",
     "date": "2026-02-23",
     "notes": "Fixed all feeders showing as stale. The 24h auto-purge introduced in v1.0.76 was deleting active feeders whose last_seen hadn't been flushed yet. On the next cycle, upsert_feeder recreated them with new IDs, but active_connections held the old IDs, causing mark_inactive_feeders to immediately mark the new records stale. Fix: purge now excludes any feeder ID currently in active_connections."
