@@ -1,5 +1,10 @@
 [
   {
+    "version": "1.0.83",
+    "date": "2026-02-23",
+    "notes": "Fixed /api/ routes returning 404 when accessed via adsb.tak-solutions.com. aggregator.conf used server_name _ (catch-all) while netbird.conf had an explicit server_name — nginx prioritizes explicit names, so adsb.tak-solutions.com was being routed to the netbird block which has no /api/ routes. Fix: added adsb.tak-solutions.com explicitly to aggregator.conf server_name."
+  },
+  {
     "version": "1.0.82",
     "date": "2026-02-23",
     "notes": "Fixed feeder count dropping to 0 after service restart. mark_inactive_feeders was marking feeders stale based purely on active_connections snapshot — if a feeder hadn't reconnected yet when the stats cycle ran, it got wrongly marked stale. Fix: only mark a feeder stale if it is both absent from active_connections AND hasn't been seen in the last 5 minutes. This gives feeders a safe reconnection window after restart without requiring a separate grace period counter."
