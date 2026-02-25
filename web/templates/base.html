@@ -176,6 +176,31 @@
         .card-grid-3 { grid-template-columns: repeat(3, 1fr); }
         .card-grid-2 { grid-template-columns: repeat(2, 1fr); }
 
+        /* Collapsible card */
+        .card-collapsible .card-header { margin-bottom: 0; }
+        .card-collapsible .card-header-toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+        .card-collapsible .card-header-toggle:hover { color: var(--text-primary); }
+        .card-collapsible .card-toggle-icon {
+            font-size: 10px;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+        .card-collapsible.collapsed .card-toggle-icon { transform: rotate(-90deg); }
+        .card-collapsible .card-body-collapsible {
+            overflow: hidden;
+            max-height: 2000px;
+            transition: max-height 0.25s ease-out;
+        }
+        .card-collapsible.collapsed .card-body-collapsible {
+            max-height: 0 !important;
+            margin-top: 0;
+            padding-top: 0;
+        }
+        .card-collapsible:not(.collapsed) .card-body-collapsible { margin-top: 16px; }
+
         .stat-card {
             background: var(--bg-card);
             border: 1px solid var(--border);

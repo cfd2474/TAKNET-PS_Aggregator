@@ -40,26 +40,32 @@
     </div>
 </div>
 
-<!-- Feeder Table -->
-<div class="card" style="margin-top:16px;">
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>IP Address</th>
-                    <th>Location</th>
-                    <th>Messages</th>
-                    <th>MLAT</th>
-                    <th>Last Seen</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="feeder-table">
-                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
-            </tbody>
-        </table>
+<!-- Feeder Table (collapsible, collapsed by default) -->
+<div class="card card-collapsible collapsed" style="margin-top:16px;" id="feeder-table-card">
+    <div class="card-header card-header-toggle" onclick="toggleFeederTableCard()" role="button" tabindex="0" aria-expanded="false" aria-controls="feeder-table-body">
+        <h3>Feeders</h3>
+        <span class="card-toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="card-body-collapsible" id="feeder-table-body">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>IP Address</th>
+                        <th>Location</th>
+                        <th>Messages</th>
+                        <th>MLAT</th>
+                        <th>Last Seen</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="feeder-table">
+                    <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -125,6 +131,13 @@ function renderTable() {
         html += '</tr>';
     });
     tbody.innerHTML = html;
+}
+
+function toggleFeederTableCard() {
+    const card = document.getElementById('feeder-table-card');
+    const btn = card.querySelector('.card-header-toggle');
+    const isCollapsed = card.classList.toggle('collapsed');
+    btn.setAttribute('aria-expanded', !isCollapsed);
 }
 
 document.getElementById('filter-status').addEventListener('change', loadFeeders);
