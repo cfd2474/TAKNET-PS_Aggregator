@@ -207,12 +207,9 @@ ok "CLI installed: taknet-agg"
 # ── 7. Build and start ─────────────────────────────────────────────────────
 info "Building and starting containers..."
 cd "$INSTALL_DIR"
-# Remove orphaned taknet containers not owned by this compose project
-for cname in $(docker ps -a --format '{{.Names}}' 2>/dev/null | grep '^taknet-'); do
-    proj=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$cname" 2>/dev/null || true)
-    if [ "$proj" != "taknet-aggregator" ]; then
-        docker rm -f "$cname" 2>/dev/null || true
-    fi
+# Force-remove any stopped/orphaned containers before compose up
+for cname in taknet-nginx taknet-dashboard taknet-beast-proxy taknet-readsb taknet-tar1090 taknet-mlat taknet-api taknet-netbird-client; do
+    docker rm -f "$cname" 2>/dev/null || true
 done
 docker compose up -d --build
 

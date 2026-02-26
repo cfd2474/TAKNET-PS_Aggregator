@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.90",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: install.sh now force-removes all known taknet-* containers by name before docker compose up \u2014 eliminates container name conflict errors regardless of project label state"
+    ]
+  },
+  {
     "version": "1.0.89",
     "date": "2026-02-26",
     "notes": [
