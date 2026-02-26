@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.88",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: pin Docker Compose project name to 'taknet-aggregator' in docker-compose.yml \u2014 prevents container ownership conflicts when compose runs from different working directories",
+      "Fix: update script removes orphaned taknet-api container before bring-up if project label mismatch"
+    ]
+  },
+  {
     "version": "1.0.87",
     "date": "2026-02-26",
     "notes": [

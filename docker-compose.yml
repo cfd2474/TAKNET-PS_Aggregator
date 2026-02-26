@@ -1,3 +1,5 @@
+name: taknet-aggregator
+
 services:
 
   # Beast Connection Proxy — tracks feeders, classifies VPN/public, forwards to readsb

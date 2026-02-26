@@ -170,6 +170,8 @@ case "${1:-help}" in
         cp -a "$TMPDIR/repo"/* "$INSTALL_DIR/" 2>/dev/null || true
         shopt -u dotglob
         rm -rf "$INSTALL_DIR/.git" "$TMPDIR"
+        # Remove any containers with wrong project labels (e.g. from manual compose runs)
+        docker rm -f taknet-api 2>/dev/null || true
         docker compose pull 2>/dev/null || true
         docker compose up -d --build
         NEW_VERSION=$(cat VERSION 2>/dev/null || echo "unknown")
