@@ -40,32 +40,26 @@
     </div>
 </div>
 
-<!-- Feeder Table (collapsible, collapsed by default) -->
-<div class="card card-collapsible" style="margin-top:16px;" id="feeder-table-card">
-    <div class="card-header card-header-toggle" onclick="toggleFeederTableCard()" role="button" tabindex="0" aria-expanded="true" aria-controls="feeder-table-body">
-        <h3>Feeders</h3>
-        <span class="card-toggle-icon" aria-hidden="true">▼</span>
-    </div>
-    <div class="card-body-collapsible" id="feeder-table-body">
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th data-sort-field="name" data-label="Name" onclick="setFeederSort('name')" class="sortable">Name</th>
-                        <th data-sort-field="type" data-label="Type" onclick="setFeederSort('type')" class="sortable">Type</th>
-                        <th data-sort-field="ip" data-label="IP Address" onclick="setFeederSort('ip')" class="sortable">IP Address</th>
-                        <th>Location</th>
-                        <th data-sort-field="messages" data-label="Messages" onclick="setFeederSort('messages')" class="sortable">Messages</th>
-                        <th data-sort-field="mlat" data-label="MLAT" onclick="setFeederSort('mlat')" class="sortable">MLAT</th>
-                        <th>Last Seen</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody id="feeder-table">
-                    <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
-                </tbody>
-            </table>
-        </div>
+<!-- Feeder Table -->
+<div class="card" style="margin-top:16px;">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>IP Address</th>
+                    <th>Location</th>
+                    <th>Messages</th>
+                    <th>MLAT</th>
+                    <th>Last Seen</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="feeder-table">
+                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
+            </tbody>
+        </table>
     </div>
 </div>
 {% endblock %}
@@ -73,66 +67,6 @@
 {% block extra_scripts %}
 <script>
 let allFeeders = [];
-let feederSortField = 'name';
-let feederSortDir = 'asc';
-
-function setFeederSort(field) {
-    if (feederSortField === field) {
-        feederSortDir = feederSortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-        feederSortField = field;
-        feederSortDir = 'asc';
-    }
-    updateFeederSortIndicators();
-    renderTable();
-}
-
-function updateFeederSortIndicators() {
-    const headers = document.querySelectorAll('#feeder-table-card th[data-sort-field]');
-    headers.forEach(th => {
-        const field = th.getAttribute('data-sort-field');
-        const label = th.getAttribute('data-label') || th.textContent.trim();
-        let indicator = '';
-        if (field === feederSortField) {
-            indicator = feederSortDir === 'asc' ? ' ▲' : ' ▼';
-        }
-        th.textContent = label + indicator;
-    });
-}
-
-function compareFeeders(a, b) {
-    const dir = feederSortDir === 'asc' ? 1 : -1;
-    let av, bv;
-
-    switch (feederSortField) {
-        case 'name':
-            av = (a.name || '').toLowerCase();
-            bv = (b.name || '').toLowerCase();
-            break;
-        case 'type':
-            av = (a.conn_type || '').toLowerCase();
-            bv = (b.conn_type || '').toLowerCase();
-            break;
-        case 'ip':
-            av = (a.ip_address || '');
-            bv = (b.ip_address || '');
-            break;
-        case 'messages':
-            av = a.messages_received || 0;
-            bv = b.messages_received || 0;
-            break;
-        case 'mlat':
-            av = a.mlat_enabled ? 1 : 0;
-            bv = b.mlat_enabled ? 1 : 0;
-            break;
-        default:
-            return 0;
-    }
-
-    if (av < bv) return -1 * dir;
-    if (av > bv) return 1 * dir;
-    return 0;
-}
 
 async function loadFeeders() {
     try {
@@ -163,16 +97,14 @@ function renderTable() {
                (f.hostname || '').toLowerCase().includes(search);
     });
 
-    const sorted = filtered.slice().sort(compareFeeders);
-
     const tbody = document.getElementById('feeder-table');
-    if (sorted.length === 0) {
+    if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">No feeders found</td></tr>';
         return;
     }
 
     let html = '';
-    sorted.forEach(f => {
+    filtered.forEach(f => {
         let loc = '—';
         if (f.latitude != null && f.longitude != null) {
             loc = f.latitude.toFixed(4) + ', ' + f.longitude.toFixed(4);
@@ -195,13 +127,6 @@ function renderTable() {
     tbody.innerHTML = html;
 }
 
-function toggleFeederTableCard() {
-    const card = document.getElementById('feeder-table-card');
-    const btn = card.querySelector('.card-header-toggle');
-    const isCollapsed = card.classList.toggle('collapsed');
-    btn.setAttribute('aria-expanded', !isCollapsed);
-}
-
 document.getElementById('filter-status').addEventListener('change', loadFeeders);
 document.getElementById('filter-type').addEventListener('change', loadFeeders);
 document.getElementById('filter-search').addEventListener('input', renderTable);
@@ -219,7 +144,6 @@ async function resetFeederList() {
     }
 }
 
-updateFeederSortIndicators();
 loadFeeders();
 setInterval(loadFeeders, 15000);
 </script>
