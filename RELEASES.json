@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.89",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: install.sh detects and removes containers with wrong Docker Compose project labels before starting",
+      "Fix: taknet-agg update reinstalls CLI from updated install.sh before running compose, making all future fixes self-propagating"
+    ]
+  },
+  {
     "version": "1.0.88",
     "date": "2026-02-26",
     "notes": [

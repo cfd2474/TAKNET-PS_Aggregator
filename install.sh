@@ -170,8 +170,9 @@ case "${1:-help}" in
         cp -a "$TMPDIR/repo"/* "$INSTALL_DIR/" 2>/dev/null || true
         shopt -u dotglob
         rm -rf "$INSTALL_DIR/.git" "$TMPDIR"
-        # Remove any containers with wrong project labels (e.g. from manual compose runs)
-        docker rm -f taknet-api 2>/dev/null || true
+        # Reinstall CLI so fixes in install.sh take effect immediately
+        bash "$INSTALL_DIR/install.sh" 2>/dev/null || true
+        # Pull external images, build local ones, restart cleanly
         docker compose pull 2>/dev/null || true
         docker compose up -d --build
         NEW_VERSION=$(cat VERSION 2>/dev/null || echo "unknown")
@@ -206,6 +207,13 @@ ok "CLI installed: taknet-agg"
 # ── 7. Build and start ─────────────────────────────────────────────────────
 info "Building and starting containers..."
 cd "$INSTALL_DIR"
+# Remove orphaned taknet containers not owned by this compose project
+for cname in $(docker ps -a --format '{{.Names}}' 2>/dev/null | grep '^taknet-'); do
+    proj=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$cname" 2>/dev/null || true)
+    if [ "$proj" != "taknet-aggregator" ]; then
+        docker rm -f "$cname" 2>/dev/null || true
+    fi
+done
 docker compose up -d --build
 
 # ── Cleanup temp clone if we made one ───────────────────────────────────────
