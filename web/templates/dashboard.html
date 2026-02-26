@@ -49,17 +49,29 @@
     </div>
 </div>
 
-<!-- Activity Log -->
-<div class="card" style="margin-top:16px;">
-    <div class="card-header"><h3>Recent Activity</h3></div>
-    <ul class="activity-list" id="activity-log">
-        <li class="activity-item"><span style="color:var(--text-muted)">Loading...</span></li>
-    </ul>
+<!-- Activity Log (collapsible, collapsed by default) -->
+<div class="card card-collapsible collapsed" style="margin-top:16px;" id="activity-card">
+    <div class="card-header card-header-toggle" onclick="toggleActivityCard()" role="button" tabindex="0" aria-expanded="false" aria-controls="activity-log-body">
+        <h3>Recent Activity</h3>
+        <span class="card-toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="card-body-collapsible" id="activity-log-body">
+        <ul class="activity-list" id="activity-log">
+            <li class="activity-item"><span style="color:var(--text-muted)">Loading...</span></li>
+        </ul>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+function toggleActivityCard() {
+    const card = document.getElementById('activity-card');
+    const btn = card.querySelector('.card-header-toggle');
+    const isCollapsed = card.classList.toggle('collapsed');
+    btn.setAttribute('aria-expanded', !isCollapsed);
+}
+
 async function loadDashboard() {
     try {
         const [statusRes, outputsRes] = await Promise.all([
