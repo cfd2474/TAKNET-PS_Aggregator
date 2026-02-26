@@ -1,33 +1,46 @@
 [
   {
+    "version": "1.0.86",
+    "date": "2026-02-26",
+    "notes": [
+      "New: ADS-B REST API (v2) \u2014 airplanes.live-compatible endpoints at /v2/",
+      "Endpoints: /v2/all, /v2/hex/<hex>, /v2/callsign/<cs>, /v2/reg/<reg>, /v2/type/<type>, /v2/squawk/<sq>, /v2/mil, /v2/ladd, /v2/pia, /v2/point/<lat>/<lon>/<radius_nm>",
+      "REST API is public (no auth required), supports comma-separated multi-value lookups",
+      "Point endpoint returns aircraft sorted nearest-first with 'dst' (nm) field, capped at 250 nm",
+      "Durable API keys: no connection-count limits, key stays 'ready' indefinitely \u2014 regenerate to rotate",
+      "Single-use keys unchanged: consumed on first beast connection, unlimited REST API calls",
+      "Key type selector added to output creation UI"
+    ]
+  },
+  {
     "version": "1.0.85",
     "date": "2026-02-23",
-    "notes": "Fixed update modal showing JSON parse error after restart. When the container restarts, nginx may send an HTML error page as the last SSE chunk — JSON.parse threw and surfaced the error to the user. Fix: wrapped SSE message parsing in try/catch, silently discarding unparseable frames. Also: page now auto-reloads 1 second after the server comes back online, so manual refresh is no longer needed."
+    "notes": "Fixed update modal showing JSON parse error after restart. When the container restarts, nginx may send an HTML error page as the last SSE chunk \u2014 JSON.parse threw and surfaced the error to the user. Fix: wrapped SSE message parsing in try/catch, silently discarding unparseable frames. Also: page now auto-reloads 1 second after the server comes back online, so manual refresh is no longer needed."
   },
   {
     "version": "1.0.84",
     "date": "2026-02-23",
-    "notes": "Fixed feeders going stale despite active connections. stats_flusher was crashing after its first cycle with 'Cannot operate on a closed database'. Root cause: _get_conn() returns a cached thread-local connection, but several db functions (validate_output_key, purge_old_feeders, etc.) called conn.close() on it. After close, the cached reference remains but is unusable, causing the next db call in the same thread to fail. stats_flusher task died silently, stopping all last_seen updates. Fix: removed all conn.close() calls from beast-proxy db.py — thread-local connections are long-lived by design and should not be closed."
+    "notes": "Fixed feeders going stale despite active connections. stats_flusher was crashing after its first cycle with 'Cannot operate on a closed database'. Root cause: _get_conn() returns a cached thread-local connection, but several db functions (validate_output_key, purge_old_feeders, etc.) called conn.close() on it. After close, the cached reference remains but is unusable, causing the next db call in the same thread to fail. stats_flusher task died silently, stopping all last_seen updates. Fix: removed all conn.close() calls from beast-proxy db.py \u2014 thread-local connections are long-lived by design and should not be closed."
   },
   {
     "version": "1.0.83",
     "date": "2026-02-23",
-    "notes": "Fixed /api/ routes returning 404 when accessed via adsb.tak-solutions.com. aggregator.conf used server_name _ (catch-all) while netbird.conf had an explicit server_name — nginx prioritizes explicit names, so adsb.tak-solutions.com was being routed to the netbird block which has no /api/ routes. Fix: added adsb.tak-solutions.com explicitly to aggregator.conf server_name."
+    "notes": "Fixed /api/ routes returning 404 when accessed via adsb.tak-solutions.com. aggregator.conf used server_name _ (catch-all) while netbird.conf had an explicit server_name \u2014 nginx prioritizes explicit names, so adsb.tak-solutions.com was being routed to the netbird block which has no /api/ routes. Fix: added adsb.tak-solutions.com explicitly to aggregator.conf server_name."
   },
   {
     "version": "1.0.82",
     "date": "2026-02-23",
-    "notes": "Fixed feeder count dropping to 0 after service restart. mark_inactive_feeders was marking feeders stale based purely on active_connections snapshot — if a feeder hadn't reconnected yet when the stats cycle ran, it got wrongly marked stale. Fix: only mark a feeder stale if it is both absent from active_connections AND hasn't been seen in the last 5 minutes. This gives feeders a safe reconnection window after restart without requiring a separate grace period counter."
+    "notes": "Fixed feeder count dropping to 0 after service restart. mark_inactive_feeders was marking feeders stale based purely on active_connections snapshot \u2014 if a feeder hadn't reconnected yet when the stats cycle ran, it got wrongly marked stale. Fix: only mark a feeder stale if it is both absent from active_connections AND hasn't been seen in the last 5 minutes. This gives feeders a safe reconnection window after restart without requiring a separate grace period counter."
   },
   {
     "version": "1.0.81",
     "date": "2026-02-23",
-    "notes": "Reverted READSB_LAT/LON added in v1.0.80. A fixed reference point is wrong for a distributed multi-feeder aggregator — it biases local CPR decoding toward one location, causing failures for aircraft far from that point. Without lat/lon, readsb uses global CPR decoding exclusively (requires even+odd frame pair), which works correctly across the entire USA when multiple feeders are providing data."
+    "notes": "Reverted READSB_LAT/LON added in v1.0.80. A fixed reference point is wrong for a distributed multi-feeder aggregator \u2014 it biases local CPR decoding toward one location, causing failures for aircraft far from that point. Without lat/lon, readsb uses global CPR decoding exclusively (requires even+odd frame pair), which works correctly across the entire USA when multiple feeders are providing data."
   },
   {
     "version": "1.0.80",
     "date": "2026-02-23",
-    "notes": "Fixed missing distant aircraft on aggregator map. Readsb had no READSB_LAT/LON set, causing it to use 0,0 (Gulf of Guinea) as the CPR decoding reference point. CPR position decoding requires a reference location close to the aircraft — without it, positions for aircraft far from 0,0 fail to decode correctly. Now passes SITE_LAT/SITE_LON from .env into the readsb container."
+    "notes": "Fixed missing distant aircraft on aggregator map. Readsb had no READSB_LAT/LON set, causing it to use 0,0 (Gulf of Guinea) as the CPR decoding reference point. CPR position decoding requires a reference location close to the aircraft \u2014 without it, positions for aircraft far from 0,0 fail to decode correctly. Now passes SITE_LAT/SITE_LON from .env into the readsb container."
   },
   {
     "version": "1.0.79",
@@ -37,12 +50,12 @@
   {
     "version": "1.0.78",
     "date": "2026-02-23",
-    "notes": "Dashboard outputs stat card now shows live count from /api/outputs instead of hardcoded 0 with 'coming soon'. Count is user-scoped: network_admins see only their own outputs, admins see all — matching the outputs page behavior."
+    "notes": "Dashboard outputs stat card now shows live count from /api/outputs instead of hardcoded 0 with 'coming soon'. Count is user-scoped: network_admins see only their own outputs, admins see all \u2014 matching the outputs page behavior."
   },
   {
     "version": "1.0.77",
     "date": "2026-02-23",
-    "notes": "Fixed updater not applying code changes — dashboard/beast-proxy/mlat-server are locally built images that docker compose pull skips. Update script now explicitly runs 'docker compose build' for these services before bringing containers up, ensuring new code is always applied."
+    "notes": "Fixed updater not applying code changes \u2014 dashboard/beast-proxy/mlat-server are locally built images that docker compose pull skips. Update script now explicitly runs 'docker compose build' for these services before bringing containers up, ensuring new code is always applied."
   },
   {
     "version": "1.0.76",
@@ -52,17 +65,17 @@
   {
     "version": "1.0.75",
     "date": "2026-02-23",
-    "notes": "Output API key modal now shows beginner-friendly connection instructions with the full URL/host (adsb.tak-solutions.com) and step-by-step guidance for both beast raw TCP and JSON HTTP. Edit modal now locks name/type/mode fields once an API key has been generated — only notes remains editable. Button changes to 'Save Notes' to reflect this."
+    "notes": "Output API key modal now shows beginner-friendly connection instructions with the full URL/host (adsb.tak-solutions.com) and step-by-step guidance for both beast raw TCP and JSON HTTP. Edit modal now locks name/type/mode fields once an API key has been generated \u2014 only notes remains editable. Button changes to 'Save Notes' to reflect this."
   },
   {
     "version": "1.0.74",
     "date": "2026-02-23",
-    "notes": "Fixed update modal — gunicorn was running 2 worker processes, so the update thread (Worker A) wrote to an in-memory queue that the SSE stream (Worker B) could never see. Reduced to 1 worker — the dashboard is a single-admin tool and doesn't need multiple workers."
+    "notes": "Fixed update modal \u2014 gunicorn was running 2 worker processes, so the update thread (Worker A) wrote to an in-memory queue that the SSE stream (Worker B) could never see. Reduced to 1 worker \u2014 the dashboard is a single-admin tool and doesn't need multiple workers."
   },
   {
     "version": "1.0.73",
     "date": "2026-02-23",
-    "notes": "Fixed misleading API key modal text — key is visible in the outputs list, not one-time only. Deleting an output now emits a drop signal before deletion, terminating any active beast connection using that output's key."
+    "notes": "Fixed misleading API key modal text \u2014 key is visible in the outputs list, not one-time only. Deleting an output now emits a drop signal before deletion, terminating any active beast connection using that output's key."
   },
   {
     "version": "1.0.72",
@@ -77,7 +90,7 @@
   {
     "version": "1.0.70",
     "date": "2026-02-23",
-    "notes": "Fixed update error 'unhashable type: dict' — docker volumes dict was incorrectly embedded inside the f-string using {{ }} escaping, causing Python to evaluate it as a dict literal with a dict value as a key. Moved volumes dict outside the f-string."
+    "notes": "Fixed update error 'unhashable type: dict' \u2014 docker volumes dict was incorrectly embedded inside the f-string using {{ }} escaping, causing Python to evaluate it as a dict literal with a dict value as a key. Moved volumes dict outside the f-string."
   },
   {
     "version": "1.0.69",
@@ -107,7 +120,7 @@
   {
     "version": "1.0.64",
     "date": "2026-02-22",
-    "notes": "Fixed feeder detail page JS broken in v1.0.63 — async function deleteFeeder() declaration was accidentally removed by a str_replace, leaving a bare return statement at script top-level that killed all subsequent function definitions (populateName, openFeederView, onProxyLoad, etc.)."
+    "notes": "Fixed feeder detail page JS broken in v1.0.63 \u2014 async function deleteFeeder() declaration was accidentally removed by a str_replace, leaving a bare return statement at script top-level that killed all subsequent function definitions (populateName, openFeederView, onProxyLoad, etc.)."
   },
   {
     "version": "1.0.63",
@@ -117,7 +130,7 @@
   {
     "version": "1.0.62",
     "date": "2026-02-22",
-    "notes": "Feeder detail page: added '📍 From Location' button that auto-populates the name field in CC-ST-City format (e.g. US-TN-nashville). Uses MLAT GPS coordinates via Nominatim reverse geocode if available, falls back to IP geolocation via ip-api.com. Name is previewed in the field; user confirms by clicking Save Changes."
+    "notes": "Feeder detail page: added '\ud83d\udccd From Location' button that auto-populates the name field in CC-ST-City format (e.g. US-TN-nashville). Uses MLAT GPS coordinates via Nominatim reverse geocode if available, falls back to IP geolocation via ip-api.com. Name is previewed in the field; user confirms by clicking Save Changes."
   },
   {
     "version": "1.0.61",
@@ -132,7 +145,7 @@
   {
     "version": "1.0.59",
     "date": "2026-02-22",
-    "notes": "Fixed feeder proxy 404. Root cause: nginx proxy_pass with IP variables requires a resolver directive — without it nginx silently falls through to Flask which has no matching route. Added Docker DNS resolver (127.0.0.11) to nginx config. Also fixed WebSocket Connection header and simplified auth sub-request."
+    "notes": "Fixed feeder proxy 404. Root cause: nginx proxy_pass with IP variables requires a resolver directive \u2014 without it nginx silently falls through to Flask which has no matching route. Added Docker DNS resolver (127.0.0.11) to nginx config. Also fixed WebSocket Connection header and simplified auth sub-request."
   },
   {
     "version": "1.0.58",
@@ -197,7 +210,7 @@
   {
     "version": "1.0.46",
     "date": "2026-02-21",
-    "notes": "Fixed web update — git clone and file copy now run inside docker:cli container which has the host install directory bind-mounted, ensuring files actually land on disk. Also added 1s delay before restart to ensure pre_restart event reaches the browser."
+    "notes": "Fixed web update \u2014 git clone and file copy now run inside docker:cli container which has the host install directory bind-mounted, ensuring files actually land on disk. Also added 1s delay before restart to ensure pre_restart event reaches the browser."
   },
   {
     "version": "1.0.45",
@@ -232,7 +245,7 @@
   {
     "version": "1.0.39",
     "date": "2026-02-21",
-    "notes": "Access control added — login required. Three roles: admin (full access), network_admin (dashboard + data), viewer (map only). Default credentials admin/password. User management page under System. Each user can change their own password via profile menu."
+    "notes": "Access control added \u2014 login required. Three roles: admin (full access), network_admin (dashboard + data), viewer (map only). Default credentials admin/password. User management page under System. Each user can change their own password via profile menu."
   },
   {
     "version": "1.0.38",
@@ -242,7 +255,7 @@
   {
     "version": "1.0.37",
     "date": "2026-02-21",
-    "notes": "Fixed Aircraft Tracked stat card — now shows 'with position' sub-count. Fixed topbar aircraft count (was showing [object Object])."
+    "notes": "Fixed Aircraft Tracked stat card \u2014 now shows 'with position' sub-count. Fixed topbar aircraft count (was showing [object Object])."
   },
   {
     "version": "1.0.36",
@@ -252,12 +265,12 @@
   {
     "version": "1.0.35",
     "date": "2026-02-20",
-    "notes": "Fixed NetBird enrollment — added /dev/net/tun device to container so WireGuard interface creates successfully."
+    "notes": "Fixed NetBird enrollment \u2014 added /dev/net/tun device to container so WireGuard interface creates successfully."
   },
   {
     "version": "1.0.34",
     "date": "2026-02-20",
-    "notes": "NetBird server enrollment UI. VPN page now includes enrollment form — enter a setup key to register the aggregator as a NetBird peer. Status, re-enroll, and disconnect controls added."
+    "notes": "NetBird server enrollment UI. VPN page now includes enrollment form \u2014 enter a setup key to register the aggregator as a NetBird peer. Status, re-enroll, and disconnect controls added."
   },
   {
     "version": "1.0.33",

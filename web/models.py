@@ -512,9 +512,11 @@ class OutputKeyModel:
     """API key management for outputs."""
 
     @staticmethod
-    def generate(output_id: int) -> str:
+    def generate(output_id: int, key_type: str = "single_use") -> str:
         """Generate a new key, store hash + display copy, return the raw key."""
         import secrets, hashlib
+        if key_type not in ("single_use", "durable"):
+            key_type = "single_use"
         raw = "tak-" + secrets.token_urlsafe(32)
         key_hash = hashlib.sha256(raw.encode()).hexdigest()
         prefix = raw[:12]
@@ -522,9 +524,9 @@ class OutputKeyModel:
         conn.execute("DELETE FROM output_api_keys WHERE output_id = ?", (output_id,))
         conn.execute(
             """INSERT INTO output_api_keys
-               (output_id, key_hash, key_prefix, key_display, status)
-               VALUES (?, ?, ?, ?, 'ready')""",
-            (output_id, key_hash, prefix, raw)
+               (output_id, key_hash, key_prefix, key_display, key_type, status)
+               VALUES (?, ?, ?, ?, ?, 'ready')""",
+            (output_id, key_hash, prefix, raw, key_type)
         )
         conn.commit()
         conn.close()
@@ -532,10 +534,10 @@ class OutputKeyModel:
 
     @staticmethod
     def get_for_output(output_id: int):
-        """Return key metadata including display key and status."""
+        """Return key metadata including display key, type, and status."""
         conn = get_db()
         row = conn.execute(
-            """SELECT id, key_prefix, key_display, status, created_at, last_used
+            """SELECT id, key_prefix, key_display, key_type, status, created_at, last_used
                FROM output_api_keys WHERE output_id = ?""",
             (output_id,)
         ).fetchone()
@@ -544,13 +546,15 @@ class OutputKeyModel:
 
     @staticmethod
     def consume(raw_key: str):
-        """Validate a ready key and mark it used (single-use auth).
-        Returns output dict if valid and ready, None otherwise."""
+        """Validate a key for beast_raw connection.
+        - single_use: must be 'ready', marks it 'used' on first auth.
+        - durable: always valid if key exists and output is active; never consumed.
+        Returns output dict if valid, None otherwise."""
         import hashlib
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
         conn = get_db()
         row = conn.execute(
-            """SELECT o.*, k.id as key_id, k.status as key_status
+            """SELECT o.*, k.id as key_id, k.key_type, k.status as key_status
                FROM output_api_keys k
                JOIN outputs o ON k.output_id = o.id
                WHERE k.key_hash = ? AND o.status = 'active'""",
@@ -559,32 +563,50 @@ class OutputKeyModel:
         if not row:
             conn.close()
             return None
-        if row["key_status"] != "ready":
-            conn.close()
-            return None  # already used
-        conn.execute(
-            "UPDATE output_api_keys SET status = 'used', last_used = datetime('now') WHERE id = ?",
-            (row["key_id"],)
-        )
-        conn.commit()
+        key_type = row["key_type"]
+        if key_type == "single_use":
+            if row["key_status"] != "ready":
+                conn.close()
+                return None  # already used
+            conn.execute(
+                "UPDATE output_api_keys SET status = 'used', last_used = datetime('now') WHERE id = ?",
+                (row["key_id"],)
+            )
+            conn.commit()
+        else:
+            # durable — just update last_used, never consume
+            conn.execute(
+                "UPDATE output_api_keys SET last_used = datetime('now') WHERE id = ?",
+                (row["key_id"],)
+            )
+            conn.commit()
         conn.close()
         return dict(row)
 
     @staticmethod
     def validate(raw_key: str):
-        """Non-consuming validate for JSON API (stateless HTTP)."""
+        """Non-consuming validate for JSON API (stateless HTTP).
+        Works for both single_use and durable keys — no status change."""
         import hashlib
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
         conn = get_db()
         row = conn.execute(
-            """SELECT o.*, k.id as key_id, k.status as key_status
+            """SELECT o.*, k.id as key_id, k.key_type, k.status as key_status
                FROM output_api_keys k
                JOIN outputs o ON k.output_id = o.id
                WHERE k.key_hash = ? AND o.status = 'active'""",
             (key_hash,)
         ).fetchone()
+        if not row:
+            conn.close()
+            return None
+        conn.execute(
+            "UPDATE output_api_keys SET last_used = datetime('now') WHERE id = ?",
+            (row["key_id"],)
+        )
+        conn.commit()
         conn.close()
-        return dict(row) if row else None
+        return dict(row)
 
     @staticmethod
     def delete(output_id: int):

@@ -709,12 +709,15 @@ def output_create():
     name        = (data.get("name") or "").strip()
     output_type = (data.get("output_type") or "").strip()
     mode        = data.get("mode", "api")
+    key_type    = data.get("key_type", "single_use")
     if not name or not output_type:
         return jsonify({"error": "name and output_type are required"}), 400
     if output_type not in ("json", "beast_raw"):
         return jsonify({"error": "output_type must be 'json' or 'beast_raw'"}), 400
     if mode not in ("api", "push"):
         return jsonify({"error": "mode must be 'api' or 'push'"}), 400
+    if key_type not in ("single_use", "durable"):
+        return jsonify({"error": "key_type must be 'single_use' or 'durable'"}), 400
     import json as _json
     config = _json.dumps(data.get("config") or {})
     output_id = OutputModel.create(
@@ -727,7 +730,7 @@ def output_create():
     )
     raw_key = None
     if mode == "api":
-        raw_key = OutputKeyModel.generate(output_id)
+        raw_key = OutputKeyModel.generate(output_id, key_type=key_type)
     return jsonify({"success": True, "id": output_id, "api_key": raw_key}), 201
 
 
@@ -768,8 +771,10 @@ def output_regenerate_key(output_id):
         return jsonify({"error": "Output is not in API mode"}), 400
     # Signal beast-proxy to drop any active connection using the old key
     signal_drop_output(output_id)
-    # Generate new key (deletes old one)
-    raw_key = OutputKeyModel.generate(output_id)
+    # Preserve existing key_type when regenerating
+    existing_key = OutputKeyModel.get_for_output(output_id)
+    key_type = (existing_key or {}).get("key_type", "single_use")
+    raw_key = OutputKeyModel.generate(output_id, key_type=key_type)
     return jsonify({"success": True, "api_key": raw_key})
 
 

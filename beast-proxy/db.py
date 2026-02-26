@@ -30,6 +30,10 @@ def init_db():
         conn.execute("ALTER TABLE feeders ADD COLUMN altitude REAL")
     except sqlite3.OperationalError:
         pass  # column already exists
+    try:
+        conn.execute("ALTER TABLE output_api_keys ADD COLUMN key_type TEXT NOT NULL DEFAULT 'single_use'")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     conn.commit()
     print(f"[db] Database initialized at {DB_PATH}")
 
@@ -237,14 +241,16 @@ def mark_inactive_feeders(active_feeder_ids):
 
 
 def validate_output_key(raw_key: str):
-    """Validate and consume a beast output API key (single-use auth).
-    Returns output row dict if key is valid and status='ready', else None."""
+    """Validate a beast output API key.
+    - single_use: must be 'ready'; marks it 'used' on first auth.
+    - durable: always valid if key exists and output is active; never consumed.
+    Returns output row dict if valid, else None."""
     import hashlib
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     conn = _get_conn()
     row = conn.execute(
         """SELECT o.id, o.name, o.output_type, o.mode, o.status as output_status,
-                  k.id as key_id, k.status as key_status
+                  k.id as key_id, k.key_type, k.status as key_status
            FROM output_api_keys k
            JOIN outputs o ON k.output_id = o.id
            WHERE k.key_hash = ? AND o.status = 'active' AND o.mode = 'api'""",
@@ -252,14 +258,23 @@ def validate_output_key(raw_key: str):
     ).fetchone()
     if not row:
         return None
-    if row["key_status"] != "ready":
-        return None  # already consumed
-    # Consume — mark used atomically
-    conn.execute(
-        "UPDATE output_api_keys SET status = 'used', last_used = datetime('now') WHERE id = ?",
-        (row["key_id"],)
-    )
-    conn.commit()
+    key_type = row["key_type"]
+    if key_type == "single_use":
+        if row["key_status"] != "ready":
+            return None  # already consumed
+        # Consume atomically
+        conn.execute(
+            "UPDATE output_api_keys SET status = 'used', last_used = datetime('now') WHERE id = ?",
+            (row["key_id"],)
+        )
+        conn.commit()
+    else:
+        # durable — update last_used, never consume
+        conn.execute(
+            "UPDATE output_api_keys SET last_used = datetime('now') WHERE id = ?",
+            (row["key_id"],)
+        )
+        conn.commit()
     result = dict(row)
     result["status"] = result.pop("output_status")
     return result

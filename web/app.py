@@ -70,6 +70,7 @@ def create_app():
             "ALTER TABLE outputs ADD COLUMN mode TEXT NOT NULL DEFAULT 'api'",
             "ALTER TABLE output_api_keys ADD COLUMN status TEXT NOT NULL DEFAULT 'ready'",
             "ALTER TABLE output_api_keys ADD COLUMN key_display TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE output_api_keys ADD COLUMN key_type TEXT NOT NULL DEFAULT 'single_use'",
         ]:
             try:
                 conn.execute(stmt)

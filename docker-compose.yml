@@ -165,6 +165,42 @@ services:
       beast-proxy:
         condition: service_started
 
+  # REST API v2
+  taknet-api:
+    build:
+      context: ./taknet-api
+      dockerfile: Dockerfile
+    image: taknet-api:latest
+    container_name: taknet-api
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/Los_Angeles}
+      - DB_PATH=/data/aggregator.db
+      - TAR1090_URL=http://tar1090/data/aircraft.json
+    volumes:
+      - db-data:/data:ro
+    networks:
+      - taknet-internal
+    depends_on:
+      tar1090:
+        condition: service_started
+
+  # REST API (airplanes.live-compatible v2 endpoints)
+  api:
+    build:
+      context: ./api-server
+      dockerfile: Dockerfile
+    container_name: taknet-api
+    restart: unless-stopped
+    environment:
+      - TAR1090_URL=http://tar1090:80/data/aircraft.json
+      - SITE_NAME=${SITE_NAME:-TAKNET-PS Aggregator}
+    networks:
+      - taknet-internal
+    depends_on:
+      tar1090:
+        condition: service_started
+
   # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
@@ -182,6 +218,8 @@ services:
     depends_on:
       - dashboard
       - tar1090
+      - api
+      - taknet-api
 
 volumes:
   db-data:

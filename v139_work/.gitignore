@@ -1,0 +1,10 @@
+.env
+*.mmdb
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.db
+*.db-journal
+*.log
+.DS_Store

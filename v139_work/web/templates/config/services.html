@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block page_title %}Services{% endblock %}
+
+{% block content %}
+
+<!-- Restart All card -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <div>
+            <h3>Soft Reset</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">Restart all TAKNET services without rebuilding images.</p>
+        </div>
+        <button class="btn btn-danger" id="restart-all-btn" onclick="restartAll()" style="white-space:nowrap;">Restart All Services</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Docker Containers</h3>
+        <button class="btn btn-sm" onclick="loadContainers()">Refresh</button>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Image</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th style="text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="container-table">
+                <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Restart All Modal -->
+<div class="modal-overlay" id="restart-modal">
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header">
+            <h3 id="restart-modal-title">Restarting All Services</h3>
+        </div>
+        <div class="modal-body">
+            <div id="restart-status-bar" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+                <span id="restart-spinner" style="display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;"></span>
+                <span id="restart-status-msg">Restarting services...</span>
+            </div>
+            <pre id="restart-log" style="font-size:11px;font-family:monospace;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:50vh;overflow-y:auto;background:var(--bg-primary);padding:12px;border-radius:6px;"></pre>
+            <div style="text-align:right;margin-top:12px;">
+                <button class="btn" id="restart-close-btn" style="display:none;" onclick="closeRestartModal()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Logs Modal -->
+<div class="modal-overlay" id="logs-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="logs-title">Container Logs</h3>
+            <button class="modal-close" onclick="closeLogs()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <pre id="logs-content" style="font-size:11px;font-family:monospace;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow-y:auto;background:var(--bg-primary);padding:12px;border-radius:6px;">Loading...</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadContainers() {
+    try {
+        const r = await fetch('/api/docker/containers');
+        const d = await r.json();
+        const containers = d.containers || [];
+        const tbody = document.getElementById('container-table');
+
+        if (containers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:40px;">No TAKNET containers found. Is Docker accessible?</td></tr>';
+            return;
+        }
+
+        let html = '';
+        containers.forEach(c => {
+            const statusBadge = c.status === 'running'
+                ? '<span class="badge badge-live">Running</span>'
+                : '<span class="badge badge-offline">' + c.status + '</span>';
+
+            html += '<tr>';
+            html += '<td style="font-weight:500;color:var(--text-primary)">' + c.short_name + '</td>';
+            html += '<td style="font-size:12px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + c.image + '</td>';
+            html += '<td>' + statusBadge + '</td>';
+            html += '<td style="font-size:12px;">' + fmtTime(c.started_at) + '</td>';
+            html += '<td style="text-align:right;">';
+            html += '<button class="btn btn-sm" onclick="showLogs(\'' + c.name + '\')">Logs</button> ';
+            html += '<button class="btn btn-sm" onclick="restartContainer(\'' + c.name + '\')">Restart</button>';
+            html += '</td>';
+            html += '</tr>';
+        });
+        tbody.innerHTML = html;
+    } catch(e) {
+        console.error('Load containers error:', e);
+    }
+}
+
+async function restartAll() {
+    if (!confirm('Restart all TAKNET services? They will be briefly unavailable.')) return;
+
+    document.getElementById('restart-modal-title').textContent = 'Restarting All Services';
+    document.getElementById('restart-spinner').style.display = 'inline-block';
+    document.getElementById('restart-status-bar').style.background = 'rgba(59,130,246,0.08)';
+    document.getElementById('restart-status-bar').style.borderColor = 'rgba(59,130,246,0.2)';
+    document.getElementById('restart-status-msg').style.color = 'var(--accent)';
+    document.getElementById('restart-status-msg').textContent = 'Restarting services...';
+    document.getElementById('restart-log').textContent = '';
+    document.getElementById('restart-close-btn').style.display = 'none';
+    document.getElementById('restart-modal').classList.add('show');
+    document.getElementById('restart-all-btn').disabled = true;
+
+    try {
+        const r = await fetch('/api/docker/restart-all', { method: 'POST' });
+        const d = await r.json();
+
+        if (d.success) {
+            document.getElementById('restart-spinner').style.display = 'none';
+            document.getElementById('restart-modal-title').textContent = 'Restart Complete';
+            document.getElementById('restart-status-bar').style.background = 'rgba(34,197,94,0.08)';
+            document.getElementById('restart-status-bar').style.borderColor = 'rgba(34,197,94,0.2)';
+            document.getElementById('restart-status-msg').style.color = 'var(--green)';
+            document.getElementById('restart-status-msg').textContent = '✓ All services restarted.';
+            document.getElementById('restart-log').textContent = d.output || '';
+            loadContainers();
+        } else {
+            throw new Error(d.error || 'Unknown error');
+        }
+    } catch(e) {
+        document.getElementById('restart-spinner').style.display = 'none';
+        document.getElementById('restart-modal-title').textContent = 'Restart Failed';
+        document.getElementById('restart-status-bar').style.background = 'rgba(239,68,68,0.08)';
+        document.getElementById('restart-status-bar').style.borderColor = 'rgba(239,68,68,0.2)';
+        document.getElementById('restart-status-msg').style.color = 'var(--red)';
+        document.getElementById('restart-status-msg').textContent = '✗ ' + e.message;
+    } finally {
+        document.getElementById('restart-close-btn').style.display = 'block';
+        document.getElementById('restart-all-btn').disabled = false;
+    }
+}
+
+function closeRestartModal() {
+    document.getElementById('restart-modal').classList.remove('show');
+}
+
+async function restartContainer(name) {
+    if (!confirm('Restart ' + name + '?')) return;
+    try {
+        const r = await fetch('/api/docker/containers/' + name + '/restart', { method: 'POST' });
+        const d = await r.json();
+        alert(d.message || 'Done');
+        loadContainers();
+    } catch(e) { alert('Error: ' + e); }
+}
+
+async function showLogs(name) {
+    document.getElementById('logs-title').textContent = name + ' — Logs';
+    document.getElementById('logs-content').textContent = 'Loading...';
+    document.getElementById('logs-modal').classList.add('show');
+
+    try {
+        const r = await fetch('/api/docker/containers/' + name + '/logs?tail=200');
+        const d = await r.json();
+        document.getElementById('logs-content').textContent = d.logs || 'No logs available';
+        const el = document.getElementById('logs-content');
+        el.scrollTop = el.scrollHeight;
+    } catch(e) {
+        document.getElementById('logs-content').textContent = 'Error: ' + e;
+    }
+}
+
+function closeLogs() {
+    document.getElementById('logs-modal').classList.remove('show');
+}
+
+document.getElementById('logs-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeLogs();
+});
+
+loadContainers();
+setInterval(loadContainers, 30000);
+</script>
+{% endblock %}

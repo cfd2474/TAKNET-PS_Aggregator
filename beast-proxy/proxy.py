@@ -393,7 +393,8 @@ async def _handle_output_client(reader, writer):
             return
 
         output_id = output["id"]
-        print(f"[output] {peer[0]} authenticated as '{output.get('name')}' — streaming")
+        key_type  = output.get("key_type", "single_use")
+        print(f"[output] {peer[0]} authenticated as '{output.get('name')}' ({key_type}) — streaming")
         writer.write(b"OK\n")
         await writer.drain()
 

@@ -1,0 +1,313 @@
+"""Database wrapper for beast-proxy SQLite operations."""
+
+import os
+import sqlite3
+import threading
+from datetime import datetime, timezone
+
+DB_PATH = os.environ.get("DB_PATH", "/data/aggregator.db")
+_local = threading.local()
+
+
+def _get_conn():
+    """Get thread-local database connection."""
+    if not hasattr(_local, "conn") or _local.conn is None:
+        _local.conn = sqlite3.connect(DB_PATH, timeout=10)
+        _local.conn.row_factory = sqlite3.Row
+        _local.conn.execute("PRAGMA journal_mode=WAL")
+        _local.conn.execute("PRAGMA busy_timeout=5000")
+    return _local.conn
+
+
+def init_db():
+    """Initialize database with schema if tables don't exist."""
+    conn = _get_conn()
+    schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+    with open(schema_path) as f:
+        conn.executescript(f.read())
+    # Migrations for existing databases
+    try:
+        conn.execute("ALTER TABLE feeders ADD COLUMN altitude REAL")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+    conn.commit()
+    print(f"[db] Database initialized at {DB_PATH}")
+
+
+def now_utc():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=None):
+    """Create or update feeder record. Returns feeder ID."""
+    conn = _get_conn()
+    ts = now_utc()
+
+    # Auto-populate map/stats URLs for NetBird feeders
+    nb_tar1090 = f"http://{ip_address}:8080" if conn_type == "netbird" else None
+    nb_graphs  = f"http://{ip_address}:8080/graphs1090/" if conn_type == "netbird" else None
+
+    # Try to find existing feeder by IP first
+    row = conn.execute(
+        "SELECT id, name FROM feeders WHERE ip_address = ?", (ip_address,)
+    ).fetchone()
+
+    # If not found by IP but we have a hostname, check for a stale record
+    # from a different IP (e.g. same feeder previously connected via public IP).
+    # When a NetBird connection arrives with a known hostname, absorb the old record.
+    if not row and hostname and conn_type == "netbird":
+        stale = conn.execute(
+            "SELECT id, name FROM feeders WHERE hostname = ? AND ip_address != ?",
+            (hostname, ip_address)
+        ).fetchone()
+        if stale:
+            # Re-home the stale record to the NetBird IP and reclassify it
+            print(f"[db] Merging stale public record (id={stale['id']}, hostname={hostname}) → NetBird IP {ip_address}")
+            conn.execute(
+                """UPDATE feeders SET
+                    ip_address = ?, conn_type = 'netbird',
+                    tar1090_url    = CASE WHEN (tar1090_url IS NULL OR tar1090_url = '') THEN ? ELSE tar1090_url END,
+                    graphs1090_url = CASE WHEN (graphs1090_url IS NULL OR graphs1090_url = '') THEN ? ELSE graphs1090_url END,
+                    last_seen = ?, status = 'active', updated_at = ?
+                WHERE id = ?""",
+                (ip_address, nb_tar1090, nb_graphs, ts, ts, stale["id"])
+            )
+            conn.commit()
+            return stale["id"]
+
+    if row:
+        feeder_id = row["id"]
+        conn.execute(
+            """UPDATE feeders SET
+                hostname = COALESCE(?, hostname),
+                conn_type = ?,
+                location = COALESCE(?, location),
+                latitude = COALESCE(?, latitude),
+                longitude = COALESCE(?, longitude),
+                last_seen = ?,
+                status = 'active',
+                updated_at = ?,
+                tar1090_url    = CASE WHEN (tar1090_url IS NULL OR tar1090_url = '') AND ? IS NOT NULL THEN ? ELSE tar1090_url END,
+                graphs1090_url = CASE WHEN (graphs1090_url IS NULL OR graphs1090_url = '') AND ? IS NOT NULL THEN ? ELSE graphs1090_url END
+            WHERE id = ?""",
+            (hostname, conn_type, location, lat, lon, ts, ts,
+             nb_tar1090, nb_tar1090, nb_graphs, nb_graphs, feeder_id),
+        )
+    else:
+        # Auto-generate name
+        if hostname:
+            name = hostname
+        elif location:
+            short_hash = ip_address.replace(".", "")[-4:]
+            name = f"feeder-{location.lower().replace(' ', '-').replace(',', '')}-{short_hash}"
+        else:
+            short_hash = ip_address.replace(".", "")[-4:]
+            name = f"feeder-{short_hash}"
+
+        cursor = conn.execute(
+            """INSERT INTO feeders
+                (name, conn_type, ip_address, hostname, location, latitude, longitude,
+                 tar1090_url, graphs1090_url,
+                 first_seen, last_seen, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
+            (name, conn_type, ip_address, hostname, location, lat, lon,
+             nb_tar1090, nb_graphs, ts, ts, ts, ts),
+        )
+        feeder_id = cursor.lastrowid
+
+    conn.commit()
+    return feeder_id
+
+
+def log_connection(feeder_id, ip_address):
+    """Log a new connection event. Returns connection ID."""
+    conn = _get_conn()
+    ts = now_utc()
+    cursor = conn.execute(
+        "INSERT INTO connections (feeder_id, ip_address, connected_at) VALUES (?, ?, ?)",
+        (feeder_id, ip_address, ts),
+    )
+    conn.execute(
+        "INSERT INTO activity_log (event_type, feeder_id, message) VALUES (?, ?, ?)",
+        ("feeder_connected", feeder_id, f"Feeder connected from {ip_address}"),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def log_disconnection(feeder_id, connection_id, bytes_transferred=0):
+    """Log disconnection and compute duration."""
+    conn = _get_conn()
+    ts = now_utc()
+    conn.execute(
+        """UPDATE connections SET
+            disconnected_at = ?,
+            duration_seconds = CAST((julianday(?) - julianday(connected_at)) * 86400 AS INTEGER),
+            bytes_transferred = ?
+        WHERE id = ?""",
+        (ts, ts, bytes_transferred, connection_id),
+    )
+    conn.execute(
+        "UPDATE feeders SET status = 'offline', last_seen = ?, updated_at = ? WHERE id = ?",
+        (ts, ts, feeder_id),
+    )
+    conn.execute(
+        "INSERT INTO activity_log (event_type, feeder_id, message) VALUES (?, ?, ?)",
+        ("feeder_disconnected", feeder_id, "Feeder disconnected"),
+    )
+    conn.commit()
+
+
+def update_feeder_stats(feeder_id, bytes_count, messages_count=0, positions_count=0):
+    """Increment feeder byte, message, and position counters."""
+    conn = _get_conn()
+    ts = now_utc()
+    conn.execute(
+        """UPDATE feeders SET
+            bytes_received = bytes_received + ?,
+            messages_received = messages_received + ?,
+            positions_received = positions_received + ?,
+            last_seen = ?,
+            status = 'active',
+            updated_at = ?
+        WHERE id = ?""",
+        (bytes_count, messages_count, positions_count, ts, ts, feeder_id),
+    )
+    conn.commit()
+
+
+def touch_feeder(feeder_id):
+    """Update last_seen and ensure feeder is marked active (even with no new data)."""
+    conn = _get_conn()
+    ts = now_utc()
+    conn.execute(
+        "UPDATE feeders SET last_seen = ?, status = 'active', updated_at = ? WHERE id = ?",
+        (ts, ts, feeder_id),
+    )
+    conn.commit()
+
+
+def update_feeder_mlat(feeder_id, mlat_enabled, lat=None, lon=None, alt=None, mlat_name=None):
+    """Update MLAT status, coordinates, and name for a feeder."""
+    conn = _get_conn()
+    ts = now_utc()
+    if mlat_enabled and lat is not None and lon is not None:
+        conn.execute(
+            """UPDATE feeders SET
+                mlat_enabled = 1,
+                name = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
+                latitude = ?,
+                longitude = ?,
+                altitude = ?,
+                updated_at = ?
+            WHERE id = ?""",
+            (mlat_name, mlat_name, lat, lon, alt, ts, feeder_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE feeders SET mlat_enabled = ?, updated_at = ? WHERE id = ?",
+            (1 if mlat_enabled else 0, ts, feeder_id),
+        )
+    conn.commit()
+
+
+def mark_inactive_feeders(active_feeder_ids):
+    """Mark feeders as stale only if not currently connected AND
+    not seen in the last 5 minutes. Prevents wrong stale marking
+    during service restarts while feeders are reconnecting."""
+    conn = _get_conn()
+    ts = now_utc()
+    if active_feeder_ids:
+        placeholders = ",".join("?" for _ in active_feeder_ids)
+        conn.execute(
+            f"""UPDATE feeders SET status = 'stale', updated_at = ?
+                WHERE status = 'active'
+                AND id NOT IN ({placeholders})
+                AND last_seen < datetime('now', '-5 minutes')""",
+            (ts, *active_feeder_ids),
+        )
+    else:
+        conn.execute(
+            """UPDATE feeders SET status = 'stale', updated_at = ?
+               WHERE status = 'active'
+               AND last_seen < datetime('now', '-5 minutes')""",
+            (ts,),
+        )
+    conn.commit()
+
+
+def validate_output_key(raw_key: str):
+    """Validate and consume a beast output API key (single-use auth).
+    Returns output row dict if key is valid and status='ready', else None."""
+    import hashlib
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    conn = _get_conn()
+    row = conn.execute(
+        """SELECT o.id, o.name, o.output_type, o.mode, o.status as output_status,
+                  k.id as key_id, k.status as key_status
+           FROM output_api_keys k
+           JOIN outputs o ON k.output_id = o.id
+           WHERE k.key_hash = ? AND o.status = 'active' AND o.mode = 'api'""",
+        (key_hash,)
+    ).fetchone()
+    if not row:
+        return None
+    if row["key_status"] != "ready":
+        return None  # already consumed
+    # Consume — mark used atomically
+    conn.execute(
+        "UPDATE output_api_keys SET status = 'used', last_used = datetime('now') WHERE id = ?",
+        (row["key_id"],)
+    )
+    conn.commit()
+    result = dict(row)
+    result["status"] = result.pop("output_status")
+    return result
+
+
+def reset_output_key_status(output_id: int):
+    """Called when a key is regenerated — used to signal active connections to drop.
+    The new key will be 'ready'; this just ensures the old hash is gone."""
+    conn = _get_conn()
+    conn.execute("DELETE FROM output_api_keys WHERE output_id = ?", (output_id,))
+    conn.commit()
+
+
+def signal_drop_output(output_id: int):
+    """Write a drop signal so beast-proxy drops active connections for this output."""
+    conn = _get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO output_drop_signals (output_id) VALUES (?)",
+        (output_id,)
+    )
+    conn.commit()
+
+
+def pop_drop_signals() -> list:
+    """Fetch and clear all pending drop signals. Returns list of output_ids."""
+    conn = _get_conn()
+    rows = conn.execute("SELECT output_id FROM output_drop_signals").fetchall()
+    ids = [r["output_id"] for r in rows]
+    if ids:
+        conn.execute("DELETE FROM output_drop_signals")
+        conn.commit()
+    return ids
+
+
+def purge_old_feeders(hours: int = 24, exclude_ids: set = None) -> int:
+    """Delete feeders not seen in the last N hours, excluding any currently active."""
+    conn = _get_conn()
+    if exclude_ids:
+        placeholders = ",".join("?" for _ in exclude_ids)
+        cur = conn.execute(
+            f"DELETE FROM feeders WHERE last_seen < datetime('now', ?) AND id NOT IN ({placeholders})",
+            (f"-{hours} hours", *exclude_ids)
+        )
+    else:
+        cur = conn.execute(
+            "DELETE FROM feeders WHERE last_seen < datetime('now', ?)",
+            (f"-{hours} hours",)
+        )
+    count = cur.rowcount
+    conn.commit()
+    return count

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block page_title %}Configuration{% endblock %}
+
+{% block content %}
+<div class="card-grid card-grid-3">
+    <a href="/config/vpn" class="stat-card">
+        <div class="label">VPN</div>
+        <div class="value" style="font-size:20px;">Network</div>
+        <div class="sub">Tailscale &amp; NetBird status</div>
+    </a>
+    <a href="/config/services" class="stat-card">
+        <div class="label">Services</div>
+        <div class="value" style="font-size:20px;">Containers</div>
+        <div class="sub">Manage Docker services</div>
+    </a>
+    <a href="/config/updates" class="stat-card">
+        <div class="label">Updates</div>
+        <div class="value" style="font-size:20px;">v{{ version }}</div>
+        <div class="sub">Check for new versions</div>
+    </a>
+</div>
+{% endblock %}

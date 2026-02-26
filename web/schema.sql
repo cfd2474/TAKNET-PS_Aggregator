@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS output_api_keys (
     key_hash TEXT NOT NULL,          -- SHA-256 hex of the raw key
     key_prefix TEXT NOT NULL,        -- first 12 chars for display
     key_display TEXT NOT NULL DEFAULT '', -- full raw key stored for display (shown in UI)
+    key_type TEXT NOT NULL DEFAULT 'single_use', -- 'single_use' or 'durable'
     status TEXT NOT NULL DEFAULT 'ready', -- 'ready' or 'used'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_used DATETIME,
@@ -121,3 +122,4 @@ CREATE TABLE IF NOT EXISTS output_drop_signals (
     output_id INTEGER PRIMARY KEY,
     signaled_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_output_keys_type ON output_api_keys(key_type);

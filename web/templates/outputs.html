@@ -61,6 +61,13 @@
                         <option value="push">Push (outbound to URL/host)</option>
                     </select>
                 </div>
+                <div class="form-group" id="key-type-group">
+                    <label>Key Type</label>
+                    <select class="form-control" id="modal-key-type">
+                        <option value="single_use">Single-Use — one active connection (beast) or unlimited REST calls; key shows as "used" after first beast connection</option>
+                        <option value="durable">Durable — no connection limits, never consumed; key stays "ready" indefinitely</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Push config (shown when mode=push) -->
@@ -144,8 +151,9 @@ function onTypeChange() {
 
 function onModeChange() {
     const mode = document.getElementById('modal-mode').value;
-    document.getElementById('push-config').style.display = (mode === 'push') ? 'block' : 'none';
-    document.getElementById('api-config').style.display  = (mode === 'api')  ? 'block' : 'none';
+    document.getElementById('push-config').style.display    = (mode === 'push') ? 'block' : 'none';
+    document.getElementById('api-config').style.display     = (mode === 'api')  ? 'block' : 'none';
+    document.getElementById('key-type-group').style.display = (mode === 'api')  ? 'block' : 'none';
 }
 
 async function loadOutputs() {
@@ -170,16 +178,22 @@ async function loadOutputs() {
                 ? '<span class="badge badge-live">active</span>'
                 : `<span class="badge">${o.status}</span>`;
 
-            // Key display and status
+            // Key display, type badge, and status
             let keyCell = '—';
             let keyStatusCell = '—';
             if (o.mode === 'api' && o.key_meta) {
                 const k = o.key_meta;
-                keyCell = `<code style="font-size:11px;color:var(--text-secondary);">${k.key_display}</code>`;
+                const isDurable = k.key_type === 'durable';
+                const keyTypeBadge = isDurable
+                    ? '<span class="badge" style="font-size:10px;background:rgba(16,185,129,0.12);color:var(--green);margin-left:4px;">durable</span>'
+                    : '<span class="badge" style="font-size:10px;background:rgba(148,163,184,0.12);color:var(--text-muted);margin-left:4px;">single-use</span>';
+                keyCell = `<code style="font-size:11px;color:var(--text-secondary);">${k.key_display}</code>${keyTypeBadge}`;
                 const isReady = k.status === 'ready';
-                keyStatusCell = isReady
-                    ? '<span class="badge badge-live" style="font-size:11px;">ready</span>'
-                    : '<span class="badge" style="font-size:11px;background:rgba(239,68,68,0.1);color:var(--red);">used</span>';
+                keyStatusCell = isDurable
+                    ? '<span class="badge badge-live" style="font-size:11px;">active</span>'
+                    : (isReady
+                        ? '<span class="badge badge-live" style="font-size:11px;">ready</span>'
+                        : '<span class="badge" style="font-size:11px;background:rgba(239,68,68,0.1);color:var(--red);">used</span>');
             }
 
             html += '<tr>';
@@ -192,7 +206,8 @@ async function loadOutputs() {
             if (userRole === 'admin') html += `<td style="color:var(--text-muted);font-size:12px;">${o.creator_name}</td>`;
             html += `<td style="text-align:right;white-space:nowrap;">`;
             if (o.mode === 'api') {
-                html += `<button class="btn" style="font-size:11px;padding:4px 8px;margin-right:4px;" onclick="regenKey(${o.id}, '${o.output_type}')">↺ Regen Key</button>`;
+                const keyType = (o.key_meta || {}).key_type || 'single_use';
+                html += `<button class="btn" style="font-size:11px;padding:4px 8px;margin-right:4px;" onclick="regenKey(${o.id}, '${o.output_type}', '${keyType}')">↺ Regen Key</button>`;
             }
             html += `<button class="btn" style="font-size:11px;padding:4px 8px;margin-right:4px;" onclick="openEditModal(${o.id})">Edit</button>`;
             html += `<button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteOutput(${o.id}, '${o.name.replace(/'/g,"\\'")}')">Delete</button>`;
@@ -210,6 +225,7 @@ function openCreateModal() {
     document.getElementById('modal-name').value = '';
     document.getElementById('modal-type').value = 'json';
     document.getElementById('modal-mode').value = 'api';
+    document.getElementById('modal-key-type').value = 'single_use';
     document.getElementById('modal-push-url').value = '';
     document.getElementById('modal-push-interval').value = '5';
     document.getElementById('modal-notes').value = '';

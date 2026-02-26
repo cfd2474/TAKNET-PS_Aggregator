@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block page_title %}Statistics{% endblock %}
+
+{% block topbar %}{% endblock %}
+
+{% block content %}
+<div class="iframe-wrap" style="margin:-24px;height:calc(100vh - 0px);">
+    <div class="iframe-toolbar">
+        <span>graphs1090 — Performance Statistics</span>
+        <a href="/graphs1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
+    </div>
+    <iframe src="/graphs1090/" style="flex:1;"></iframe>
+</div>
+{% endblock %}

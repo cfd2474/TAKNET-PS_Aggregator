@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+{% block page_title %}Outputs{% endblock %}
+
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <div>
+        <h2 style="font-size:18px;font-weight:600;margin:0;">Outputs</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">Outgoing data feeds you manage</p>
+    </div>
+    <button class="btn btn-primary" onclick="openCreateModal()" style="font-size:13px;">+ Add Output</button>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Mode</th>
+                    <th>Key</th>
+                    <th>Key Status</th>
+                    <th>Status</th>
+                    {% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="outputs-tbody">
+                <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px;">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Create / Edit Modal -->
+<div class="modal-overlay" id="output-modal">
+    <div class="modal" style="max-width:560px;">
+        <div class="modal-header">
+            <h3 id="modal-title">Add Output</h3>
+            <button class="modal-close" onclick="closeOutputModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="modal-output-id" value="">
+            <div class="card-grid card-grid-2" style="gap:12px;">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input class="form-control" id="modal-name" placeholder="e.g. TAK Server Feed">
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select class="form-control" id="modal-type" onchange="onTypeChange()">
+                        <option value="json">JSON</option>
+                        <option value="beast_raw">Beast Raw</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Mode</label>
+                    <select class="form-control" id="modal-mode" onchange="onModeChange()">
+                        <option value="api">API (inbound, key-authenticated)</option>
+                        <option value="push">Push (outbound to URL/host)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Push config (shown when mode=push) -->
+            <div id="push-config" style="display:none;margin-top:4px;">
+                <div class="form-group" id="push-url-group">
+                    <label id="push-url-label">Push URL</label>
+                    <input class="form-control" id="modal-push-url" placeholder="http://your-server/endpoint">
+                </div>
+                <div class="form-group" id="push-interval-group">
+                    <label>Push Interval (seconds)</label>
+                    <input class="form-control" id="modal-push-interval" type="number" min="1" value="5">
+                </div>
+            </div>
+
+            <!-- API config info (shown when mode=api) -->
+            <div id="api-config" style="margin-top:4px;">
+                <div id="api-info-json" style="background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    <strong style="color:var(--text-primary);">JSON API</strong> — External services call:<br>
+                    <code style="color:var(--green);font-size:12px;">GET /api/outputs/stream/&lt;key&gt;</code><br>
+                    Returns current aircraft.json from this aggregator.
+                </div>
+                <div id="api-info-beast" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    <strong style="color:var(--text-primary);">Beast Raw Listener</strong> — Clients connect to:<br>
+                    <code style="color:var(--green);font-size:12px;">TCP port 30005</code><br>
+                    Send key as first line (<code>key\n</code>), then receive beast stream.
+                    Multiple simultaneous connections supported.
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea class="form-control" id="modal-notes" rows="2" placeholder="Optional"></textarea>
+            </div>
+
+            <div id="modal-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-top:8px;"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="closeOutputModal()">Cancel</button>
+                <button class="btn btn-primary" id="modal-save-btn" onclick="saveOutput()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Display Modal (shown once after creation or regen) -->
+<div class="modal-overlay" id="key-modal">
+    <div class="modal" style="max-width:640px;">
+        <div class="modal-header">
+            <h3>API Key Generated</h3>
+            <button class="modal-close" onclick="document.getElementById('key-modal').classList.remove('show')">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:14px;margin-bottom:16px;">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">Your API Key — also visible in the outputs list</div>
+                <code id="key-display" style="font-size:13px;color:var(--green);word-break:break-all;"></code>
+            </div>
+            <div id="key-usage-info" style="font-size:13px;color:var(--text-secondary);"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="copyKey()">Copy Key</button>
+                <button class="btn btn-primary" onclick="document.getElementById('key-modal').classList.remove('show')">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const userRole = '{{ current_user.role }}';
+
+function onTypeChange() {
+    const type = document.getElementById('modal-type').value;
+    document.getElementById('api-info-json').style.display  = (type === 'json')      ? 'block' : 'none';
+    document.getElementById('api-info-beast').style.display = (type === 'beast_raw') ? 'block' : 'none';
+    // beast push uses host:port, JSON push uses URL
+    document.getElementById('push-url-label').textContent =
+        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : 'Push URL';
+    document.getElementById('push-interval-group').style.display =
+        type === 'beast_raw' ? 'none' : 'block';
+}
+
+function onModeChange() {
+    const mode = document.getElementById('modal-mode').value;
+    document.getElementById('push-config').style.display = (mode === 'push') ? 'block' : 'none';
+    document.getElementById('api-config').style.display  = (mode === 'api')  ? 'block' : 'none';
+}
+
+async function loadOutputs() {
+    const tbody = document.getElementById('outputs-tbody');
+    try {
+        const r = await fetch('/api/outputs');
+        const d = await r.json();
+        const items = d.outputs || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px;">No outputs yet. Click <strong>+ Add Output</strong> to create one.</td></tr>';
+            return;
+        }
+        let html = '';
+        items.forEach(o => {
+            const typeBadge = o.output_type === 'beast_raw'
+                ? '<span class="badge badge-netbird" style="font-size:11px;">beast raw</span>'
+                : '<span class="badge badge-vpn" style="font-size:11px;">json</span>';
+            const modeBadge = o.mode === 'api'
+                ? '<span class="badge" style="font-size:11px;background:rgba(168,85,247,0.12);color:var(--purple);">api</span>'
+                : '<span class="badge badge-tailscale" style="font-size:11px;">push</span>';
+            const statusBadge = o.status === 'active'
+                ? '<span class="badge badge-live">active</span>'
+                : `<span class="badge">${o.status}</span>`;
+
+            // Key display and status
+            let keyCell = '—';
+            let keyStatusCell = '—';
+            if (o.mode === 'api' && o.key_meta) {
+                const k = o.key_meta;
+                keyCell = `<code style="font-size:11px;color:var(--text-secondary);">${k.key_display}</code>`;
+                const isReady = k.status === 'ready';
+                keyStatusCell = isReady
+                    ? '<span class="badge badge-live" style="font-size:11px;">ready</span>'
+                    : '<span class="badge" style="font-size:11px;background:rgba(239,68,68,0.1);color:var(--red);">used</span>';
+            }
+
+            html += '<tr>';
+            html += `<td style="font-weight:500;">${o.name}</td>`;
+            html += `<td>${typeBadge}</td>`;
+            html += `<td>${modeBadge}</td>`;
+            html += `<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;">${keyCell}</td>`;
+            html += `<td>${keyStatusCell}</td>`;
+            html += `<td>${statusBadge}</td>`;
+            if (userRole === 'admin') html += `<td style="color:var(--text-muted);font-size:12px;">${o.creator_name}</td>`;
+            html += `<td style="text-align:right;white-space:nowrap;">`;
+            if (o.mode === 'api') {
+                html += `<button class="btn" style="font-size:11px;padding:4px 8px;margin-right:4px;" onclick="regenKey(${o.id}, '${o.output_type}')">↺ Regen Key</button>`;
+            }
+            html += `<button class="btn" style="font-size:11px;padding:4px 8px;margin-right:4px;" onclick="openEditModal(${o.id})">Edit</button>`;
+            html += `<button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteOutput(${o.id}, '${o.name.replace(/'/g,"\\'")}')">Delete</button>`;
+            html += `</td></tr>`;
+        });
+        tbody.innerHTML = html;
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--red);text-align:center;padding:20px;">Failed to load outputs</td></tr>';
+    }
+}
+
+function openCreateModal() {
+    document.getElementById('modal-title').textContent = 'Add Output';
+    document.getElementById('modal-output-id').value = '';
+    document.getElementById('modal-name').value = '';
+    document.getElementById('modal-type').value = 'json';
+    document.getElementById('modal-mode').value = 'api';
+    document.getElementById('modal-push-url').value = '';
+    document.getElementById('modal-push-interval').value = '5';
+    document.getElementById('modal-notes').value = '';
+    document.getElementById('modal-error').style.display = 'none';
+    onTypeChange(); onModeChange();
+    document.getElementById('output-modal').classList.add('show');
+}
+
+async function openEditModal(id) {
+    const r = await fetch('/api/outputs/' + id);
+    const d = await r.json();
+    if (!d.output) return;
+    const o = d.output;
+    const cfg = JSON.parse(o.config || '{}');
+    const locked = (o.mode === 'api' && d.output.key_meta);
+
+    document.getElementById('modal-title').textContent = locked ? 'Output Details' : 'Edit Output';
+    document.getElementById('modal-output-id').value = o.id;
+    document.getElementById('modal-name').value = o.name;
+    document.getElementById('modal-type').value = o.output_type;
+    document.getElementById('modal-mode').value = o.mode;
+    document.getElementById('modal-push-url').value = cfg.push_url || '';
+    document.getElementById('modal-push-interval').value = cfg.push_interval || 5;
+    document.getElementById('modal-notes').value = o.notes || '';
+
+    // Lock fields if key exists — name/type/mode are frozen
+    const lockFields = ['modal-name', 'modal-type', 'modal-mode', 'modal-push-url', 'modal-push-interval'];
+    lockFields.forEach(fid => {
+        const el = document.getElementById(fid);
+        if (el) el.disabled = locked;
+    });
+
+    // Show/hide lock notice
+    let notice = document.getElementById('modal-lock-notice');
+    if (locked) {
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.id = 'modal-lock-notice';
+            notice.style = 'font-size:12px;color:var(--text-muted);background:var(--bg-secondary);border-radius:6px;padding:8px 12px;margin-bottom:12px;';
+            notice.textContent = '🔒 Type, mode, and name cannot be changed after an API key is generated. You can update notes or regenerate the key.';
+            document.getElementById('modal-name').closest('.card-grid').after(notice);
+        }
+        notice.style.display = 'block';
+    } else if (notice) {
+        notice.style.display = 'none';
+    }
+
+    document.getElementById('modal-save-btn').textContent = locked ? 'Save Notes' : 'Save';
+    document.getElementById('modal-error').style.display = 'none';
+    onTypeChange(); onModeChange();
+    document.getElementById('output-modal').classList.add('show');
+}
+
+async function saveOutput() {
+    const errEl = document.getElementById('modal-error');
+    errEl.style.display = 'none';
+    const id = document.getElementById('modal-output-id').value;
+    const locked = document.getElementById('modal-name').disabled;
+    let payload;
+    if (locked) {
+        // Key exists — only notes is editable
+        payload = { notes: document.getElementById('modal-notes').value.trim() };
+    } else {
+        const type = document.getElementById('modal-type').value;
+        const mode = document.getElementById('modal-mode').value;
+        const config = {};
+        if (mode === 'push') {
+            config.push_url = document.getElementById('modal-push-url').value.trim();
+            if (type !== 'beast_raw') config.push_interval = parseInt(document.getElementById('modal-push-interval').value) || 5;
+        }
+        payload = {
+            name:        document.getElementById('modal-name').value.trim(),
+            output_type: type,
+            mode:        mode,
+            config:      config,
+            notes:       document.getElementById('modal-notes').value.trim(),
+        };
+        if (!payload.name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+    }
+    const btn = document.getElementById('modal-save-btn');
+    btn.disabled = true;
+    try {
+        const r = await fetch(id ? '/api/outputs/' + id : '/api/outputs', {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (d.success || d.id) {
+            closeOutputModal();
+            loadOutputs();
+            if (d.api_key) showKeyModal(d.api_key, document.getElementById('modal-type').value);
+        } else {
+            errEl.textContent = d.error || 'Save failed';
+            errEl.style.display = 'block';
+        }
+    } catch(e) {
+        errEl.textContent = 'Request failed: ' + e;
+        errEl.style.display = 'block';
+    }
+    btn.disabled = false;
+}
+
+async function regenKey(id, outputType) {
+    if (!confirm('Regenerate API key?\n\nThe existing key will stop working immediately. Any active connections using it will be dropped.')) return;
+    const r = await fetch('/api/outputs/' + id + '/regenerate-key', { method: 'POST' });
+    const d = await r.json();
+    if (d.api_key) {
+        loadOutputs();
+        showKeyModal(d.api_key, outputType);
+    } else {
+        alert(d.error || 'Failed to regenerate key');
+    }
+}
+
+function showKeyModal(key, outputType) {
+    document.getElementById('key-display').textContent = key;
+
+    let info = '';
+    if (outputType === 'beast_raw') {
+        info = `
+            <p style="margin:0 0 10px;"><strong>What this is:</strong> A live stream of raw ADS-B aircraft data in Beast format — the same format used by tools like tar1090, readsb, and most ADS-B decoders.</p>
+            <p style="margin:0 0 6px;"><strong>How to connect:</strong></p>
+            <ol style="margin:0 0 12px;padding-left:20px;line-height:1.8;">
+                <li>Connect your application to <code style="color:var(--green);">adsb.tak-solutions.com</code> on TCP port <code style="color:var(--green);">30005</code></li>
+                <li>As soon as the connection opens, send your API key followed by a newline — exactly like this:<br>
+                    <code style="display:block;margin:6px 0;padding:6px 10px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">${key}\n</code>
+                </li>
+                <li>If the key is accepted, the server responds with <code>OK</code> and immediately begins streaming Beast data</li>
+                <li>If rejected (wrong key or already in use), the server responds with <code>REJECTED</code> and closes the connection</li>
+            </ol>
+            <p style="margin:0;font-size:12px;color:var(--text-muted);">⚠️ The key can only be used for one active connection at a time. If you need to reconnect, regenerate the key first.</p>`;
+    } else {
+        info = `
+            <p style="margin:0 0 10px;"><strong>What this is:</strong> A JSON endpoint that returns the current list of aircraft being tracked by this aggregator — the same data that feeds the live map.</p>
+            <p style="margin:0 0 6px;"><strong>How to call it:</strong></p>
+            <p style="margin:0 0 8px;">Make an HTTP GET request to this URL from your app or browser:</p>
+            <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">https://adsb.tak-solutions.com/api/outputs/stream/${key}</code>
+            <p style="margin:0 0 6px;"><strong>Example (using curl in a terminal):</strong></p>
+            <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--text-secondary);">curl "https://adsb.tak-solutions.com/api/outputs/stream/${key}"</code>
+            <p style="margin:0;font-size:12px;color:var(--text-muted);">The response is a standard JSON object. Call it as often as you need — there's no rate limit, but once per second is plenty for aircraft tracking.</p>`;
+    }
+    document.getElementById('key-usage-info').innerHTML = info;
+    document.getElementById('key-modal').classList.add('show');
+}
+
+function copyKey() {
+    const key = document.getElementById('key-display').textContent;
+    navigator.clipboard.writeText(key).then(() => alert('Key copied to clipboard'));
+}
+
+async function deleteOutput(id, name) {
+    if (!confirm(`Delete output "${name}"? This cannot be undone.`)) return;
+    const r = await fetch('/api/outputs/' + id, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.success) loadOutputs();
+    else alert(d.error || 'Delete failed');
+}
+
+function closeOutputModal() {
+    document.getElementById('output-modal').classList.remove('show');
+}
+
+loadOutputs();
+</script>
+{% endblock %}

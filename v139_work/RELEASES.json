@@ -1,0 +1,432 @@
+[
+  {
+    "version": "1.0.85",
+    "date": "2026-02-23",
+    "notes": "Fixed update modal showing JSON parse error after restart. When the container restarts, nginx may send an HTML error page as the last SSE chunk — JSON.parse threw and surfaced the error to the user. Fix: wrapped SSE message parsing in try/catch, silently discarding unparseable frames. Also: page now auto-reloads 1 second after the server comes back online, so manual refresh is no longer needed."
+  },
+  {
+    "version": "1.0.84",
+    "date": "2026-02-23",
+    "notes": "Fixed feeders going stale despite active connections. stats_flusher was crashing after its first cycle with 'Cannot operate on a closed database'. Root cause: _get_conn() returns a cached thread-local connection, but several db functions (validate_output_key, purge_old_feeders, etc.) called conn.close() on it. After close, the cached reference remains but is unusable, causing the next db call in the same thread to fail. stats_flusher task died silently, stopping all last_seen updates. Fix: removed all conn.close() calls from beast-proxy db.py — thread-local connections are long-lived by design and should not be closed."
+  },
+  {
+    "version": "1.0.83",
+    "date": "2026-02-23",
+    "notes": "Fixed /api/ routes returning 404 when accessed via adsb.tak-solutions.com. aggregator.conf used server_name _ (catch-all) while netbird.conf had an explicit server_name — nginx prioritizes explicit names, so adsb.tak-solutions.com was being routed to the netbird block which has no /api/ routes. Fix: added adsb.tak-solutions.com explicitly to aggregator.conf server_name."
+  },
+  {
+    "version": "1.0.82",
+    "date": "2026-02-23",
+    "notes": "Fixed feeder count dropping to 0 after service restart. mark_inactive_feeders was marking feeders stale based purely on active_connections snapshot — if a feeder hadn't reconnected yet when the stats cycle ran, it got wrongly marked stale. Fix: only mark a feeder stale if it is both absent from active_connections AND hasn't been seen in the last 5 minutes. This gives feeders a safe reconnection window after restart without requiring a separate grace period counter."
+  },
+  {
+    "version": "1.0.81",
+    "date": "2026-02-23",
+    "notes": "Reverted READSB_LAT/LON added in v1.0.80. A fixed reference point is wrong for a distributed multi-feeder aggregator — it biases local CPR decoding toward one location, causing failures for aircraft far from that point. Without lat/lon, readsb uses global CPR decoding exclusively (requires even+odd frame pair), which works correctly across the entire USA when multiple feeders are providing data."
+  },
+  {
+    "version": "1.0.80",
+    "date": "2026-02-23",
+    "notes": "Fixed missing distant aircraft on aggregator map. Readsb had no READSB_LAT/LON set, causing it to use 0,0 (Gulf of Guinea) as the CPR decoding reference point. CPR position decoding requires a reference location close to the aircraft — without it, positions for aircraft far from 0,0 fail to decode correctly. Now passes SITE_LAT/SITE_LON from .env into the readsb container."
+  },
+  {
+    "version": "1.0.79",
+    "date": "2026-02-23",
+    "notes": "Fixed all feeders showing as stale. The 24h auto-purge introduced in v1.0.76 was deleting active feeders whose last_seen hadn't been flushed yet. On the next cycle, upsert_feeder recreated them with new IDs, but active_connections held the old IDs, causing mark_inactive_feeders to immediately mark the new records stale. Fix: purge now excludes any feeder ID currently in active_connections."
+  },
+  {
+    "version": "1.0.78",
+    "date": "2026-02-23",
+    "notes": "Dashboard outputs stat card now shows live count from /api/outputs instead of hardcoded 0 with 'coming soon'. Count is user-scoped: network_admins see only their own outputs, admins see all — matching the outputs page behavior."
+  },
+  {
+    "version": "1.0.77",
+    "date": "2026-02-23",
+    "notes": "Fixed updater not applying code changes — dashboard/beast-proxy/mlat-server are locally built images that docker compose pull skips. Update script now explicitly runs 'docker compose build' for these services before bringing containers up, ensuring new code is always applied."
+  },
+  {
+    "version": "1.0.76",
+    "date": "2026-02-23",
+    "notes": "Feeder list auto-cleanup: beast-proxy now purges feeders not seen in 24 hours on every stats cycle. Added 'Reset Feeder List' button (admin only) to the feeder list filter bar that removes all non-active (stale/offline) feeders on demand."
+  },
+  {
+    "version": "1.0.75",
+    "date": "2026-02-23",
+    "notes": "Output API key modal now shows beginner-friendly connection instructions with the full URL/host (adsb.tak-solutions.com) and step-by-step guidance for both beast raw TCP and JSON HTTP. Edit modal now locks name/type/mode fields once an API key has been generated — only notes remains editable. Button changes to 'Save Notes' to reflect this."
+  },
+  {
+    "version": "1.0.74",
+    "date": "2026-02-23",
+    "notes": "Fixed update modal — gunicorn was running 2 worker processes, so the update thread (Worker A) wrote to an in-memory queue that the SSE stream (Worker B) could never see. Reduced to 1 worker — the dashboard is a single-admin tool and doesn't need multiple workers."
+  },
+  {
+    "version": "1.0.73",
+    "date": "2026-02-23",
+    "notes": "Fixed misleading API key modal text — key is visible in the outputs list, not one-time only. Deleting an output now emits a drop signal before deletion, terminating any active beast connection using that output's key."
+  },
+  {
+    "version": "1.0.72",
+    "date": "2026-02-23",
+    "notes": "Fixed update modal showing 'Connection lost unexpectedly' even when update succeeded. Three-part fix: (1) Added 3s sleep in shell script between PRE_RESTART signal and docker compose up, giving browser time to receive the event; (2) Added SSE padding comments after pre_restart to force gunicorn to flush the chunk immediately; (3) Added 500ms grace period in JS onerror handler to handle race between pre_restart processing and connection drop. Also removed --build flag from docker compose up since pull already fetches updated images."
+  },
+  {
+    "version": "1.0.71",
+    "date": "2026-02-23",
+    "notes": "Output API keys are now single-use per session: key is consumed on first successful beast auth, marked 'used', and rejected for any subsequent connections. Key and status (ready/used) are visible in the outputs list. Regenerating a key drops any active beast connection using the old key (via DB signal table polled by beast-proxy), deletes the old key, and issues a new 'ready' key. Key display stored in DB and shown persistently in the UI."
+  },
+  {
+    "version": "1.0.70",
+    "date": "2026-02-23",
+    "notes": "Fixed update error 'unhashable type: dict' — docker volumes dict was incorrectly embedded inside the f-string using {{ }} escaping, causing Python to evaluate it as a dict literal with a dict value as a key. Moved volumes dict outside the f-string."
+  },
+  {
+    "version": "1.0.69",
+    "date": "2026-02-23",
+    "notes": "Built outputs system. JSON outputs: push (aggregator POSTs to your URL) or API (GET /api/outputs/stream/<key>). Beast raw outputs: push (aggregator connects outbound to host:port) or listener (clients connect to TCP port 30005, send key as first line, receive beast stream). Keys are SHA-256 hashed in DB, shown once on create with regenerate option. Multiple simultaneous connections supported on shared port 30005. Access is network_admin-scoped."
+  },
+  {
+    "version": "1.0.68",
+    "date": "2026-02-22",
+    "notes": "Fixed update modal showing 'Connection lost unexpectedly' instead of reconnecting gracefully. Root cause: pre_restart signal was queued before the docker:cli container started, but gunicorn buffering meant the browser didn't receive it before containers restarted. Signal is now emitted from inside the shell script right before docker compose up runs, guaranteeing the browser has received all prior log lines first."
+  },
+  {
+    "version": "1.0.67",
+    "date": "2026-02-22",
+    "notes": "Corrected outputs access model: viewers have no access to outputs at all. Outputs page and API are restricted to admin and network_admin only. Removed is_public concept entirely."
+  },
+  {
+    "version": "1.0.66",
+    "date": "2026-02-22",
+    "notes": "Built outputs access control foundation. Each network_admin can create outputs only they can see and modify. Admins see all outputs across all users with owner column. Viewers see only outputs marked public. New outputs table in DB (auto-migrated), full CRUD API with ownership enforcement, and outputs page with create/edit/delete UI."
+  },
+  {
+    "version": "1.0.65",
+    "date": "2026-02-22",
+    "notes": "Fixed 'From Location' name format: country is now 3-letter ISO alpha-3 (e.g. USA), state/province is full name (e.g. Tennessee), city is full name (e.g. nashville). Added pycountry library for alpha-2 to alpha-3 conversion. Example output: usa-tennessee-nashville."
+  },
+  {
+    "version": "1.0.64",
+    "date": "2026-02-22",
+    "notes": "Fixed feeder detail page JS broken in v1.0.63 — async function deleteFeeder() declaration was accidentally removed by a str_replace, leaving a bare return statement at script top-level that killed all subsequent function definitions (populateName, openFeederView, onProxyLoad, etc.)."
+  },
+  {
+    "version": "1.0.63",
+    "date": "2026-02-22",
+    "notes": "Fixed feeder detail page JS silently breaking when tar1090/graphs1090 URLs contained special characters (e.g. & in query strings). Raw Jinja URL values inside JS strings replaced with tojson filter. This also fixes the 'From Location' button appearing to do nothing."
+  },
+  {
+    "version": "1.0.62",
+    "date": "2026-02-22",
+    "notes": "Feeder detail page: added '📍 From Location' button that auto-populates the name field in CC-ST-City format (e.g. US-TN-nashville). Uses MLAT GPS coordinates via Nominatim reverse geocode if available, falls back to IP geolocation via ip-api.com. Name is previewed in the field; user confirms by clicking Save Changes."
+  },
+  {
+    "version": "1.0.61",
+    "date": "2026-02-22",
+    "notes": "Fixed duplicate feeder records when same feeder connects via both public IP and NetBird IP. beast-proxy now detects when a NetBird feeder's hostname matches an existing public-IP record and merges them on reconnect. Added 'Merge Duplicate' button on feeder detail page to manually collapse existing duplicates and re-parent their connection history."
+  },
+  {
+    "version": "1.0.60",
+    "date": "2026-02-22",
+    "notes": "Fixed broken web interface caused by corrupted nginx config (duplicate location blocks outside server context from a failed str_replace in v1.0.59). Config rewritten clean with single server block."
+  },
+  {
+    "version": "1.0.59",
+    "date": "2026-02-22",
+    "notes": "Fixed feeder proxy 404. Root cause: nginx proxy_pass with IP variables requires a resolver directive — without it nginx silently falls through to Flask which has no matching route. Added Docker DNS resolver (127.0.0.11) to nginx config. Also fixed WebSocket Connection header and simplified auth sub-request."
+  },
+  {
+    "version": "1.0.58",
+    "date": "2026-02-22",
+    "notes": "Fixed feeder map proxy freezing. Root cause: Flask proxy could not handle tar1090's WebSocket connections for live aircraft updates. Rewrote proxy to route through nginx (which handles WebSockets natively). Flask now only validates auth and redirects; nginx does the actual proxying to the feeder's NetBird IP with WebSocket upgrade support."
+  },
+  {
+    "version": "1.0.57",
+    "date": "2026-02-22",
+    "notes": "Fixed NetBird feeders being mis-classified as Tailscale. VPN resolver now checks NetBird first (primary VPN), uses a full peer list cache refreshed every 60s instead of per-IP API calls, and prefers NetBird in the CIDR fallback when both VPNs share the same range. On startup, beast-proxy now reclassifies all existing feeders against live peer lists and corrects any mis-classifications in the database."
+  },
+  {
+    "version": "1.0.56",
+    "date": "2026-02-22",
+    "notes": "Feeder detail page: 'View Map' and 'View Stats' buttons open the feeder's tar1090/graphs1090 in a full-screen modal proxied through the aggregator's NetBird connection, so users not on NetBird can still access feeder interfaces. Includes 'Open Directly' link for direct access when on NetBird."
+  },
+  {
+    "version": "1.0.55",
+    "date": "2026-02-22",
+    "notes": "NetBird connection type indicator changed from purple to orange throughout the UI (feeders page, dashboard breakdown, feeder detail). NetBird feeders now auto-populate map URL (http://IP:8080) and stats URL (http://IP:8080/graphs1090/) on first connection; existing empty fields are back-filled on reconnect."
+  },
+  {
+    "version": "1.0.54",
+    "date": "2026-02-22",
+    "notes": "NetBird peer table now shows peer name instead of system hostname."
+  },
+  {
+    "version": "1.0.53",
+    "date": "2026-02-22",
+    "notes": "Updates page now shows release notes for all versions included in an available update, displayed inside the update banner before you run it."
+  },
+  {
+    "version": "1.0.52",
+    "date": "2026-02-22",
+    "notes": "NetBird enrollment card: shows a green hi-vis banner when connected, hides setup key field and re-enroll button. Enrollment form only appears when not connected. Disconnect button moves into the connected banner."
+  },
+  {
+    "version": "1.0.51",
+    "date": "2026-02-22",
+    "notes": "VPN page peer tables now collapse by default. Click the card header to expand/collapse Tailscale or NetBird peer lists. Peer counts remain visible in the header at all times."
+  },
+  {
+    "version": "1.0.50",
+    "date": "2026-02-22",
+    "notes": "Added self-registration with access request workflow. New users register via 'Request Access' on the login page, enter a pending state, and see a holding screen until approved. Admins see pending requests in Users page with approve/deny/role controls, and a banner on the dashboard when requests are waiting."
+  },
+  {
+    "version": "1.0.49",
+    "date": "2026-02-22",
+    "notes": "Map page now fills full available height with no blank space. README rewritten: NetBird as primary VPN, Tailscale references minimized, irrelevant content removed, feeder beast_out requirement documented."
+  },
+  {
+    "version": "1.0.48",
+    "date": "2026-02-21",
+    "notes": "Login logo centered correctly. Services page: added Restart All Services (soft reset) button that restarts all TAKNET containers with a live status modal."
+  },
+  {
+    "version": "1.0.47",
+    "date": "2026-02-21",
+    "notes": "Login page logo updated to oval TAKNET-PS badge, displayed at 80% screen width."
+  },
+  {
+    "version": "1.0.46",
+    "date": "2026-02-21",
+    "notes": "Fixed web update — git clone and file copy now run inside docker:cli container which has the host install directory bind-mounted, ensuring files actually land on disk. Also added 1s delay before restart to ensure pre_restart event reaches the browser."
+  },
+  {
+    "version": "1.0.45",
+    "date": "2026-02-21",
+    "notes": "Login page restyled to match dashboard dark theme. TAKNET-PS logo added as splash above login fields."
+  },
+  {
+    "version": "1.0.44",
+    "date": "2026-02-21",
+    "notes": "Fixed updates page showing stale 'update available' after web update completes. Version status now refreshes automatically after the modal closes."
+  },
+  {
+    "version": "1.0.43",
+    "date": "2026-02-21",
+    "notes": "Removed LAT/LONG from tar1090 config. Combined with v1.0.41-42 fixes, aggregator now displays aircraft from feeders at any location without range filtering at any layer."
+  },
+  {
+    "version": "1.0.42",
+    "date": "2026-02-21",
+    "notes": "Removed fixed READSB_LAT/LON from readsb config. With READSB_NET_RECEIVER_ID enabled, readsb uses each feeder's own position for CPR decoding, fixing position loss for remote feeders."
+  },
+  {
+    "version": "1.0.41",
+    "date": "2026-02-21",
+    "notes": "Removed READSB_MAX_RANGE limit. Aggregator now accepts aircraft data from feeders at any distance, enabling nationwide and international deployments."
+  },
+  {
+    "version": "1.0.40",
+    "date": "2026-02-21",
+    "notes": "About page now accessible to all authenticated users (admin, network_admin, viewer)."
+  },
+  {
+    "version": "1.0.39",
+    "date": "2026-02-21",
+    "notes": "Access control added — login required. Three roles: admin (full access), network_admin (dashboard + data), viewer (map only). Default credentials admin/password. User management page under System. Each user can change their own password via profile menu."
+  },
+  {
+    "version": "1.0.38",
+    "date": "2026-02-21",
+    "notes": "Web UI update button on Updates page. Live log modal streams output via SSE. Auto-reconnects after dashboard restart. Error state waits for user dismissal."
+  },
+  {
+    "version": "1.0.37",
+    "date": "2026-02-21",
+    "notes": "Fixed Aircraft Tracked stat card — now shows 'with position' sub-count. Fixed topbar aircraft count (was showing [object Object])."
+  },
+  {
+    "version": "1.0.36",
+    "date": "2026-02-20",
+    "notes": "NetBird setup key now persists to .env automatically when enrolled via the VPN page. .env mounted into dashboard container for writing."
+  },
+  {
+    "version": "1.0.35",
+    "date": "2026-02-20",
+    "notes": "Fixed NetBird enrollment — added /dev/net/tun device to container so WireGuard interface creates successfully."
+  },
+  {
+    "version": "1.0.34",
+    "date": "2026-02-20",
+    "notes": "NetBird server enrollment UI. VPN page now includes enrollment form — enter a setup key to register the aggregator as a NetBird peer. Status, re-enroll, and disconnect controls added."
+  },
+  {
+    "version": "1.0.33",
+    "date": "2026-02-19",
+    "notes": "NetBird self-hosted integration. Added nginx config for netbird.tak-solutions.com with TLS (Let's Encrypt). Port 443 added to nginx container with /etc/letsencrypt bind mount."
+  },
+  {
+    "version": "1.0.32",
+    "date": "2026-02-18",
+    "notes": "Fixed Tailscale feeder classification. Removed is_private gate that excluded CGNAT range (100.64.0.0/10) from VPN detection."
+  },
+  {
+    "version": "1.0.31",
+    "date": "2026-02-18",
+    "notes": "Fixed Tailscale socket API auth. Added required Sec-Tailscale header to both beast-proxy and dashboard VPN service."
+  },
+  {
+    "version": "1.0.30",
+    "date": "2026-02-18",
+    "notes": "Beast-proxy fetches aircraft data from tar1090 HTTP instead of non-existent readsb JSON file. Fixes 0 aircraft count. Removed unused readsb-run volume and READSB_JSON_DIR."
+  },
+  {
+    "version": "1.0.29",
+    "date": "2026-02-18",
+    "notes": "Added READSB_JSON_DIR to enable aircraft.json output. Fixes 0 aircraft count in dashboard and beast-proxy stats."
+  },
+  {
+    "version": "1.0.28",
+    "date": "2026-02-18",
+    "notes": "Updates page with version check against GitHub, release notes display, and update history log. taknet-agg update now logs to database."
+  },
+  {
+    "version": "1.0.27",
+    "date": "2026-02-18",
+    "notes": "Feeder names auto-populated from MLAT handshake data, overriding default IP-based naming."
+  },
+  {
+    "version": "1.0.26",
+    "date": "2026-02-18",
+    "notes": "Web UI now displays feeder coordinates, altitude, and MLAT status. Feeders list shows location and MLAT columns."
+  },
+  {
+    "version": "1.0.25",
+    "date": "2026-02-18",
+    "notes": "Beast frame parsing for accurate message/position counts. MLAT clients.json integration for coordinates, altitude, and connection status. Added altitude column to schema."
+  },
+  {
+    "version": "1.0.24",
+    "date": "2026-02-18",
+    "notes": "Beast protocol frame counting, position tracking, MLAT detection via shared log volume. Replaced per-flush counters with real message stats."
+  },
+  {
+    "version": "1.0.23",
+    "date": "2026-02-18",
+    "notes": "Time-based stats flushing every 30s. Feeders stay active while connected. Aircraft count from readsb. GeoIP enabled by default. Removed stale host mount for mmdb."
+  },
+  {
+    "version": "1.0.22",
+    "date": "2026-02-18",
+    "notes": "Fixed tar1090 read-only filesystem error. Replaced shared readsb volume with tmpfs mounts for tar1090's internal readsb."
+  },
+  {
+    "version": "1.0.21",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server arguments for wiedehopf fork: --basestation-listen/connect instead of --results."
+  },
+  {
+    "version": "1.0.20",
+    "date": "2026-02-18",
+    "notes": "Added required --work-dir=/tmp argument for mlat-server."
+  },
+  {
+    "version": "1.0.19",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server Dockerfile \u2014 runs script directly from cloned repo instead of pip module. Installs all Python dependencies."
+  },
+  {
+    "version": "1.0.18",
+    "date": "2026-02-18",
+    "notes": "GeoIP auto-download built into beast-proxy image using db-ip.com City Lite database. No registration required."
+  },
+  {
+    "version": "1.0.17",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server entrypoint from binary to python3 -m. Corrected executable path resolution."
+  },
+  {
+    "version": "1.0.16",
+    "date": "2026-02-18",
+    "notes": "Healthcheck set to always-pass for readsb container. Resolves dependency startup failures."
+  },
+  {
+    "version": "1.0.15",
+    "date": "2026-02-18",
+    "notes": "Explicit healthcheck override for readsb. Removed service_healthy dependencies."
+  },
+  {
+    "version": "1.0.14",
+    "date": "2026-02-18",
+    "notes": "Switched all container dependencies to service_started. Removed custom healthcheck."
+  },
+  {
+    "version": "1.0.13",
+    "date": "2026-02-18",
+    "notes": "Changed readsb healthcheck from file check to process check. Added start_period grace."
+  },
+  {
+    "version": "1.0.12",
+    "date": "2026-02-18",
+    "notes": "Fixed mlat-server build: added Cython and build-essential dependencies for C extension compilation."
+  },
+  {
+    "version": "1.0.11",
+    "date": "2026-02-18",
+    "notes": "Custom mlat-server Dockerfile \u2014 builds from wiedehopf/mlat-server source since no published image exists."
+  },
+  {
+    "version": "1.0.10",
+    "date": "2026-02-18",
+    "notes": "Complete install.sh rewrite. Full validation suite: bash syntax, Python compile, YAML parse, heredoc balance."
+  },
+  {
+    "version": "1.0.9",
+    "date": "2026-02-18",
+    "notes": "Fixed unquoted SITE_NAME causing bash source error. Safe env variable extraction."
+  },
+  {
+    "version": "1.0.8",
+    "date": "2026-02-18",
+    "notes": "Renamed .env.example to env.example for macOS Finder/GitHub Desktop visibility."
+  },
+  {
+    "version": "1.0.7",
+    "date": "2026-02-18",
+    "notes": "Fixed dotfile deployment with shopt dotglob fallback for systems without rsync."
+  },
+  {
+    "version": "1.0.6",
+    "date": "2026-02-18",
+    "notes": "Added Fresh VPS Setup section to README. Installer bootstraps its own dependencies."
+  },
+  {
+    "version": "1.0.5",
+    "date": "2026-02-18",
+    "notes": "GitHub curl-pipe installer with auto-clone. Supports both curl-pipe and local clone workflows."
+  },
+  {
+    "version": "1.0.4",
+    "date": "2026-02-18",
+    "notes": "Removed parallel/cutover mode. WEB_PORT defaults to 80."
+  },
+  {
+    "version": "1.0.3",
+    "date": "2026-02-18",
+    "notes": "MLAT server wired into Docker stack with client and results ports."
+  },
+  {
+    "version": "1.0.2",
+    "date": "2026-02-18",
+    "notes": "Port corrections: Beast 30004, MLAT 30105, MLAT results 39001. Tailscale runs on host."
+  },
+  {
+    "version": "1.0.1",
+    "date": "2026-02-18",
+    "notes": "Detailed README with architecture overview, port map, and deployment instructions."
+  },
+  {
+    "version": "1.0.0",
+    "date": "2026-02-18",
+    "notes": "Initial Docker-based aggregator build. Six containers: beast-proxy, readsb, mlat-server, tar1090, dashboard, nginx."
+  }
+]

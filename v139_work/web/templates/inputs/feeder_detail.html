@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block page_title %}Feeder: {{ feeder.name or 'Unknown' }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+    <a href="/inputs/feeders" style="font-size:13px;color:var(--text-muted);">&larr; Back to Feeders</a>
+</div>
+
+<div class="card-grid card-grid-2">
+    <!-- Connection Info -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Connection Info</h3>
+            <span id="feeder-status">{{ feeder.status }}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
+            <span style="color:var(--text-muted)">Name</span>
+            <span id="fd-name" style="color:var(--text-primary);font-weight:500">{{ feeder.name or '—' }}</span>
+            <span style="color:var(--text-muted)">Type</span>
+            <span id="fd-type"></span>
+            <span style="color:var(--text-muted)">IP Address</span>
+            <span style="font-family:monospace;">{{ feeder.ip_address or '—' }}</span>
+            {% if feeder.hostname %}
+            <span style="color:var(--text-muted)">Hostname</span>
+            <span>{{ feeder.hostname }}</span>
+            {% endif %}
+            {% if feeder.location %}
+            <span style="color:var(--text-muted)">Location</span>
+            <span>{{ feeder.location }}</span>
+            {% endif %}
+            <span style="color:var(--text-muted)">First Seen</span>
+            <span id="fd-first-seen">{{ feeder.first_seen }}</span>
+            <span style="color:var(--text-muted)">Last Seen</span>
+            <span id="fd-last-seen">{{ feeder.last_seen }}</span>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="card">
+        <div class="card-header"><h3>Statistics</h3></div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
+            <span style="color:var(--text-muted)">Messages</span>
+            <span style="color:var(--text-primary);font-weight:500">{{ '{:,}'.format(feeder.messages_received or 0) }}</span>
+            <span style="color:var(--text-muted)">Positions</span>
+            <span>{{ '{:,}'.format(feeder.positions_received or 0) }}</span>
+            <span style="color:var(--text-muted)">Data Received</span>
+            <span id="fd-bytes">{{ feeder.bytes_received or 0 }}</span>
+            <span style="color:var(--text-muted)">MLAT</span>
+            <span>
+                {% if feeder.mlat_enabled %}
+                    <span class="badge badge-live">Enabled</span>
+                {% else %}
+                    <span style="color:var(--text-muted)">Disabled</span>
+                {% endif %}
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Coordinates (from MLAT handshake) -->
+{% if feeder.latitude is not none and feeder.longitude is not none %}
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>Feeder Location</h3></div>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
+        <span style="color:var(--text-muted)">Latitude</span>
+        <span style="font-family:monospace;">{{ '%.6f' | format(feeder.latitude) }}</span>
+        <span style="color:var(--text-muted)">Longitude</span>
+        <span style="font-family:monospace;">{{ '%.6f' | format(feeder.longitude) }}</span>
+        {% if feeder.altitude is not none %}
+        <span style="color:var(--text-muted)">Altitude</span>
+        <span style="font-family:monospace;">{{ '%.1f' | format(feeder.altitude) }} m ({{ '%.0f' | format(feeder.altitude * 3.28084) }} ft)</span>
+        {% endif %}
+        <span style="color:var(--text-muted)">Source</span>
+        <span style="color:var(--text-muted);font-size:12px;">Coordinates from MLAT client handshake</span>
+    </div>
+</div>
+{% endif %}
+
+<!-- Edit Form -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>Edit Feeder</h3></div>
+    <form id="edit-form" onsubmit="saveFeeder(event)">
+        <div class="card-grid card-grid-2">
+            <div class="form-group">
+                <label>Name</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" class="form-control" name="name" id="edit-name" value="{{ feeder.name or '' }}">
+                    <button type="button" class="btn" style="white-space:nowrap;font-size:12px;padding:6px 12px;" onclick="populateName()" id="btn-populate-name" title="Auto-fill from GPS coordinates or IP geolocation">📍 From Location</button>
+                </div>
+                <div id="populate-name-msg" style="font-size:11px;margin-top:4px;display:none;"></div>
+            </div>
+            <div class="form-group">
+                <label>tar1090 URL</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" class="form-control" name="tar1090_url" value="{{ feeder.tar1090_url or '' }}" placeholder="http://...">
+                    {% if feeder.tar1090_url %}
+                    <button type="button" class="btn" style="white-space:nowrap;font-size:12px;padding:6px 12px;" onclick="openFeederView('map')">📡 View Map</button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="form-group">
+                <label>graphs1090 URL</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" class="form-control" name="graphs1090_url" value="{{ feeder.graphs1090_url or '' }}" placeholder="http://...">
+                    {% if feeder.graphs1090_url %}
+                    <button type="button" class="btn" style="white-space:nowrap;font-size:12px;padding:6px 12px;" onclick="openFeederView('graphs')">📊 View Stats</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Notes</label>
+            <textarea class="form-control" name="notes">{{ feeder.notes or '' }}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="deleteFeeder()">Delete Feeder</button>
+            <button type="button" class="btn" style="margin-left:auto;font-size:12px;" onclick="showMergeModal()">Merge Duplicate…</button>
+        </div>
+    </form>
+</div>
+
+<!-- Connection History -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>Connection History</h3></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Connected</th>
+                    <th>Disconnected</th>
+                    <th>Duration</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody id="conn-history">
+                <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Merge Duplicate Modal -->
+<div class="modal-overlay" id="merge-modal">
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header">
+            <h3>Merge Duplicate Feeder</h3>
+            <button class="modal-close" onclick="closeModal('merge-modal')">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+                This will move all connection history from this record into the selected feeder, then delete this record. Use this to collapse two records for the same physical feeder (e.g. one public IP + one NetBird IP).
+            </p>
+            <div id="merge-error" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-bottom:14px;"></div>
+            <div class="form-group">
+                <label>Merge this record INTO</label>
+                <select class="form-control" id="merge-target">
+                    <option value="">Loading feeders…</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="closeModal('merge-modal')">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmMerge()">Merge &amp; Delete This Record</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feeder Proxy Modal -->
+<div class="modal-overlay" id="feeder-proxy-modal" style="z-index:1000;" onclick="if(event.target===this)closeProxyModal()">
+    <div class="modal" style="width:95vw;max-width:1400px;height:90vh;display:flex;flex-direction:column;padding:0;">
+        <div class="modal-header" style="flex-shrink:0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
+            <h3 id="proxy-modal-title" style="font-size:14px;"></h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <a id="proxy-direct-link" href="#" target="_blank" class="btn" style="font-size:11px;padding:4px 10px;">Open Directly ↗</a>
+                <button class="modal-close" onclick="closeProxyModal()">&#x2715;</button>
+            </div>
+        </div>
+        <div id="proxy-iframe-wrap" style="flex:1;position:relative;background:#0f1923;">
+            <div id="proxy-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;">Loading...</div>
+            <iframe id="proxy-iframe" src="" style="width:100%;height:100%;border:none;display:none;" onload="onProxyLoad()"></iframe>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const feederId = {{ feeder.id }};
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// Set type badge
+document.getElementById('fd-type').innerHTML = typeBadge('{{ feeder.conn_type }}');
+document.getElementById('feeder-status').innerHTML = statusBadge('{{ feeder.status }}');
+document.getElementById('fd-bytes').textContent = fmtBytes({{ feeder.bytes_received or 0 }});
+
+// Load connection history
+async function loadHistory() {
+    try {
+        const r = await fetch('/api/feeders/' + feederId + '/connections');
+        const d = await r.json();
+        const conns = d.connections || [];
+        const tbody = document.getElementById('conn-history');
+
+        if (conns.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No connection history</td></tr>';
+            return;
+        }
+
+        let html = '';
+        conns.forEach(c => {
+            html += '<tr>';
+            html += '<td>' + fmtTime(c.connected_at) + '</td>';
+            html += '<td>' + (c.disconnected_at ? fmtTime(c.disconnected_at) : '<span class="badge badge-live">Active</span>') + '</td>';
+            html += '<td>' + (c.duration_seconds ? fmtDuration(c.duration_seconds) : '—') + '</td>';
+            html += '<td>' + fmtBytes(c.bytes_transferred) + '</td>';
+            html += '</tr>';
+        });
+        tbody.innerHTML = html;
+    } catch(e) {
+        console.error('Load history error:', e);
+    }
+}
+
+async function saveFeeder(e) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const data = {};
+    form.forEach((v,k) => { data[k] = v; });
+
+    try {
+        const r = await fetch('/api/feeders/' + feederId, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (r.ok) {
+            document.getElementById('fd-name').textContent = data.name || '—';
+            alert('Saved!');
+        } else {
+            alert('Save failed');
+        }
+    } catch(e) { alert('Error: ' + e); }
+}
+
+async function populateName() {
+    const btn = document.getElementById('btn-populate-name');
+    const msg = document.getElementById('populate-name-msg');
+    btn.disabled = true;
+    btn.textContent = 'Looking up…';
+    msg.style.display = 'none';
+    try {
+        const r = await fetch('/api/feeders/' + feederId + '/suggest-name');
+        const d = await r.json();
+        if (d.name) {
+            document.getElementById('edit-name').value = d.name;
+            const src = d.source === 'gps' ? '📡 from GPS coordinates' : '🌐 from IP geolocation';
+            msg.textContent = '✓ Name populated ' + src + ' — click Save Changes to apply.';
+            msg.style.color = 'var(--green)';
+            msg.style.display = 'block';
+        } else {
+            msg.textContent = '✗ ' + (d.error || 'Could not determine location');
+            msg.style.color = 'var(--red)';
+            msg.style.display = 'block';
+        }
+    } catch(e) {
+        msg.textContent = '✗ Request failed: ' + e;
+        msg.style.color = 'var(--red)';
+        msg.style.display = 'block';
+    }
+    btn.disabled = false;
+    btn.textContent = '📍 From Location';
+}
+
+async function showMergeModal() {
+    document.getElementById('merge-error').style.display = 'none';
+    const sel = document.getElementById('merge-target');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    document.getElementById('merge-modal').classList.add('show');
+    try {
+        const r = await fetch('/api/feeders');
+        const d = await r.json();
+        const others = (d.feeders || []).filter(f => f.id !== feederId);
+        sel.innerHTML = others.map(f =>
+            `<option value="${f.id}">${f.name} (${f.conn_type} — ${f.ip_address})</option>`
+        ).join('');
+        if (!others.length) sel.innerHTML = '<option value="">No other feeders</option>';
+    } catch(e) {
+        sel.innerHTML = '<option value="">Error loading feeders</option>';
+    }
+}
+
+async function confirmMerge() {
+    const into = document.getElementById('merge-target').value;
+    const errEl = document.getElementById('merge-error');
+    if (!into) { errEl.textContent = 'Select a target feeder.'; errEl.style.display = 'block'; return; }
+    if (!confirm('This will merge this feeder record into the selected one and cannot be undone. Continue?')) return;
+    const r = await fetch('/api/feeders/' + feederId + '/merge', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({into: parseInt(into)})
+    });
+    const d = await r.json();
+    if (d.success) {
+        location.href = '/inputs/feeder/' + into;
+    } else {
+        errEl.textContent = d.error || 'Merge failed';
+        errEl.style.display = 'block';
+    }
+}
+
+
+async function deleteFeeder() {
+    if (!confirm('Delete this feeder? This cannot be undone.')) return;
+    try {
+        await fetch('/api/feeders/' + feederId, { method: 'DELETE' });
+        location.href = '/inputs/feeders';
+    } catch(e) { alert('Error: ' + e); }
+}
+
+function openFeederView(type) {
+    const titles = { map: 'Feeder Map (via NetBird)', graphs: 'Feeder Stats (via NetBird)' };
+    const proxyUrl = '/api/feeder-proxy/' + feederId + '/' + type;
+    const directUrls = {
+        map:    {{ feeder.tar1090_url | tojson }},
+        graphs: {{ feeder.graphs1090_url | tojson }}
+    };
+    document.getElementById('proxy-modal-title').textContent = titles[type] || type;
+    document.getElementById('proxy-direct-link').href = directUrls[type] || proxyUrl;
+    document.getElementById('proxy-iframe').style.display = 'none';
+    document.getElementById('proxy-iframe').src = '';
+    document.getElementById('proxy-loading').style.display = 'flex';
+    document.getElementById('proxy-loading').textContent = 'Connecting via NetBird…';
+    document.getElementById('feeder-proxy-modal').classList.add('show');
+    setTimeout(() => {
+        document.getElementById('proxy-iframe').src = proxyUrl;
+    }, 50);
+}
+
+function onProxyLoad() {
+    document.getElementById('proxy-loading').style.display = 'none';
+    document.getElementById('proxy-iframe').style.display = 'block';
+}
+
+function closeProxyModal() {
+    document.getElementById('feeder-proxy-modal').classList.remove('show');
+    document.getElementById('proxy-iframe').src = '';
+}
+
+loadHistory();
+</script>
+{% endblock %}

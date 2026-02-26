@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block page_title %}VPN Status{% endblock %}
+
+{% block content %}
+<div id="vpn-content">
+    <div style="color:var(--text-muted);padding:40px;text-align:center;">Loading VPN status...</div>
+</div>
+
+<!-- NetBird Enrollment Card -->
+<div class="card" style="margin-top:16px;" id="nb-enroll-card">
+    <div class="card-header">
+        <h3>Server Enrollment</h3>
+        <span id="nb-client-badge"><span class="badge badge-offline">Checking...</span></span>
+    </div>
+
+    <!-- Connected banner — shown when enrolled + running -->
+    <div id="nb-connected-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.35);border-radius:8px;padding:14px 18px;margin-bottom:16px;display:none;align-items:center;justify-content:space-between;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:22px;">✅</span>
+            <div>
+                <div style="font-size:14px;font-weight:600;color:#22c55e;">Server is enrolled and connected to NetBird</div>
+                <div id="nb-connected-detail" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+            </div>
+        </div>
+        <button class="btn btn-danger" onclick="disconnectNetbird()" id="nb-disconnect-btn" style="font-size:12px;white-space:nowrap;">Disconnect</button>
+    </div>
+
+    <!-- Not connected state — shown when not enrolled or not running -->
+    <div id="nb-disconnected-state" style="display:none;">
+        <div id="nb-client-status" style="margin-bottom:16px;font-size:13px;color:var(--text-secondary);"></div>
+        <div class="form-group">
+            <label>Setup Key</label>
+            <input type="text" class="form-control" id="nb-setup-key"
+                   placeholder="Enter a NetBird setup key to enroll this server as a peer..."
+                   style="font-family:monospace;">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-primary" onclick="enrollNetbird()" id="nb-enroll-btn">Enroll Server</button>
+            <span id="nb-action-msg" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="nb-loading-state" style="font-size:13px;color:var(--text-muted);">Checking enrollment status...</div>
+
+    <div style="margin-top:16px;padding:12px;background:var(--bg-input);border-radius:6px;font-size:12px;color:var(--text-muted);">
+        ℹ Setup keys are automatically saved to <code style="color:var(--accent);">/opt/taknet-aggregator/.env</code> and persist through updates.
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadVPN() {
+    try {
+        const r = await fetch('/api/vpn/status');
+        const d = await r.json();
+        let html = '';
+
+        // ── Tailscale ──────────────────────────────────────────────────────
+        const ts = d.tailscale || {};
+        html += '<div class="card" style="margin-bottom:16px;">';
+        html += '<div class="card-header" style="cursor:pointer;user-select:none;" onclick="toggleSection(\'ts-body\')">';
+        html += '<div style="display:flex;align-items:center;gap:10px;"><h3>Tailscale</h3>';
+        if (ts.enabled) {
+            const stateColor = ts.state === 'running' ? 'var(--green)' : 'var(--yellow)';
+            html += '<span class="badge" style="background:rgba(34,197,94,0.12);color:' + stateColor + '">' + (ts.state || 'unknown') + '</span>';
+        } else {
+            html += '<span class="badge badge-offline">Disabled</span>';
+        }
+        html += '</div>';
+        html += '<span id="ts-chevron" style="font-size:12px;color:var(--text-muted);transition:transform .2s;display:inline-block;transform:rotate(-90deg);">▼</span>';
+        html += '</div>';
+
+        html += '<div id="ts-body" style="display:none;">';
+        if (ts.enabled && ts.state === 'running') {
+            html += '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;margin-bottom:16px;">';
+            html += '<span style="color:var(--text-muted)">Hostname</span><span>' + (ts.self_hostname || '—') + '</span>';
+            html += '<span style="color:var(--text-muted)">Tailnet</span><span>' + (ts.tailnet_name || '—') + '</span>';
+            html += '<span style="color:var(--text-muted)">IPs</span><span style="font-family:monospace;font-size:12px;">' + (ts.self_ips || []).join(', ') + '</span>';
+            html += '<span style="color:var(--text-muted)">Peers</span><span>' + (ts.peers_online || 0) + ' online / ' + (ts.peers_total || 0) + ' total</span>';
+            html += '</div>';
+            if (ts.peers && ts.peers.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Hostname</th><th>IPs</th><th>OS</th><th>Status</th></tr></thead><tbody>';
+                ts.peers.forEach(p => {
+                    const badge = p.online ? '<span class="badge badge-live">Online</span>' : '<span class="badge badge-offline">Offline</span>';
+                    html += '<tr><td style="font-weight:500;color:var(--text-primary)">' + p.hostname + '</td>';
+                    html += '<td style="font-family:monospace;font-size:12px;">' + (p.ips || []).join(', ') + '</td>';
+                    html += '<td>' + (p.os || '—') + '</td>';
+                    html += '<td>' + badge + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+        } else if (ts.enabled) {
+            html += '<div style="color:var(--text-muted);font-size:13px;padding-bottom:4px;">Tailscale is enabled but not reachable. Verify the socket is mounted.</div>';
+        } else {
+            html += '<div style="color:var(--text-muted);font-size:13px;padding-bottom:4px;">Tailscale is disabled. Set TAILSCALE_ENABLED=true in .env to enable.</div>';
+        }
+        html += '</div></div>';
+
+        // ── NetBird Peers ──────────────────────────────────────────────────
+        const nb = d.netbird || {};
+        html += '<div class="card">';
+        html += '<div class="card-header" style="cursor:pointer;user-select:none;" onclick="toggleSection(\'nb-body\')">';
+        html += '<div style="display:flex;align-items:center;gap:10px;"><h3>NetBird Peers</h3>';
+        if (nb.enabled) {
+            html += '<span class="badge" style="background:rgba(249,115,22,0.12);color:var(--orange)">' + (nb.state || 'unknown') + '</span>';
+            if (nb.state === 'running') {
+                html += '<span style="font-size:12px;color:var(--text-muted);">' + (nb.peers_online || 0) + ' online / ' + (nb.peers_total || 0) + ' total</span>';
+            }
+        } else {
+            html += '<span class="badge badge-offline">Disabled</span>';
+        }
+        html += '</div>';
+        html += '<span id="nb-chevron" style="font-size:12px;color:var(--text-muted);transition:transform .2s;display:inline-block;transform:rotate(-90deg);">▼</span>';
+        html += '</div>';
+
+        html += '<div id="nb-body" style="display:none;">';
+        if (nb.enabled && nb.state === 'running') {
+            if (nb.peers && nb.peers.length > 0) {
+                html += '<div class="table-wrap"><table><thead><tr><th>Hostname</th><th>IP</th><th>OS</th><th>Status</th></tr></thead><tbody>';
+                nb.peers.forEach(p => {
+                    const badge = p.connected ? '<span class="badge badge-live">Connected</span>' : '<span class="badge badge-offline">Offline</span>';
+                    html += '<tr><td style="font-weight:500;color:var(--text-primary)">' + p.hostname + '</td>';
+                    html += '<td style="font-family:monospace;font-size:12px;">' + (p.ip || '—') + '</td>';
+                    html += '<td>' + (p.os || '—') + '</td>';
+                    html += '<td>' + badge + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            } else {
+                html += '<div style="color:var(--text-muted);font-size:13px;padding-bottom:4px;">No peers enrolled yet.</div>';
+            }
+        } else if (nb.enabled && nb.state === 'no_token') {
+            html += '<div style="color:var(--text-muted);font-size:13px;padding-bottom:4px;">No API token configured. Set NETBIRD_API_TOKEN in .env.</div>';
+        } else if (nb.enabled) {
+            html += '<div style="color:var(--text-muted);font-size:13px;padding-bottom:4px;">NetBird API unreachable. Check that NetBird is running and the API URL is correct.</div>';
+        } else {
+            html += '<div style="color:var(--text-muted);font-size:13px;padding-bottom:4px;">NetBird disabled. Set NETBIRD_ENABLED=true in .env to enable.</div>';
+        }
+        html += '</div></div>';
+
+        document.getElementById('vpn-content').innerHTML = html;
+    } catch(e) {
+        document.getElementById('vpn-content').innerHTML =
+            '<div class="card"><div style="color:var(--red);padding:20px;">Error loading VPN status: ' + e + '</div></div>';
+    }
+}
+
+function toggleSection(bodyId) {
+    const body = document.getElementById(bodyId);
+    const chevronId = bodyId === 'ts-body' ? 'ts-chevron' : 'nb-chevron';
+    const chevron = document.getElementById(chevronId);
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    if (chevron) chevron.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+
+async function loadClientStatus() {
+    try {
+        const r = await fetch('/api/netbird/client');
+        const d = await r.json();
+        const badge       = document.getElementById('nb-client-badge');
+        const loading     = document.getElementById('nb-loading-state');
+        const connected   = document.getElementById('nb-connected-banner');
+        const disconnected = document.getElementById('nb-disconnected-state');
+        const detail      = document.getElementById('nb-connected-detail');
+        const statusEl    = document.getElementById('nb-client-status');
+
+        loading.style.display = 'none';
+
+        if (d.enrolled && d.running) {
+            badge.innerHTML = '<span class="badge badge-live"><span class="pulse">●</span> Connected</span>';
+            detail.textContent = 'Running since ' + (fmtTime(d.started_at) || '—');
+            connected.style.display = 'flex';
+            disconnected.style.display = 'none';
+        } else if (d.enrolled && !d.running) {
+            badge.innerHTML = '<span class="badge badge-stale">Enrolled / Not Running</span>';
+            statusEl.textContent = 'Container exists but is not running (status: ' + d.status + '). Re-enroll or check Docker logs.';
+            connected.style.display = 'none';
+            disconnected.style.display = 'block';
+        } else {
+            badge.innerHTML = '<span class="badge badge-offline">Not Enrolled</span>';
+            statusEl.textContent = 'This server is not enrolled as a NetBird peer. Enter a setup key to enroll.';
+            connected.style.display = 'none';
+            disconnected.style.display = 'block';
+        }
+    } catch(e) {
+        document.getElementById('nb-loading-state').textContent = 'Error checking status: ' + e;
+    }
+}
+
+async function enrollNetbird() {
+    const key = document.getElementById('nb-setup-key').value.trim();
+    if (!key) {
+        setMsg('Please enter a setup key.', 'var(--red)');
+        return;
+    }
+    const btn = document.getElementById('nb-enroll-btn');
+    btn.disabled = true;
+    btn.textContent = 'Enrolling...';
+    setMsg('Starting NetBird client (pulling image if needed, may take a moment)...', 'var(--text-muted)');
+
+    try {
+        const r = await fetch('/api/netbird/enroll', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({setup_key: key})
+        });
+        const d = await r.json();
+        if (d.success) {
+            setMsg(d.message, 'var(--green)');
+            document.getElementById('nb-setup-key').value = '';
+            setTimeout(loadClientStatus, 3000);
+            setTimeout(loadVPN, 5000);
+        } else {
+            setMsg('Error: ' + (d.error || 'Unknown error'), 'var(--red)');
+        }
+    } catch(e) {
+        setMsg('Request failed: ' + e, 'var(--red)');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enroll Server';
+    }
+}
+
+async function disconnectNetbird() {
+    if (!confirm('Disconnect this server from NetBird?')) return;
+    setMsg('Disconnecting...', 'var(--text-muted)');
+    try {
+        const r = await fetch('/api/netbird/disconnect', {method: 'POST'});
+        const d = await r.json();
+        if (d.success) {
+            setMsg(d.message, 'var(--green)');
+            setTimeout(loadClientStatus, 1000);
+        } else {
+            setMsg('Error: ' + (d.error || 'Unknown error'), 'var(--red)');
+        }
+    } catch(e) {
+        setMsg('Request failed: ' + e, 'var(--red)');
+    }
+}
+
+function setMsg(msg, color) {
+    const el = document.getElementById('nb-action-msg');
+    el.textContent = msg;
+    el.style.color = color || 'var(--text-muted)';
+}
+
+loadVPN();
+loadClientStatus();
+setInterval(loadVPN, 30000);
+setInterval(loadClientStatus, 15000);
+</script>
+{% endblock %}
