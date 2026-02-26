@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.87",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: update script now builds taknet-api image alongside other local services \u2014 resolves container name conflict on update"
+    ]
+  },
+  {
     "version": "1.0.86",
     "date": "2026-02-26",
     "notes": [

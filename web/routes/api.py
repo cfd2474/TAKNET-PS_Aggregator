@@ -82,7 +82,7 @@ echo "Pulling updated images..."
 cd {INSTALL_DIR}
 docker compose pull 2>&1
 echo "Building local images..."
-docker compose build dashboard beast-proxy mlat-server 2>&1
+docker compose build dashboard beast-proxy mlat-server api 2>&1
 echo "PRE_RESTART"
 sleep 3
 echo "Restarting containers..."
