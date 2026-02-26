@@ -49,9 +49,14 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" 2>/dev/null && pwd)"
 CLEANUP_DIR=""
 
-if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
+# Use local repo only if script is being run directly from a real directory
+# (not piped via curl, which sets SCRIPT_DIR to cwd e.g. /root)
+if [ -f "$SCRIPT_DIR/docker-compose.yml" ] && [ "$SCRIPT_DIR" != "/root" ] && [ "$SCRIPT_DIR" != "/tmp" ]; then
     SOURCE_DIR="$SCRIPT_DIR"
     ok "Running from local repo: $SOURCE_DIR"
+elif [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+    SOURCE_DIR="$INSTALL_DIR"
+    ok "Running from installed repo: $SOURCE_DIR"
 else
     info "Cloning from GitHub..."
     CLEANUP_DIR=$(mktemp -d)
@@ -208,7 +213,7 @@ ok "CLI installed: taknet-agg"
 info "Building and starting containers..."
 cd "$INSTALL_DIR"
 # Force-remove any stopped/orphaned containers before compose up
-for cname in taknet-nginx taknet-dashboard taknet-beast-proxy taknet-readsb taknet-tar1090 taknet-mlat taknet-api taknet-netbird-client; do
+for cname in taknet-nginx taknet-dashboard taknet-beast-proxy taknet-readsb taknet-tar1090 taknet-mlat taknet-api taknet-netbird-client netbird-server netbird-dashboard; do
     docker rm -f "$cname" 2>/dev/null || true
 done
 docker compose up -d --build

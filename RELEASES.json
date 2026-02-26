@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.91",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: install.sh correctly detects curl-pipe installs (BASH_SOURCE[0] empty) \u2014 now uses /opt/taknet-aggregator if it exists, clones from GitHub otherwise",
+      "Fix: container cleanup list now includes netbird-server and netbird-dashboard"
+    ]
+  },
+  {
     "version": "1.0.90",
     "date": "2026-02-26",
     "notes": [
