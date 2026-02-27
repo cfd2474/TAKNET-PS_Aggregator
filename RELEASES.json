@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.97",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: Update check now bypasses cache — API sends no-store headers and requests GitHub with no-cache so 'Check Now' and page load always see latest; Updates page fetch uses cache: 'no-store' so browser does not reuse cached 'no update available'"
+    ]
+  },
+  {
     "version": "1.0.96",
     "date": "2026-02-26",
     "notes": [

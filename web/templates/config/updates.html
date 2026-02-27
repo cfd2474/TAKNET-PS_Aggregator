@@ -78,7 +78,7 @@ async function checkUpdate() {
     btn.disabled = true; btn.textContent = 'Checking...';
     el.innerHTML = '<span style="color:var(--text-muted)">Checking...</span>';
     try {
-        const r = await fetch('/api/updates/check');
+        const r = await fetch('/api/updates/check', { cache: 'no-store' });
         const d = await r.json();
         if (d.error) {
             el.innerHTML = '<span style="color:var(--red)">Error: ' + d.error + '</span>';

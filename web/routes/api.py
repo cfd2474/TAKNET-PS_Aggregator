@@ -480,7 +480,8 @@ def updates_check():
     """Check GitHub for latest version and return release notes for new versions."""
     try:
         url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/VERSION"
-        resp = http_requests.get(url, timeout=10)
+        # Avoid GitHub CDN cache so we see the real latest
+        resp = http_requests.get(url, timeout=10, headers={"Cache-Control": "no-cache", "Pragma": "no-cache"})
         if resp.status_code != 200:
             return jsonify({"error": f"GitHub returned {resp.status_code}"}), 502
 
@@ -493,7 +494,7 @@ def updates_check():
         if update_available:
             try:
                 rurl = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/RELEASES.json"
-                rresp = http_requests.get(rurl, timeout=10)
+                rresp = http_requests.get(rurl, timeout=10, headers={"Cache-Control": "no-cache", "Pragma": "no-cache"})
                 if rresp.status_code == 200:
                     all_releases = rresp.json()
                     # Return entries that are newer than current (appear before current in list)
@@ -504,12 +505,16 @@ def updates_check():
             except Exception:
                 pass
 
-        return jsonify({
+        response = jsonify({
             "current": current,
             "latest": latest,
             "update_available": update_available,
             "new_releases": new_releases,
         })
+        # Prevent browser from caching so "Check Now" and page load always get fresh comparison
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        return response
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
