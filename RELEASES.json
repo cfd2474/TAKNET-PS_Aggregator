@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.96",
+    "date": "2026-02-26",
+    "notes": [
+      "Change: Outputs table — removed Status column, added Created column showing date/time each output was created"
+    ]
+  },
+  {
     "version": "1.0.95",
     "date": "2026-02-26",
     "notes": [
