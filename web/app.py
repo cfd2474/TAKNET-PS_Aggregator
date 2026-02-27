@@ -81,13 +81,25 @@ def create_app():
 
     @app.context_processor
     def inject_globals():
-        version = "1.0.56"
+        """Inject site-wide template variables, including the current version.
+
+        Version is read from the same VERSION file used by the update system so
+        the sidebar/footer stay in sync with what taknet-agg and /api/updates
+        report after an update.
+        """
+        version = "unknown"
         try:
-            vpath = os.path.join(os.path.dirname(__file__), "VERSION")
-            if os.path.exists(vpath):
-                version = open(vpath).read().strip()
+            # Prefer project root VERSION (one level above web/ inside the image)
+            root_vpath = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
+            web_vpath = os.path.join(os.path.dirname(__file__), "VERSION")
+            for vpath in (root_vpath, web_vpath):
+                if os.path.exists(vpath):
+                    with open(vpath) as f:
+                        version = f.read().strip()
+                    break
         except Exception:
             pass
+
         return {
             "site_name": os.environ.get("SITE_NAME", "TAKNET-PS Aggregator"),
             "version": version,
