@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.95",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: Dashboard now reads VERSION from the same host file used by taknet-agg and the update system, ensuring the web UI 'Installed' version stays in sync with CLI status and GitHub releases",
+      "Fix: docker-compose mounts /opt/taknet-aggregator/VERSION into the dashboard container at /app/VERSION so /api/updates/check and the sidebar version badge always reflect the current installed release"
+    ]
+  },
+  {
     "version": "1.0.94",
     "date": "2026-02-26",
     "notes": [
