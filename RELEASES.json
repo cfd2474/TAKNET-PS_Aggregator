@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.92",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: remove duplicate taknet-api service in docker-compose.yml that caused container name conflict preventing startup"
+    ]
+  },
+  {
     "version": "1.0.91",
     "date": "2026-02-26",
     "notes": [
