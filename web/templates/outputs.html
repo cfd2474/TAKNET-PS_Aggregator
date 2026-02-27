@@ -21,13 +21,13 @@
                     <th>Mode</th>
                     <th>Key</th>
                     <th>Key Status</th>
-                    <th>Status</th>
+                    <th>Created</th>
                     {% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}
                     <th></th>
                 </tr>
             </thead>
             <tbody id="outputs-tbody">
-                <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px;">Loading…</td></tr>
+                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:30px;">Loading…</td></tr>
             </tbody>
         </table>
     </div>
@@ -163,7 +163,7 @@ async function loadOutputs() {
         const d = await r.json();
         const items = d.outputs || [];
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px;">No outputs yet. Click <strong>+ Add Output</strong> to create one.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:30px;">No outputs yet. Click <strong>+ Add Output</strong> to create one.</td></tr>';
             return;
         }
         let html = '';
@@ -174,9 +174,6 @@ async function loadOutputs() {
             const modeBadge = o.mode === 'api'
                 ? '<span class="badge" style="font-size:11px;background:rgba(168,85,247,0.12);color:var(--purple);">api</span>'
                 : '<span class="badge badge-tailscale" style="font-size:11px;">push</span>';
-            const statusBadge = o.status === 'active'
-                ? '<span class="badge badge-live">active</span>'
-                : `<span class="badge">${o.status}</span>`;
 
             // Key display, type badge, and status
             let keyCell = '—';
@@ -196,13 +193,17 @@ async function loadOutputs() {
                         : '<span class="badge" style="font-size:11px;background:rgba(239,68,68,0.1);color:var(--red);">used</span>');
             }
 
+            const createdDisplay = o.created_at
+                ? (new Date(o.created_at)).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+                : '—';
+
             html += '<tr>';
             html += `<td style="font-weight:500;">${o.name}</td>`;
             html += `<td>${typeBadge}</td>`;
             html += `<td>${modeBadge}</td>`;
             html += `<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;">${keyCell}</td>`;
             html += `<td>${keyStatusCell}</td>`;
-            html += `<td>${statusBadge}</td>`;
+            html += `<td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${createdDisplay}</td>`;
             if (userRole === 'admin') html += `<td style="color:var(--text-muted);font-size:12px;">${o.creator_name}</td>`;
             html += `<td style="text-align:right;white-space:nowrap;">`;
             if (o.mode === 'api') {
@@ -215,7 +216,7 @@ async function loadOutputs() {
         });
         tbody.innerHTML = html;
     } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--red);text-align:center;padding:20px;">Failed to load outputs</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--red);text-align:center;padding:20px;">Failed to load outputs</td></tr>';
     }
 }
 
