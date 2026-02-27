@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.54
+# TAKNET-PS Aggregator v1.0.94
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of remote feeders connected via NetBird VPN, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -44,16 +44,17 @@ TAKNET-PS Aggregator is a fully containerized ADS-B aggregation stack that colle
 
 ## Architecture
 
-Six Docker containers in one Compose stack on a shared bridge network (`taknet-internal`).
+Seven Docker containers in one Compose stack on a shared bridge network (`taknet-internal`).
 
 | Container | Image | Exposed Port(s) | Purpose |
 |-----------|-------|-----------------|---------|
 | `beast-proxy` | Custom (Python 3.11) | 30004/tcp | Receives Beast data from feeders, classifies by VPN peer, logs to SQLite, forwards to readsb |
 | `readsb` | ghcr.io/sdr-enthusiasts/docker-readsb-protobuf | 30003/tcp (SBS out) | ADS-B aggregation engine in net-only mode |
 | `mlat-server` | Custom (wiedehopf/mlat-server) | 30105/tcp (in), 39001/tcp (results) | Multilateration — calculates positions from multiple feeders |
-| `tar1090` | ghcr.io/sdr-enthusiasts/docker-tar1090 | *(internal)* | Aircraft map and performance graphs |
-| `dashboard` | Custom (Flask/Gunicorn) | *(internal)* | Web UI, REST API, background scheduler |
-| `nginx` | nginx:alpine | 80/tcp | Reverse proxy routing web traffic |
+| `tar1090` | ghcr.io/sdr-enthusiasts/docker-tar1090 | *(internal)* | Aircraft map and performance graphs, serves `aircraft.json` for API consumers |
+| `dashboard` | Custom (Flask/Gunicorn) | *(internal)* | Web UI, internal `/api/` JSON endpoints, background scheduler |
+| `api` (`taknet-api`) | Custom (Flask/Gunicorn) | *(internal)* | Public REST API (v2) reading aircraft data from tar1090 |
+| `nginx` | nginx:alpine | 80/tcp | Reverse proxy routing web traffic to dashboard, REST API, and tar1090 |
 
 ```
 Feeders (Pi) ──Beast 30004──▶ beast-proxy ──▶ readsb:30006 ──▶ tar1090 (map)
@@ -203,7 +204,7 @@ taknet-agg <command>
 ## Dashboard Pages
 
 ### Dashboard (`/`)
-Overview with stat cards (feeders, aircraft, system uptime), feeder breakdown by connection type, system health (CPU, memory, disk), and live activity log. Auto-refreshes every 15 seconds.
+Overview with stat cards (feeders, aircraft, system uptime), feeder breakdown by connection type, and system health (CPU, memory, disk). Auto-refreshes every 15 seconds.
 
 ### Feeders (`/inputs/feeders`)
 Sortable, filterable table of all registered feeders. Filter by status and connection type. Click a row for the detail view.
@@ -328,7 +329,20 @@ SQLite at `/data/aggregator.db` in the `taknet-db-data` volume. WAL mode for con
 
 ## API Endpoints
 
-All endpoints return JSON and require authentication. Base path: `/api/`
+There are two API surfaces:
+
+- **Public REST API (v2)** under `/v2/` (no authentication; read-only ADS-B data)
+- **Dashboard JSON API** under `/api/` (authenticated; internal use by the web UI)
+
+### Public REST API (`/v2/`)
+
+The public REST API provides airplanes.live-compatible endpoints such as `/v2/all`, `/v2/hex/<hex>`, `/v2/callsign/<callsign>`, and `/v2/point/<lat>/<lon>/<radius_nm>`, backed by `aircraft.json` from tar1090.
+
+For a complete, up-to-date reference (including response envelope details and `curl` examples), see **`REST_API_DOCUMENTATION.md`**.
+
+### Dashboard JSON API (`/api/`)
+
+All endpoints below return JSON and require authentication. Base path: `/api/`
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
@@ -400,34 +414,41 @@ taknet-aggregator/
 ├── VERSION
 ├── README.md
 ├── RELEASES.json
+├── REST_API_DOCUMENTATION.md
 ├── env.example
 ├── docker-compose.yml
 ├── install.sh
 ├── uninstall.sh
+├── ARCHIVE/                    # Versioned release tarballs (taknet-aggregator-v*.tar.gz)
 │
 ├── beast-proxy/
 │   ├── Dockerfile
-│   ├── proxy.py              # Async TCP server — listens on 30004
-│   ├── db.py                 # SQLite write operations
-│   ├── vpn_resolver.py       # NetBird IP classification + hostname resolution
-│   ├── geoip_helper.py       # GeoIP for public IPs
+│   ├── proxy.py                # Async TCP server — listens on 30004
+│   ├── db.py                   # SQLite write operations
+│   ├── vpn_resolver.py         # NetBird IP classification + hostname resolution
+│   ├── geoip_helper.py         # GeoIP for public IPs
 │   └── schema.sql
+│
+├── api-server/
+│   ├── Dockerfile
+│   ├── app.py                  # Public REST API (v2) — reads from tar1090
+│   └── requirements.txt
 │
 ├── mlat-server/
 │   └── Dockerfile
 │
 ├── web/
 │   ├── Dockerfile
-│   ├── app.py                # Flask app factory, Flask-Login, scheduler
-│   ├── models.py             # DB models: Feeder, Connection, Activity, User
+│   ├── app.py                  # Flask app factory, Flask-Login, scheduler
+│   ├── models.py               # DB models: Feeder, Connection, Activity, User, Outputs, Keys
 │   ├── routes/
-│   │   ├── auth.py           # Login, logout, profile
-│   │   ├── auth_utils.py     # Role decorators: admin_required, network_admin_required
+│   │   ├── auth.py             # Login, logout, profile
+│   │   ├── auth_utils.py       # Role decorators: admin_required, network_admin_required
 │   │   ├── dashboard.py
 │   │   ├── inputs.py
 │   │   ├── pages.py
-│   │   ├── config.py         # VPN, services, updates, user management
-│   │   └── api.py            # All /api/* JSON endpoints
+│   │   ├── config.py           # VPN, services, updates, user management
+│   │   └── api.py              # All /api/* JSON endpoints
 │   ├── services/
 │   │   ├── docker_service.py
 │   │   └── vpn_service.py
@@ -436,6 +457,11 @@ taknet-aggregator/
 │   │       └── taknetlogo.png
 │   └── templates/
 │       ├── base.html
+│       ├── dashboard.html
+│       ├── stats.html
+│       ├── map.html
+│       ├── outputs.html
+│       ├── about.html
 │       ├── auth/
 │       │   ├── login.html
 │       │   └── profile.html
@@ -468,20 +494,23 @@ Stops containers, optionally removes data volumes, removes install directory and
 
 ## Roadmap
 
-### v1.1 — Outputs
-- FlightAware, adsb.fi, adsb.lol, airplanes.live feed forwarding
-- ADSBCot for TAK Server integration
-- Per-output toggle from dashboard
+### Immediate
+- SSL certificate renewal before expiry
+- REST API rate limiting on `/v2/` endpoints via nginx
+- REST API response caching (short-lived, e.g. 1–5 seconds) to reduce tar1090 load
 
-### v1.2 — Analytics
-- Per-feeder performance graphs
-- Coverage heatmaps
-- MLAT contribution rankings
+### Medium-Term
+- REST API pagination support (`?limit=&offset=`) for high-traffic aggregators
+- Optional key-auth mode for REST API consumers
+- Dedicated API documentation landing page linked from the dashboard
+- `/v2/emergency` endpoint for 7500/7600/7700 monitoring
 
-### v2.0 — Multi-Aggregator
-- Federated inter-aggregator Beast forwarding
-- Shared feeder registry across instances
+### Long-Term
+- Migrate from SQLite to PostgreSQL for higher feeder counts
+- Introduce Redis-backed pub/sub for SSE and metrics
+- CI/CD pipeline with automated Compose validation and smoke tests
+- Additional CoT/XML outputs for TAK server integration
 
 ---
 
-*TAKNET-PS Aggregator v1.0.54 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.94 — Built for public safety ADS-B operations.*
