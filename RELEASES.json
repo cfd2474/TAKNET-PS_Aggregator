@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.93",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: install.sh no longer removes netbird-server or netbird-dashboard during cleanup \u2014 those are managed by a separate compose project and must not be touched during taknet updates"
+    ]
+  },
+  {
     "version": "1.0.92",
     "date": "2026-02-26",
     "notes": [

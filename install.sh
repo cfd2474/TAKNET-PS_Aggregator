@@ -213,7 +213,7 @@ ok "CLI installed: taknet-agg"
 info "Building and starting containers..."
 cd "$INSTALL_DIR"
 # Force-remove any stopped/orphaned containers before compose up
-for cname in taknet-nginx taknet-dashboard taknet-beast-proxy taknet-readsb taknet-tar1090 taknet-mlat taknet-api taknet-netbird-client netbird-server netbird-dashboard; do
+for cname in taknet-nginx taknet-dashboard taknet-beast-proxy taknet-readsb taknet-tar1090 taknet-mlat taknet-api taknet-netbird-client; do
     docker rm -f "$cname" 2>/dev/null || true
 done
 docker compose up -d --build
