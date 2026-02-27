@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.94",
+    "date": "2026-02-26",
+    "notes": [
+      "New: REST_API_DOCUMENTATION.md reference for all /v2 REST endpoints with curl examples to help new integrators onboard quickly",
+      "Change: Removed dashboard 'Recent Activity' card to declutter the main view while keeping feeder breakdown and system health front and center"
+    ]
+  },
+  {
     "version": "1.0.93",
     "date": "2026-02-26",
     "notes": [
