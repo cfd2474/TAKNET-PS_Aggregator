@@ -39,7 +39,7 @@ def main():
     except Exception:
         sys.exit(2)
 
-    # Process CPU %: psutil returns 0.0 on first call per process; need two samples.
+    # Process list: CPU % needs two samples; MEM %, RSS, status are immediate.
     top_processes = []
     try:
         info_by_pid = {}
@@ -50,11 +50,23 @@ def main():
                     continue
                 cmd = info.get("cmdline") or []
                 cmd_str = " ".join(cmd)[:80] if cmd else (info.get("name") or "?")
+                mem_pct = 0.0
+                rss_mb = 0.0
+                st = "?"
+                try:
+                    mem_pct = round(proc.memory_percent() or 0, 1)
+                    rss_mb = round((proc.memory_info().rss or 0) / (1024 * 1024), 1)
+                    st = (proc.status() or "?")[:12]
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
                 info_by_pid[info["pid"]] = {
                     "pid": info["pid"],
                     "cmd": (cmd_str or "?")[:80],
                     "username": (info.get("username") or "?"),
                     "cpu_percent": 0.0,
+                    "memory_percent": mem_pct,
+                    "rss_mb": rss_mb,
+                    "status": st,
                 }
                 proc.cpu_percent()  # prime: first call returns 0
             except (psutil.NoSuchProcess, psutil.AccessDenied):

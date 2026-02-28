@@ -705,9 +705,9 @@ def _get_health_detail():
                 "pid": p.get("pid"),
                 "username": p.get("username", "—"),
                 "cpu_percent": p.get("cpu_percent", 0),
-                "memory_percent": 0,
-                "rss_mb": 0,
-                "status": "—",
+                "memory_percent": p.get("memory_percent", 0),
+                "rss_mb": p.get("rss_mb", 0),
+                "status": (p.get("status") or "—")[:12],
                 "cmdline": (p.get("cmd") or "?")[:80],
             }
             for p in procs[:50]

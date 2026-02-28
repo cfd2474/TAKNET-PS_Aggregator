@@ -5,7 +5,7 @@
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
     <div>
         <h2 style="font-size:18px;font-weight:600;margin:0;">System Health</h2>
-        <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">Detailed CPU, memory, disk and top processes (like top/htop)</p>
+        <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">Detailed CPU, memory, disk and top processes (like top). Refreshes every 5s while viewing.</p>
     </div>
     <button class="btn" onclick="loadHealth()" id="btn-refresh" style="font-size:12px;">↻ Refresh</button>
 </div>
@@ -134,7 +134,7 @@ function renderHealth(d) {
     const noteEl = document.getElementById('processes-note');
     if (fromHost) {
         titleEl.textContent = 'Top processes (entire VM, by CPU)';
-        noteEl.textContent = 'Entire VM: server-wide top processes from host snapshot every 30s (netbird, python, readsb, nginx, etc.). History chart above uses the same data.';
+        noteEl.textContent = 'Entire VM: same columns as top (PID, User, CPU %, MEM %, RSS, Status, Command). Data from host snapshot every 30s; this page refreshes every 5s.';
     } else {
         titleEl.textContent = 'Top processes (entire VM, by CPU)';
         noteEl.innerHTML = 'Host snapshot is set up automatically during install/update. If you still see only container processes, the server may lack <code>psutil</code> — check install logs; then run <code>taknet-agg restart dashboard</code>.';
@@ -271,7 +271,7 @@ function drawHistoryChart() {
 
 loadHealth();
 loadHistory();
-setInterval(loadHealth, 15000);
+setInterval(loadHealth, 5000);   // refresh every 5s while viewing (like top)
 setInterval(loadHistory, 30000);
 </script>
 {% endblock %}

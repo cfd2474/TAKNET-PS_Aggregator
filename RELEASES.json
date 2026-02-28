@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.105",
+    "date": "2026-02-26",
+    "notes": [
+      "Health: Top processes show MEM %, RSS (MB), Status like top; host snapshot collects memory_percent, rss_mb, status; page refreshes every 5s while viewing"
+    ]
+  },
+  {
     "version": "1.0.104",
     "date": "2026-02-26",
     "notes": [
