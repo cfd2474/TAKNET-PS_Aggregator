@@ -39,25 +39,35 @@ def main():
     except Exception:
         sys.exit(2)
 
+    # Process CPU %: psutil returns 0.0 on first call per process; need two samples.
     top_processes = []
     try:
-        procs = []
-        for proc in psutil.process_iter(attrs=["pid", "cpu_percent", "cmdline", "name", "username"], ad_value=None):
+        info_by_pid = {}
+        for proc in psutil.process_iter(attrs=["pid", "cmdline", "name", "username"], ad_value=None):
             try:
                 info = proc.info
                 if info.get("pid") is None:
                     continue
                 cmd = info.get("cmdline") or []
                 cmd_str = " ".join(cmd)[:80] if cmd else (info.get("name") or "?")
-                procs.append({
+                info_by_pid[info["pid"]] = {
                     "pid": info["pid"],
                     "cmd": (cmd_str or "?")[:80],
                     "username": (info.get("username") or "?"),
-                    "cpu_percent": round(info.get("cpu_percent") or 0, 1),
-                })
+                    "cpu_percent": 0.0,
+                }
+                proc.cpu_percent()  # prime: first call returns 0
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
-        procs.sort(key=lambda x: x["cpu_percent"], reverse=True)
+        time.sleep(0.2)  # let CPU times accumulate
+        for proc in psutil.process_iter(attrs=["pid"], ad_value=None):
+            try:
+                pid = proc.info.get("pid")
+                if pid is not None and pid in info_by_pid:
+                    info_by_pid[pid]["cpu_percent"] = round(proc.cpu_percent() or 0, 1)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        procs = sorted(info_by_pid.values(), key=lambda x: x["cpu_percent"], reverse=True)
         top_processes = procs[:TOP_N]
     except Exception:
         pass

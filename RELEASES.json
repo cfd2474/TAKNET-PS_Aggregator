@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.104",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: Host health snapshot now reports real process CPU % — use two samples with 0.2s sleep so psutil returns non-zero values (first call per process was 0)"
+    ]
+  },
+  {
     "version": "1.0.103",
     "date": "2026-02-26",
     "notes": [
