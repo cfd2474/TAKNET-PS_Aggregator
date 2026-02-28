@@ -422,7 +422,7 @@ taknet-aggregator/
 ├── docker-compose.yml
 ├── install.sh
 ├── uninstall.sh
-├── ARCHIVE/                    # Versioned release tarballs (taknet-aggregator-v*.tar.gz)
+├── ARCHIVE/                    # Versioned release tarballs (taknet-aggregator-v*.tar.gz); do not delete old .tar.gz — only add new ones
 │
 ├── beast-proxy/
 │   ├── Dockerfile
