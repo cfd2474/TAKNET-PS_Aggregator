@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.101 — Installer
+# TAKNET-PS Aggregator v1.0.102 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -101,8 +101,23 @@ chmod 755 "$INSTALL_DIR/scripts/health_snapshot_host.py" 2>/dev/null || true
 # ── 2b. Host health snapshot (Config → Health server view) ──────────────────
 if [ -f "$INSTALL_DIR/scripts/health_snapshot_host.py" ]; then
     if ! python3 -c "import psutil" 2>/dev/null; then
-        info "Installing python3-psutil for host health snapshot (Config → Health)..."
-        (pip3 install --break-system-packages psutil 2>/dev/null || pip3 install psutil 2>/dev/null) || true
+        info "Installing psutil for host health snapshot (Config → Health)..."
+        # Prefer system package (no gcc needed)
+        if command -v dnf &>/dev/null; then
+            dnf install -y python3-psutil 2>/dev/null || true
+        fi
+        if ! python3 -c "import psutil" 2>/dev/null && command -v yum &>/dev/null; then
+            yum install -y python3-psutil 2>/dev/null || true
+        fi
+        # Fallback: install build deps then pip (fixes "gcc: No such file or directory" on minimal installs)
+        if ! python3 -c "import psutil" 2>/dev/null; then
+            if command -v dnf &>/dev/null; then
+                dnf install -y gcc python3-devel 2>/dev/null || true
+            elif command -v yum &>/dev/null; then
+                yum install -y gcc python3-devel 2>/dev/null || yum install -y gcc python36-devel 2>/dev/null || true
+            fi
+            (pip3 install --break-system-packages psutil 2>/dev/null || pip3 install psutil 2>/dev/null || pip3 install 'psutil<6' 2>/dev/null) || true
+        fi
     fi
     if python3 -c "import psutil" 2>/dev/null; then
         sed "s|/opt/taknet-aggregator|$INSTALL_DIR|g" "$INSTALL_DIR/scripts/health-snapshot-host.service" > /etc/systemd/system/health-snapshot-host.service 2>/dev/null && \
@@ -110,7 +125,7 @@ if [ -f "$INSTALL_DIR/scripts/health_snapshot_host.py" ]; then
         systemctl daemon-reload && systemctl enable --now health-snapshot-host.timer 2>/dev/null && \
         ok "Host health snapshot timer enabled (every 30s)" || true
     else
-        warn "python3-psutil not available — Config → Health will show container view only; install with: pip3 install psutil"
+        warn "psutil not available — Config → Health will show container view only. On the server run: sudo dnf install gcc python3-devel && pip3 install psutil   (or: sudo dnf install python3-psutil)"
     fi
 fi
 

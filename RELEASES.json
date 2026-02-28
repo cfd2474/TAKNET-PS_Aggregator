@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.102",
+    "date": "2026-02-26",
+    "notes": [
+      "Installer: fix host psutil install — try dnf/yum python3-psutil first, then install gcc and python3-devel before pip; clearer warning with exact fix (dnf install gcc python3-devel && pip3 install psutil)"
+    ]
+  },
+  {
     "version": "1.0.101",
     "date": "2026-02-26",
     "notes": [
