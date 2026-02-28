@@ -1,0 +1,11 @@
+[Unit]
+Description=Run TAKNET-PS health snapshot every 30s (for Config → Health server view)
+Requires=health-snapshot-host.service
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=30
+AccuracySec=5
+
+[Install]
+WantedBy=timers.target

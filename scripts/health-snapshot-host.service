@@ -1,0 +1,12 @@
+[Unit]
+Description=TAKNET-PS Aggregator host health snapshot (CPU, top processes for dashboard)
+After=network.target
+
+[Service]
+Type=oneshot
+Environment=HEALTH_HISTORY_FILE=/opt/taknet-aggregator/var/health_history.json
+ExecStart=/usr/bin/python3 /opt/taknet-aggregator/scripts/health_snapshot_host.py
+WorkingDirectory=/opt/taknet-aggregator
+
+[Install]
+WantedBy=multi-user.target
