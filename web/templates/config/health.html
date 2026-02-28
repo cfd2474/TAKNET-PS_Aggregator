@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block page_title %}System Health{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <div>
+        <h2 style="font-size:18px;font-weight:600;margin:0;">System Health</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">Detailed CPU, memory, disk and top processes (like top/htop)</p>
+    </div>
+    <button class="btn" onclick="loadHealth()" id="btn-refresh" style="font-size:12px;">↻ Refresh</button>
+</div>
+
+<div id="health-loading" style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>
+<div id="health-content" style="display:none;">
+    <!-- Overview -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>Overview</h3><span id="health-updated" style="font-size:12px;color:var(--text-muted);"></span></div>
+        <div class="card-grid card-grid-3" style="gap:16px;">
+            <div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">CPU</div>
+                <div id="overview-cpu" style="font-size:24px;font-weight:700;"></div>
+                <div class="progress-bar" style="margin-top:8px;"><div id="overview-cpu-bar" class="fill" style="width:0%"></div></div>
+            </div>
+            <div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Memory</div>
+                <div id="overview-mem" style="font-size:24px;font-weight:700;"></div>
+                <div class="progress-bar" style="margin-top:8px;"><div id="overview-mem-bar" class="fill" style="width:0%"></div></div>
+            </div>
+            <div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Disk (root)</div>
+                <div id="overview-disk" style="font-size:24px;font-weight:700;"></div>
+                <div class="progress-bar" style="margin-top:8px;"><div id="overview-disk-bar" class="fill" style="width:0%"></div></div>
+            </div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text-muted);">
+            System uptime: <span id="uptime-sys"></span> · App uptime: <span id="uptime-app"></span>
+        </div>
+    </div>
+
+    <!-- CPU per core -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>CPU per core</h3></div>
+        <div id="cpu-cores" style="display:grid;gap:8px;"></div>
+    </div>
+
+    <!-- Memory breakdown -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>Memory</h3></div>
+        <div id="memory-breakdown" style="font-size:13px;"></div>
+    </div>
+
+    <!-- Disk partitions -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>Disk</h3></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Mount</th><th>Total</th><th>Used</th><th>Free</th><th>Use %</th></tr></thead>
+                <tbody id="disk-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Top processes -->
+    <div class="card">
+        <div class="card-header"><h3>Top processes (by CPU then memory)</h3></div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Metrics are from the dashboard container. For full host view run <code>top</code> or <code>htop</code> on the server.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>PID</th><th>User</th><th>CPU %</th><th>MEM %</th><th>RSS (MB)</th><th>Status</th><th>Command</th></tr></thead>
+                <tbody id="processes-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="health-error" class="card" style="display:none;border-color:var(--red);">
+    <div style="padding:20px;color:var(--red);" id="health-error-msg"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function progressColor(pct) {
+    if (pct >= 90) return 'fill-red';
+    if (pct >= 70) return 'fill-yellow';
+    return 'fill-green';
+}
+function fmtDuration(sec) {
+    if (sec < 60) return sec + 's';
+    if (sec < 3600) return Math.floor(sec/60) + 'm';
+    const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+    return h + 'h ' + m + 'm';
+}
+async function loadHealth() {
+    const loading = document.getElementById('health-loading');
+    const content = document.getElementById('health-content');
+    const errEl = document.getElementById('health-error');
+    const errMsg = document.getElementById('health-error-msg');
+    const btn = document.getElementById('btn-refresh');
+    btn.disabled = true;
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    errEl.style.display = 'none';
+    try {
+        const r = await fetch('/api/health/detail', { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed to load');
+        renderHealth(d);
+        content.style.display = 'block';
+        loading.style.display = 'none';
+        document.getElementById('health-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    } catch (e) {
+        loading.style.display = 'none';
+        errMsg.textContent = e.message || 'Failed to load health data';
+        errEl.style.display = 'block';
+    }
+    btn.disabled = false;
+}
+function renderHealth(d) {
+    const cpu = d.cpu_percent || 0;
+    const mem = d.memory || {};
+    const disk = d.disk || {};
+    document.getElementById('overview-cpu').textContent = cpu + '%';
+    document.getElementById('overview-cpu-bar').style.width = cpu + '%';
+    document.getElementById('overview-cpu-bar').className = 'fill ' + progressColor(cpu);
+    document.getElementById('overview-mem').textContent = (mem.used_gb || 0) + ' / ' + (mem.total_gb || 0) + ' GB';
+    document.getElementById('overview-mem-bar').style.width = (mem.percent || 0) + '%';
+    document.getElementById('overview-mem-bar').className = 'fill ' + progressColor(mem.percent || 0);
+    document.getElementById('overview-disk').textContent = (disk.used_gb || 0) + ' / ' + (disk.total_gb || 0) + ' GB';
+    document.getElementById('overview-disk-bar').style.width = (disk.percent || 0) + '%';
+    document.getElementById('overview-disk-bar').className = 'fill ' + progressColor(disk.percent || 0);
+    document.getElementById('uptime-sys').textContent = fmtDuration(d.uptime_seconds || 0);
+    document.getElementById('uptime-app').textContent = fmtDuration(d.app_uptime_seconds || 0);
+
+    const cores = d.cpu_per_core || [];
+    let html = '';
+    cores.forEach((pct, i) => {
+        html += '<div style="display:flex;align-items:center;gap:10px;">';
+        html += '<span style="width:60px;font-size:12px;color:var(--text-muted);">Core ' + i + '</span>';
+        html += '<div class="progress-bar" style="flex:1;"><div class="fill ' + progressColor(pct) + '" style="width:' + pct + '%"></div></div>';
+        html += '<span style="width:40px;font-size:12px;text-align:right;">' + pct + '%</span></div>';
+    });
+    document.getElementById('cpu-cores').innerHTML = html || '<span style="color:var(--text-muted);">No per-core data</span>';
+
+    const mb = d.memory_breakdown || {};
+    document.getElementById('memory-breakdown').innerHTML =
+        'Total: ' + (mb.total_gb || 0) + ' GB · Used: ' + (mb.used_gb || 0) + ' GB · Available: ' + (mb.available_gb || 0) + ' GB · ' +
+        (mb.percent || 0) + '% used' + (mb.cached_gb ? ' · Cached: ' + mb.cached_gb + ' GB' : '') + (mb.buffers_gb ? ' · Buffers: ' + mb.buffers_gb + ' GB' : '');
+
+    const parts = d.disk_partitions || [];
+    let rows = '';
+    parts.forEach(function(p) {
+        rows += '<tr><td><code style="font-size:11px;">' + (p.mount || '') + '</code></td>';
+        rows += '<td>' + (p.total_gb || 0) + ' GB</td><td>' + (p.used_gb || 0) + ' GB</td><td>' + (p.free_gb || 0) + ' GB</td>';
+        rows += '<td><span class="badge ' + (p.percent >= 90 ? 'badge-offline' : p.percent >= 70 ? 'badge-stale' : 'badge-live') + '">' + (p.percent || 0) + '%</span></td></tr>';
+    });
+    document.getElementById('disk-tbody').innerHTML = rows || '<tr><td colspan="5" style="color:var(--text-muted);">No partitions</td></tr>';
+
+    const procs = d.processes || [];
+    let procRows = '';
+    procs.forEach(function(p) {
+        procRows += '<tr><td>' + (p.pid || '') + '</td><td>' + (p.username || '') + '</td>';
+        procRows += '<td>' + (p.cpu_percent || 0) + '</td><td>' + (p.memory_percent || 0) + '</td><td>' + (p.rss_mb || 0) + '</td>';
+        procRows += '<td>' + (p.status || '') + '</td><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;" title="' + (p.cmdline || '').replace(/"/g, '&quot;') + '">' + (p.cmdline || '') + '</td></tr>';
+    });
+    document.getElementById('processes-tbody').innerHTML = procRows || '<tr><td colspan="7" style="color:var(--text-muted);">No process data</td></tr>';
+}
+loadHealth();
+setInterval(loadHealth, 15000);
+</script>
+{% endblock %}
