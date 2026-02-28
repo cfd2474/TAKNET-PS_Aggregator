@@ -105,7 +105,7 @@ if [ -f "$INSTALL_DIR/scripts/health_snapshot_host.py" ]; then
         (pip3 install --break-system-packages psutil 2>/dev/null || pip3 install psutil 2>/dev/null) || true
     fi
     if python3 -c "import psutil" 2>/dev/null; then
-        cp "$INSTALL_DIR/scripts/health-snapshot-host.service" /etc/systemd/system/ 2>/dev/null && \
+        sed "s|/opt/taknet-aggregator|$INSTALL_DIR|g" "$INSTALL_DIR/scripts/health-snapshot-host.service" > /etc/systemd/system/health-snapshot-host.service 2>/dev/null && \
         cp "$INSTALL_DIR/scripts/health-snapshot-host.timer" /etc/systemd/system/ 2>/dev/null && \
         systemctl daemon-reload && systemctl enable --now health-snapshot-host.timer 2>/dev/null && \
         ok "Host health snapshot timer enabled (every 30s)" || true

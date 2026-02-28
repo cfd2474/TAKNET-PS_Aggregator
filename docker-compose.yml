@@ -158,7 +158,7 @@ services:
       - /opt/taknet-aggregator/VERSION:/app/VERSION:ro
       - /opt/taknet-aggregator/RELEASES.json:/app/RELEASES.json:ro
       - /opt/taknet-aggregator/.env:/opt/taknet-aggregator/.env:rw
-      - /opt/taknet-aggregator/var:/app/var:ro
+      - ${INSTALL_DIR:-/opt/taknet-aggregator}/var:/app/var:ro
     networks:
       - taknet-internal
     depends_on:

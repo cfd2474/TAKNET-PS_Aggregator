@@ -71,10 +71,10 @@
         </div>
     </div>
 
-    <!-- Top processes -->
+    <!-- Top processes (entire VM when host snapshot enabled) -->
     <div class="card">
-        <div class="card-header"><h3>Top processes (by CPU)</h3></div>
-        <p id="processes-note" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Metrics are from the dashboard container. For full host view run <code>top</code> or <code>htop</code> on the server.</p>
+        <div class="card-header"><h3 id="processes-title">Top processes (entire VM, by CPU)</h3></div>
+        <p id="processes-note" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Loading…</p>
         <div class="table-wrap">
             <table>
                 <thead><tr><th>PID</th><th>User</th><th>CPU %</th><th>MEM %</th><th>RSS (MB)</th><th>Status</th><th>Command</th></tr></thead>
@@ -130,9 +130,15 @@ async function loadHealth() {
 function renderHealth(d) {
     const fromHost = !!d.from_host;
     document.getElementById('health-view-badge').textContent = fromHost ? ' (server-wide)' : '';
-    document.getElementById('processes-note').textContent = fromHost
-        ? 'Server-wide top processes (from host snapshot every 30s). History chart above also uses host data.'
-        : 'Metrics are from the dashboard container. Enable the host health snapshot (see install/README) for server-wide view.';
+    const titleEl = document.getElementById('processes-title');
+    const noteEl = document.getElementById('processes-note');
+    if (fromHost) {
+        titleEl.textContent = 'Top processes (entire VM, by CPU)';
+        noteEl.textContent = 'Entire VM: server-wide top processes from host snapshot every 30s (netbird, python, readsb, nginx, etc.). History chart above uses the same data.';
+    } else {
+        titleEl.textContent = 'Top processes (entire VM, by CPU)';
+        noteEl.innerHTML = 'Showing container only (2 gunicorn processes) until host snapshot is enabled. To show the <strong>entire VM</strong>: on the server run &nbsp;<code>sudo mkdir -p /opt/taknet-aggregator/var</code>, install <code>python3</code> and <code>psutil</code> (<code>pip3 install psutil</code>), then <code>sudo systemctl enable --now health-snapshot-host.timer</code>. Restart the dashboard so it can read the snapshot: <code>taknet-agg restart dashboard</code>. If you use a different install path, set <code>INSTALL_DIR</code> in .env so the var mount is correct.';
+    }
     ['card-cpu-cores', 'card-memory', 'card-disk'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = fromHost ? 'none' : '';
