@@ -15,7 +15,7 @@ from services.docker_service import (get_containers, restart_container, get_logs
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
 from services.vpn_service import get_combined_status
-from services.health_snapshot import get_health_history
+from services.health_snapshot import get_health_history, get_host_snapshot
 from routes.auth_utils import login_required_any, network_admin_required, admin_required
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -681,7 +681,40 @@ def _get_system_info():
 
 
 def _get_health_detail():
-    """Detailed health for System Health page: per-CPU, memory breakdown, disk partitions, top processes."""
+    """Detailed health for System Health page. Uses host snapshot when available (full server view)."""
+    host = get_host_snapshot()
+    if host:
+        base = _get_system_info()
+        base["cpu_percent"] = host.get("cpu", 0)
+        base["memory"] = {
+            "total_gb": host.get("memory_total_gb", 0),
+            "used_gb": host.get("memory_used_gb", 0),
+            "percent": host.get("memory", 0),
+        }
+        base["disk"] = {
+            "total_gb": host.get("disk_total_gb", 0),
+            "used_gb": host.get("disk_used_gb", 0),
+            "percent": host.get("disk", 0),
+        }
+        base["cpu_per_core"] = []
+        base["memory_breakdown"] = {}
+        base["disk_partitions"] = []
+        procs = host.get("top_processes") or []
+        base["processes"] = [
+            {
+                "pid": p.get("pid"),
+                "username": p.get("username", "—"),
+                "cpu_percent": p.get("cpu_percent", 0),
+                "memory_percent": 0,
+                "rss_mb": 0,
+                "status": "—",
+                "cmdline": (p.get("cmd") or "?")[:80],
+            }
+            for p in procs[:50]
+        ]
+        base["from_host"] = True
+        return base
+
     vm = psutil.virtual_memory()
     try:
         cpu_per_core = psutil.cpu_percent(interval=0.15, percpu=True)
@@ -741,6 +774,7 @@ def _get_health_detail():
     base["memory_breakdown"] = memory_breakdown
     base["disk_partitions"] = disk_partitions
     base["processes"] = processes
+    base["from_host"] = False
     return base
 
 

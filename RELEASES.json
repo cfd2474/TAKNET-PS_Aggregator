@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.100",
+    "date": "2026-02-26",
+    "notes": [
+      "New: Config → Health shows full server view when host snapshot is enabled — overview, history chart and top processes (netbird, readsb, python, etc.) from the host; installer runs scripts/health_snapshot_host.py every 30s via systemd timer and dashboard reads var/health_history.json (mount /opt/taknet-aggregator/var); requires python3 and psutil on host"
+    ]
+  },
+  {
     "version": "1.0.99",
     "date": "2026-02-26",
     "notes": [

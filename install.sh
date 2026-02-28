@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.99 — Installer
+# TAKNET-PS Aggregator v1.0.100 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -95,6 +95,24 @@ else
     rm -rf "$INSTALL_DIR/.git" 2>/dev/null || true
 fi
 ok "Files deployed"
+mkdir -p "$INSTALL_DIR/var"
+chmod 755 "$INSTALL_DIR/scripts/health_snapshot_host.py" 2>/dev/null || true
+
+# ── 2b. Host health snapshot (Config → Health server view) ──────────────────
+if [ -f "$INSTALL_DIR/scripts/health_snapshot_host.py" ]; then
+    if ! python3 -c "import psutil" 2>/dev/null; then
+        info "Installing python3-psutil for host health snapshot (Config → Health)..."
+        (pip3 install --break-system-packages psutil 2>/dev/null || pip3 install psutil 2>/dev/null) || true
+    fi
+    if python3 -c "import psutil" 2>/dev/null; then
+        cp "$INSTALL_DIR/scripts/health-snapshot-host.service" /etc/systemd/system/ 2>/dev/null && \
+        cp "$INSTALL_DIR/scripts/health-snapshot-host.timer" /etc/systemd/system/ 2>/dev/null && \
+        systemctl daemon-reload && systemctl enable --now health-snapshot-host.timer 2>/dev/null && \
+        ok "Host health snapshot timer enabled (every 30s)" || true
+    else
+        warn "python3-psutil not available — Config → Health will show container view only; install with: pip3 install psutil"
+    fi
+fi
 
 # ── 3. Create or fix .env ───────────────────────────────────────────────────
 if [ -f "$INSTALL_DIR/.env" ]; then

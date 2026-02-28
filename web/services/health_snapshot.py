@@ -1,14 +1,30 @@
 """Health history — in-memory ring buffer of CPU/memory/disk + top processes per sample.
 
-Used to correlate CPU spikes with offending processes. Collector runs every 30s;
-history keeps last 120 points (1 hour). No DB; resets on restart.
+When the host runs scripts/health_snapshot_host.py and writes to var/health_history.json
+( mounted at /app/var ), we use that for full server view (netbird, readsb, etc.).
+Otherwise we use in-container collection (only gunicorn visible).
 """
 
+import json
+import os
 import time
 
 _history = []
 MAX_POINTS = 120  # 1 hour at 30s interval
 TOP_N = 5  # top N processes by CPU per sample
+HOST_HISTORY_PATH = os.environ.get("HEALTH_HISTORY_FILE", "/app/var/health_history.json")
+
+
+def _read_host_history():
+    """Return list of points from host file, or None if not available."""
+    if not os.path.isfile(HOST_HISTORY_PATH):
+        return None
+    try:
+        with open(HOST_HISTORY_PATH, "r") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else None
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def collect_health_snapshot():
@@ -58,7 +74,18 @@ def collect_health_snapshot():
 
 
 def get_health_history(minutes=60):
-    """Return history for the last N minutes (oldest first for chart)."""
+    """Return history for the last N minutes (oldest first). Prefer host file when present."""
     cutoff = time.time() - (minutes * 60)
-    points = [p for p in _history if p["ts"] >= cutoff]
+    host = _read_host_history()
+    source = host if host else _history
+    points = [p for p in source if p.get("ts", 0) >= cutoff]
     return sorted(points, key=lambda x: x["ts"])
+
+
+def get_host_snapshot():
+    """Return the latest snapshot from the host file, or None. Used for health detail (CPU, processes)."""
+    host = _read_host_history()
+    if not host:
+        return None
+    points = sorted(host, key=lambda x: x.get("ts", 0))
+    return points[-1] if points else None

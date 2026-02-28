@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.99
+# TAKNET-PS Aggregator v1.0.100
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of remote feeders connected via NetBird VPN, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -229,6 +229,9 @@ Checks GitHub for the latest version and runs the web update workflow with live 
 
 ### Users (`/config/users`)
 User management (admin only). Create users, assign roles, reset passwords.
+
+### Health (`/config/health`)
+CPU, memory, disk and top processes. **Server-wide view:** the installer runs a host-side script every 30s (systemd timer) that writes snapshots to `var/health_history.json`; the dashboard mounts `var` and uses this for overview, history chart, and top processes (e.g. netbird, readsb, python) so you can see what drives CPU spikes. Requires `python3` and `psutil` on the host (installer installs psutil if needed). Without it, the page shows container-only metrics (mainly gunicorn).
 
 ---
 
@@ -513,4 +516,4 @@ Stops containers, optionally removes data volumes, removes install directory and
 
 ---
 
-*TAKNET-PS Aggregator v1.0.99 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.100 — Built for public safety ADS-B operations.*
