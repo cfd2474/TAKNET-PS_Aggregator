@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.99",
+    "date": "2026-02-26",
+    "notes": [
+      "New: Health history on Config → Health — CPU-over-time chart for the last 60 minutes (30s samples); hover over the chart to see top processes at that time to identify what causes CPU spikes (e.g. 30% vs normal 10%)"
+    ]
+  },
+  {
     "version": "1.0.98",
     "date": "2026-02-26",
     "notes": [

@@ -37,6 +37,17 @@
         </div>
     </div>
 
+    <!-- History: CPU over time + top processes on hover -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>History — CPU over time</h3></div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Last 60 minutes, sampled every 30s. Hover over the chart to see which processes were using CPU at that time (helps find what causes spikes).</p>
+        <div id="history-chart-wrap" style="position:relative;width:100%;height:140px;background:var(--bg-input);border-radius:6px;">
+            <svg id="history-chart" width="100%" height="140" style="display:block;"></svg>
+            <div id="history-tooltip" style="display:none;position:absolute;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12px;max-width:320px;z-index:10;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.3);"></div>
+        </div>
+        <div id="history-legend" style="margin-top:8px;font-size:11px;color:var(--text-muted);"></div>
+    </div>
+
     <!-- CPU per core -->
     <div class="card" style="margin-bottom:16px;">
         <div class="card-header"><h3>CPU per core</h3></div>
@@ -165,7 +176,87 @@ function renderHealth(d) {
     });
     document.getElementById('processes-tbody').innerHTML = procRows || '<tr><td colspan="7" style="color:var(--text-muted);">No process data</td></tr>';
 }
+
+let _historyPoints = [];
+const HISTORY_MINUTES = 60;
+
+async function loadHistory() {
+    try {
+        const r = await fetch('/api/health/history?minutes=' + HISTORY_MINUTES, { cache: 'no-store' });
+        const d = await r.json();
+        _historyPoints = d.points || [];
+        drawHistoryChart();
+    } catch (e) {
+        document.getElementById('history-legend').textContent = 'Could not load history.';
+    }
+}
+
+function drawHistoryChart() {
+    const svg = document.getElementById('history-chart');
+    const wrap = document.getElementById('history-chart-wrap');
+    const pts = _historyPoints;
+    if (!pts.length) {
+        svg.innerHTML = '';
+        document.getElementById('history-legend').textContent = 'No history yet. Data is collected every 30s; wait a minute and refresh.';
+        return;
+    }
+    const w = wrap.clientWidth || 600;
+    const h = 140;
+    const pad = { top: 8, right: 8, bottom: 24, left: 36 };
+    const chartW = w - pad.left - pad.right;
+    const chartH = h - pad.top - pad.bottom;
+    const cpuMax = Math.max(100, Math.ceil(Math.max.apply(null, pts.map(p => p.cpu)) / 10) * 10);
+    const tMin = pts[0].ts;
+    const tMax = pts[pts.length - 1].ts;
+    const tRange = tMax - tMin || 1;
+    function x(ts) { return pad.left + ((ts - tMin) / tRange) * chartW; }
+    function y(cpu) { return pad.top + chartH - (cpu / cpuMax) * chartH; }
+    let path = 'M ' + x(pts[0].ts) + ' ' + y(pts[0].cpu);
+    for (let i = 1; i < pts.length; i++) {
+        path += ' L ' + x(pts[i].ts) + ' ' + y(pts[i].cpu);
+    }
+    const yTicks = [0, Math.round(cpuMax/2), cpuMax];
+    let svgContent = '<g stroke="var(--border)" fill="none" font-size="10">';
+    yTicks.forEach(function(v) {
+        const yy = y(v);
+        svgContent += '<line x1="' + pad.left + '" y1="' + yy + '" x2="' + (w - pad.right) + '" y2="' + yy + '" stroke-dasharray="2,2"/>';
+        svgContent += '<text x="' + (pad.left - 6) + '" y="' + (yy + 4) + '" text-anchor="end" fill="var(--text-muted)">' + v + '%</text>';
+    });
+    const startTime = new Date(pts[0].ts * 1000);
+    const endTime = new Date(pts[pts.length - 1].ts * 1000);
+    svgContent += '<text x="' + (pad.left) + '" y="' + (h - 4) + '" fill="var(--text-muted)">' + startTime.toLocaleTimeString() + '</text>';
+    svgContent += '<text x="' + (w - pad.right) + '" y="' + (h - 4) + '" text-anchor="end" fill="var(--text-muted)">' + endTime.toLocaleTimeString() + '</text>';
+    svgContent += '</g>';
+    svgContent += '<path d="' + path + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    svg.innerHTML = svgContent;
+    document.getElementById('history-legend').textContent = pts.length + ' samples · CPU 0–' + cpuMax + '%. Hover to see top processes at that time.';
+
+    const tooltip = document.getElementById('history-tooltip');
+    wrap.onmousemove = function(ev) {
+        const rect = wrap.getBoundingClientRect();
+        const px = ev.clientX - rect.left - pad.left;
+        const t = tMin + (px / chartW) * tRange;
+        let best = 0;
+        let bestDist = 1e9;
+        pts.forEach((p, i) => {
+            const dist = Math.abs(p.ts - t);
+            if (dist < bestDist) { bestDist = dist; best = i; }
+        });
+        const p = pts[best];
+        const timeStr = new Date(p.ts * 1000).toLocaleTimeString();
+        let topStr = (p.top_processes || []).slice(0, 5).map(x => (x.cmd || '?').split(/[/\\]/).pop() + ' ' + (x.cpu_percent || 0) + '%').join(', ');
+        if (!topStr) topStr = '—';
+        tooltip.innerHTML = '<strong>' + timeStr + '</strong> · CPU <strong>' + p.cpu + '%</strong><br/><span style="color:var(--text-muted);font-size:11px;">Top: ' + topStr + '</span>';
+        tooltip.style.left = Math.min(ev.clientX - rect.left + 12, rect.width - 330) + 'px';
+        tooltip.style.top = (ev.clientY - rect.top - 8) + 'px';
+        tooltip.style.display = 'block';
+    };
+    wrap.onmouseleave = function() { tooltip.style.display = 'none'; };
+}
+
 loadHealth();
+loadHistory();
 setInterval(loadHealth, 15000);
+setInterval(loadHistory, 30000);
 </script>
 {% endblock %}

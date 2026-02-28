@@ -15,6 +15,7 @@ from services.docker_service import (get_containers, restart_container, get_logs
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
 from services.vpn_service import get_combined_status
+from services.health_snapshot import get_health_history
 from routes.auth_utils import login_required_any, network_admin_required, admin_required
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -748,6 +749,16 @@ def _get_health_detail():
 def health_detail():
     """Detailed system health for the System Health page (admin only)."""
     return jsonify(_get_health_detail())
+
+
+@bp.route("/health/history")
+@admin_required
+def health_history():
+    """CPU/memory/disk history with top processes per sample (admin only). For correlating spikes with processes."""
+    minutes = request.args.get("minutes", 60, type=int)
+    minutes = min(max(minutes, 5), 120)
+    points = get_health_history(minutes=minutes)
+    return jsonify({"points": points})
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
