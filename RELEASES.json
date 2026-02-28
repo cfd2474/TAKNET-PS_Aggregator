@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.101",
+    "date": "2026-02-26",
+    "notes": [
+      "Health (entire VM): Top Processes card titled 'entire VM, by CPU' with clear enable steps when host snapshot off; dashboard var mount uses INSTALL_DIR from .env; installer substitutes INSTALL_DIR into systemd service for non-default install paths"
+    ]
+  },
+  {
     "version": "1.0.100",
     "date": "2026-02-26",
     "notes": [

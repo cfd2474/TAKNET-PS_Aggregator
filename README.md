@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.100
+# TAKNET-PS Aggregator v1.0.101
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of remote feeders connected via NetBird VPN, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -422,7 +422,7 @@ taknet-aggregator/
 ├── docker-compose.yml
 ├── install.sh
 ├── uninstall.sh
-├── ARCHIVE/                    # Versioned release tarballs (taknet-aggregator-v*.tar.gz); do not delete old .tar.gz — only add new ones
+├── ARCHIVE/                    # Versioned release tarballs (taknet-aggregator-v*.tar.gz); do not delete old .tar.gz — only add new ones. Every submission to GitHub is a version change: bump VERSION, web/VERSION, RELEASES.json, README, install.sh, beast-proxy, env.example, then add new ARCHIVE tarball.
 │
 ├── beast-proxy/
 │   ├── Dockerfile
@@ -516,4 +516,4 @@ Stops containers, optionally removes data volumes, removes install directory and
 
 ---
 
-*TAKNET-PS Aggregator v1.0.100 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.101 — Built for public safety ADS-B operations.*
