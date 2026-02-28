@@ -26,6 +26,11 @@ def services():
 def updates():
     return render_template("config/updates.html")
 
+@bp.route("/health")
+@admin_required
+def health():
+    return render_template("config/health.html")
+
 @bp.route("/users")
 @admin_required
 def users():

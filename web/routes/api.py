@@ -679,6 +679,77 @@ def _get_system_info():
     }
 
 
+def _get_health_detail():
+    """Detailed health for System Health page: per-CPU, memory breakdown, disk partitions, top processes."""
+    vm = psutil.virtual_memory()
+    try:
+        cpu_per_core = psutil.cpu_percent(interval=0.15, percpu=True)
+    except Exception:
+        cpu_per_core = []
+    memory_breakdown = {
+        "total_gb": round(vm.total / (1024**3), 2),
+        "used_gb": round(vm.used / (1024**3), 2),
+        "available_gb": round(vm.available / (1024**3), 2),
+        "percent": vm.percent,
+        "cached_gb": round((getattr(vm, "cached", 0) or 0) / (1024**3), 2),
+        "buffers_gb": round((getattr(vm, "buffers", 0) or 0) / (1024**3), 2),
+    }
+    disk_partitions = []
+    for p in psutil.disk_partitions(all=False):
+        try:
+            usage = psutil.disk_usage(p.mountpoint)
+            disk_partitions.append({
+                "mount": p.mountpoint,
+                "device": p.device,
+                "total_gb": round(usage.total / (1024**3), 1),
+                "used_gb": round(usage.used / (1024**3), 1),
+                "free_gb": round(usage.free / (1024**3), 1),
+                "percent": usage.percent,
+            })
+        except (PermissionError, OSError):
+            continue
+    processes = []
+    try:
+        for proc in psutil.process_iter(attrs=["pid", "username", "cpu_percent", "memory_percent", "memory_info", "status", "cmdline"], ad_value=None):
+            try:
+                info = proc.info
+                if info.get("pid") is None:
+                    continue
+                cmd = info.get("cmdline") or []
+                cmd_str = " ".join(cmd)[:80] if cmd else (proc.name() if hasattr(proc, "name") else "")
+                rss_mb = 0
+                if info.get("memory_info"):
+                    rss_mb = round(info["memory_info"].rss / (1024 * 1024), 1)
+                processes.append({
+                    "pid": info["pid"],
+                    "username": info.get("username") or "?",
+                    "cpu_percent": round(info.get("cpu_percent") or 0, 1),
+                    "memory_percent": round(info.get("memory_percent") or 0, 1),
+                    "rss_mb": rss_mb,
+                    "status": (info.get("status") or "?")[:12],
+                    "cmdline": (cmd_str or "?")[:80],
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    except Exception:
+        pass
+    processes.sort(key=lambda x: (x["cpu_percent"], x["memory_percent"]), reverse=True)
+    processes = processes[:50]
+    base = _get_system_info()
+    base["cpu_per_core"] = cpu_per_core
+    base["memory_breakdown"] = memory_breakdown
+    base["disk_partitions"] = disk_partitions
+    base["processes"] = processes
+    return base
+
+
+@bp.route("/health/detail")
+@admin_required
+def health_detail():
+    """Detailed system health for the System Health page (admin only)."""
+    return jsonify(_get_health_detail())
+
+
 # ── Outputs ───────────────────────────────────────────────────────────────────
 
 @bp.route("/outputs")

@@ -43,10 +43,17 @@
         <div class="card-header"><h3>Feeder Breakdown</h3></div>
         <div id="feeder-breakdown">Loading...</div>
     </div>
+    {% if current_user.role == 'admin' %}
+    <a href="/config/health" class="card" style="text-decoration:none;color:inherit;display:block;">
+        <div class="card-header"><h3>System Health</h3></div>
+        <div id="system-health">Loading...</div>
+    </a>
+    {% else %}
     <div class="card">
         <div class="card-header"><h3>System Health</h3></div>
         <div id="system-health">Loading...</div>
     </div>
+    {% endif %}
 </div>
 
 {% endblock %}

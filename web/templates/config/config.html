@@ -2,7 +2,7 @@
 {% block page_title %}Configuration{% endblock %}
 
 {% block content %}
-<div class="card-grid card-grid-3">
+<div class="card-grid card-grid-2" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
     <a href="/config/vpn" class="stat-card">
         <div class="label">VPN</div>
         <div class="value" style="font-size:20px;">Network</div>
@@ -13,10 +13,20 @@
         <div class="value" style="font-size:20px;">Containers</div>
         <div class="sub">Manage Docker services</div>
     </a>
+    <a href="/config/health" class="stat-card">
+        <div class="label">Health</div>
+        <div class="value" style="font-size:20px;">CPU / Mem</div>
+        <div class="sub">Detailed system metrics</div>
+    </a>
     <a href="/config/updates" class="stat-card">
         <div class="label">Updates</div>
         <div class="value" style="font-size:20px;">v{{ version }}</div>
         <div class="sub">Check for new versions</div>
+    </a>
+    <a href="/config/users" class="stat-card">
+        <div class="label">Users</div>
+        <div class="value" style="font-size:20px;">Access</div>
+        <div class="sub">User management</div>
     </a>
 </div>
 {% endblock %}

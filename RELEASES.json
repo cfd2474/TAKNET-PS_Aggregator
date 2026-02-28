@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.98",
+    "date": "2026-02-26",
+    "notes": [
+      "New: System Health page (Config → Health) — detailed CPU per-core, memory breakdown, disk per-mount, and top processes (like top/htop); dashboard System Health card links to it for admins; GET /api/health/detail (admin only)"
+    ]
+  },
+  {
     "version": "1.0.97",
     "date": "2026-02-26",
     "notes": [
