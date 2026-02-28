@@ -137,7 +137,7 @@ function renderHealth(d) {
         noteEl.textContent = 'Entire VM: server-wide top processes from host snapshot every 30s (netbird, python, readsb, nginx, etc.). History chart above uses the same data.';
     } else {
         titleEl.textContent = 'Top processes (entire VM, by CPU)';
-        noteEl.innerHTML = 'Showing container only (2 gunicorn processes) until host snapshot is enabled. To show the <strong>entire VM</strong>: on the server run &nbsp;<code>sudo mkdir -p /opt/taknet-aggregator/var</code>, install <code>python3</code> and <code>psutil</code> (<code>pip3 install psutil</code>), then <code>sudo systemctl enable --now health-snapshot-host.timer</code>. Restart the dashboard so it can read the snapshot: <code>taknet-agg restart dashboard</code>. If you use a different install path, set <code>INSTALL_DIR</code> in .env so the var mount is correct.';
+        noteEl.innerHTML = 'Host snapshot is set up automatically during install/update. If you still see only container processes, the server may lack <code>psutil</code> — check install logs; then run <code>taknet-agg restart dashboard</code>.';
     }
     ['card-cpu-cores', 'card-memory', 'card-disk'].forEach(id => {
         const el = document.getElementById(id);

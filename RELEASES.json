@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.103",
+    "date": "2026-02-26",
+    "notes": [
+      "Host health snapshot fully automated: installer restarts dashboard after enabling timer so no manual step; .env gets INSTALL_DIR if missing for var mount; Top Processes note shortened to 'set up automatically during install/update'"
+    ]
+  },
+  {
     "version": "1.0.102",
     "date": "2026-02-26",
     "notes": [

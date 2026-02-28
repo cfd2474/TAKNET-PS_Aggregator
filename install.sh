@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.102 — Installer
+# TAKNET-PS Aggregator v1.0.103 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -124,6 +124,8 @@ if [ -f "$INSTALL_DIR/scripts/health_snapshot_host.py" ]; then
         cp "$INSTALL_DIR/scripts/health-snapshot-host.timer" /etc/systemd/system/ 2>/dev/null && \
         systemctl daemon-reload && systemctl enable --now health-snapshot-host.timer 2>/dev/null && \
         ok "Host health snapshot timer enabled (every 30s)" || true
+        # Restart dashboard so it picks up the var mount and can read host snapshot (no manual step)
+        (cd "$INSTALL_DIR" && docker compose restart dashboard 2>/dev/null) || true
     else
         warn "psutil not available — Config → Health will show container view only. On the server run: sudo dnf install gcc python3-devel && pip3 install psutil   (or: sudo dnf install python3-psutil)"
     fi
@@ -133,6 +135,8 @@ fi
 if [ -f "$INSTALL_DIR/.env" ]; then
     # Fix unquoted SITE_NAME from earlier versions
     sed -i '/^SITE_NAME=/{/"/!s/=\(.*\)/="\1"/}' "$INSTALL_DIR/.env" 2>/dev/null || true
+    # Ensure INSTALL_DIR is set so dashboard var mount (host health snapshot) resolves
+    grep -q '^INSTALL_DIR=' "$INSTALL_DIR/.env" 2>/dev/null || echo "INSTALL_DIR=$INSTALL_DIR" >> "$INSTALL_DIR/.env"
     ok "Existing .env preserved"
 elif [ -f "$INSTALL_DIR/env.example" ]; then
     cp "$INSTALL_DIR/env.example" "$INSTALL_DIR/.env"
