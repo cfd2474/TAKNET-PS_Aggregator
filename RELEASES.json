@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.108",
+    "date": "2026-02-26",
+    "notes": [
+      "Health: background refresh no longer flashes screen — data updates in place every 5s without showing loading overlay"
+    ]
+  },
+  {
     "version": "1.0.107",
     "date": "2026-02-26",
     "notes": [

@@ -147,10 +147,13 @@ async function loadHealth() {
     const errEl = document.getElementById('health-error');
     const errMsg = document.getElementById('health-error-msg');
     const btn = document.getElementById('btn-refresh');
+    const isBackgroundRefresh = content.style.display !== 'none';
     btn.disabled = true;
-    loading.style.display = 'block';
-    content.style.display = 'none';
-    errEl.style.display = 'none';
+    if (!isBackgroundRefresh) {
+        loading.style.display = 'block';
+        content.style.display = 'none';
+        errEl.style.display = 'none';
+    }
     try {
         const r = await fetch('/api/health/detail', { cache: 'no-store' });
         const d = await r.json();
@@ -160,9 +163,11 @@ async function loadHealth() {
         loading.style.display = 'none';
         document.getElementById('health-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (e) {
-        loading.style.display = 'none';
-        errMsg.textContent = e.message || 'Failed to load health data';
-        errEl.style.display = 'block';
+        if (!isBackgroundRefresh) {
+            loading.style.display = 'none';
+            errMsg.textContent = e.message || 'Failed to load health data';
+            errEl.style.display = 'block';
+        }
     }
     btn.disabled = false;
 }
