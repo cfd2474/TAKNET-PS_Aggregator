@@ -48,10 +48,15 @@
             <div><span style="font-size:11px;color:var(--text-muted);">CPU % per feeder</span><div id="cap-cpu-per-feeder" style="font-weight:700;">—</div></div>
             <div><span style="font-size:11px;color:var(--text-muted);">Target CPU %</span><input type="number" id="cap-target" min="50" max="95" value="80" style="width:60px;padding:4px 8px;font-size:13px;" title="Leave headroom (e.g. 80%)"></div>
             <div><span style="font-size:11px;color:var(--text-muted);">Remaining %</span><div id="cap-remaining" style="font-weight:700;">—</div></div>
-            <div><span style="font-size:11px;color:var(--text-muted);">Est. more feeders</span><div id="cap-more" style="font-weight:700;">—</div></div>
         </div>
-        <div id="cap-breakdown" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
-        <p id="cap-conservative" style="font-size:11px;color:var(--text-muted);display:none;"></p>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;"><strong>Est. more feeders</strong> (if adding only this type):</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:8px;">
+            <span><span class="badge badge-netbird" style="font-size:11px;">NetBird</span> <strong id="cap-more-netbird">—</strong></span>
+            <span><span class="badge badge-tailscale" style="font-size:11px;">Tailscale</span> <strong id="cap-more-tailscale">—</strong></span>
+            <span><span class="badge badge-public" style="font-size:11px;">Public</span> <strong id="cap-more-public">—</strong></span>
+        </div>
+        <div id="cap-breakdown" style="font-size:12px;color:var(--text-muted);margin-bottom:4px;"></div>
+        <p style="font-size:11px;color:var(--text-muted);">VPN types use more CPU per feeder (NetBird ~2×, Tailscale ~1.5× average); public ≈ 1×.</p>
     </div>
 
     <!-- History: CPU over time + top processes on hover -->
@@ -125,21 +130,20 @@ function updateCapacityEstimate() {
     const perFeeder = parseFloat(document.getElementById('cap-cpu-per-feeder').dataset.perFeeder || '0');
     const remaining = Math.max(0, target - cpu);
     document.getElementById('cap-remaining').textContent = remaining.toFixed(1) + '%';
-    let moreDisplay = '—';
-    let moreNum = 0;
-    if (perFeeder > 0) {
-        moreNum = Math.floor(remaining / perFeeder);
-        moreDisplay = moreNum;
+    const dash = '—';
+    if (perFeeder <= 0) {
+        document.getElementById('cap-more-netbird').textContent = dash;
+        document.getElementById('cap-more-tailscale').textContent = dash;
+        document.getElementById('cap-more-public').textContent = dash;
+        return;
     }
-    document.getElementById('cap-more').textContent = moreDisplay;
-    const conservativeEl = document.getElementById('cap-conservative');
-    const hasVpn = document.getElementById('cap-breakdown').innerHTML.indexOf('NetBird') >= 0 || document.getElementById('cap-breakdown').innerHTML.indexOf('Tailscale') >= 0;
-    if (moreNum > 0 && hasVpn) {
-        conservativeEl.style.display = 'block';
-        conservativeEl.textContent = 'If adding more VPN (NetBird/Tailscale) feeders, use a conservative estimate: ~' + Math.max(0, Math.floor(moreNum / 2)) + ' more (VPN often uses more CPU per feeder than public).';
-    } else {
-        conservativeEl.style.display = 'none';
-    }
+    // NetBird ~2×, Tailscale ~1.5×, Public 1× CPU per feeder
+    const moreNetBird = Math.floor(remaining / (perFeeder * 2));
+    const moreTailscale = Math.floor(remaining / (perFeeder * 1.5));
+    const morePublic = Math.floor(remaining / perFeeder);
+    document.getElementById('cap-more-netbird').textContent = '~' + moreNetBird;
+    document.getElementById('cap-more-tailscale').textContent = '~' + moreTailscale;
+    document.getElementById('cap-more-public').textContent = '~' + morePublic;
 }
 async function loadHealth() {
     const loading = document.getElementById('health-loading');

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.109",
+    "date": "2026-02-26",
+    "notes": [
+      "Health: capacity calculator shows est. more feeders by type — NetBird, Tailscale, Public (VPN ~2×/1.5× CPU per feeder)"
+    ]
+  },
+  {
     "version": "1.0.108",
     "date": "2026-02-26",
     "notes": [
