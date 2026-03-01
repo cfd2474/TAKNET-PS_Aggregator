@@ -33,8 +33,25 @@
             </div>
         </div>
         <div style="margin-top:12px;font-size:12px;color:var(--text-muted);">
-            System uptime: <span id="uptime-sys"></span> · App uptime: <span id="uptime-app"></span>
+            System uptime: <span id="uptime-sys"></span> · App uptime: <span id="uptime-app"></span> · <strong id="feeder-count">Active feeders: —</strong>
         </div>
+        <p id="capacity-note" style="margin-top:8px;font-size:11px;color:var(--text-muted);display:none;"></p>
+    </div>
+
+    <!-- Capacity calculator -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>Capacity calculator</h3></div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Estimates how many more feeders fit before hitting a CPU target. Uses current CPU ÷ active feeders as CPU per feeder. VPN (NetBird/Tailscale) often uses more CPU per feeder than public — use the conservative estimate if adding VPN feeders.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:12px;">
+            <div><span style="font-size:11px;color:var(--text-muted);">Current CPU %</span><div id="cap-cpu" style="font-weight:700;">—</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Active feeders</span><div id="cap-feeders" style="font-weight:700;">—</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">CPU % per feeder</span><div id="cap-cpu-per-feeder" style="font-weight:700;">—</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Target CPU %</span><input type="number" id="cap-target" min="50" max="95" value="80" style="width:60px;padding:4px 8px;font-size:13px;" title="Leave headroom (e.g. 80%)"></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Remaining %</span><div id="cap-remaining" style="font-weight:700;">—</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Est. more feeders</span><div id="cap-more" style="font-weight:700;">—</div></div>
+        </div>
+        <div id="cap-breakdown" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
+        <p id="cap-conservative" style="font-size:11px;color:var(--text-muted);display:none;"></p>
     </div>
 
     <!-- History: CPU over time + top processes on hover -->
@@ -102,6 +119,28 @@ function fmtDuration(sec) {
     const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
     return h + 'h ' + m + 'm';
 }
+function updateCapacityEstimate() {
+    const target = Math.min(95, Math.max(50, parseInt(document.getElementById('cap-target').value, 10) || 80));
+    const cpu = parseFloat(document.getElementById('cap-cpu').dataset.cpu || '0');
+    const perFeeder = parseFloat(document.getElementById('cap-cpu-per-feeder').dataset.perFeeder || '0');
+    const remaining = Math.max(0, target - cpu);
+    document.getElementById('cap-remaining').textContent = remaining.toFixed(1) + '%';
+    let moreDisplay = '—';
+    let moreNum = 0;
+    if (perFeeder > 0) {
+        moreNum = Math.floor(remaining / perFeeder);
+        moreDisplay = moreNum;
+    }
+    document.getElementById('cap-more').textContent = moreDisplay;
+    const conservativeEl = document.getElementById('cap-conservative');
+    const hasVpn = document.getElementById('cap-breakdown').innerHTML.indexOf('NetBird') >= 0 || document.getElementById('cap-breakdown').innerHTML.indexOf('Tailscale') >= 0;
+    if (moreNum > 0 && hasVpn) {
+        conservativeEl.style.display = 'block';
+        conservativeEl.textContent = 'If adding more VPN (NetBird/Tailscale) feeders, use a conservative estimate: ~' + Math.max(0, Math.floor(moreNum / 2)) + ' more (VPN often uses more CPU per feeder than public).';
+    } else {
+        conservativeEl.style.display = 'none';
+    }
+}
 async function loadHealth() {
     const loading = document.getElementById('health-loading');
     const content = document.getElementById('health-content');
@@ -157,6 +196,32 @@ function renderHealth(d) {
     document.getElementById('overview-disk-bar').className = 'fill ' + progressColor(disk.percent || 0);
     document.getElementById('uptime-sys').textContent = fmtDuration(d.uptime_seconds || 0);
     document.getElementById('uptime-app').textContent = fmtDuration(d.app_uptime_seconds || 0);
+    const active = d.feeder_active ?? 0, total = d.feeder_total ?? 0;
+    document.getElementById('feeder-count').textContent = 'Active feeders: ' + active + (total !== active ? ' (total ' + total + ')' : '');
+    const capNote = document.getElementById('capacity-note');
+    capNote.style.display = 'block';
+    capNote.textContent = 'Capacity: Note baseline CPU at this feeder count. After adding feeders, compare; keep peak under ~70–80% to leave headroom.';
+
+    // Capacity calculator
+    const cpuPct = cpu;
+    const cpuPerFeeder = active > 0 ? cpuPct / active : 0;
+    document.getElementById('cap-cpu').textContent = cpuPct + '%';
+    document.getElementById('cap-cpu').dataset.cpu = cpuPct;
+    document.getElementById('cap-feeders').textContent = active;
+    document.getElementById('cap-cpu-per-feeder').textContent = active > 0 ? cpuPerFeeder.toFixed(2) + '%' : '—';
+    document.getElementById('cap-cpu-per-feeder').dataset.perFeeder = String(cpuPerFeeder);
+    const breakdown = d.feeder_breakdown || [];
+    const netbird = breakdown.find(b => (b.conn_type || '').toLowerCase() === 'netbird');
+    const tailscale = breakdown.find(b => (b.conn_type || '').toLowerCase() === 'tailscale');
+    const public_ = breakdown.find(b => (b.conn_type || '').toLowerCase() === 'public');
+    const nbActive = (netbird && netbird.active_count) != null ? netbird.active_count : 0;
+    const tsActive = (tailscale && tailscale.active_count) != null ? tailscale.active_count : 0;
+    const pubActive = (public_ && public_.active_count) != null ? public_.active_count : 0;
+    document.getElementById('cap-breakdown').innerHTML =
+        'By type: <span class="badge badge-netbird" style="font-size:11px;">NetBird ' + nbActive + ' active</span> ' +
+        '<span class="badge badge-tailscale" style="font-size:11px;">Tailscale ' + tsActive + ' active</span> ' +
+        '<span class="badge badge-public" style="font-size:11px;">Public ' + pubActive + ' active</span>';
+    updateCapacityEstimate();
 
     const cores = d.cpu_per_core || [];
     let html = '';
@@ -273,5 +338,7 @@ loadHealth();
 loadHistory();
 setInterval(loadHealth, 5000);   // refresh every 5s while viewing (like top)
 setInterval(loadHistory, 30000);
+document.getElementById('cap-target').addEventListener('input', updateCapacityEstimate);
+document.getElementById('cap-target').addEventListener('change', updateCapacityEstimate);
 </script>
 {% endblock %}

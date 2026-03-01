@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.107",
+    "date": "2026-02-26",
+    "notes": [
+      "Health: Capacity calculator — CPU % per feeder, target %, remaining %, est. more feeders; feeder breakdown by NetBird/Tailscale/Public; conservative estimate when adding VPN feeders"
+    ]
+  },
+  {
+    "version": "1.0.106",
+    "date": "2026-02-26",
+    "notes": [
+      "Health: show active feeder count in Overview and capacity-planning note (baseline/peak CPU vs feeder count; keep peak under ~70–80%); README capacity planning subsection"
+    ]
+  },
+  {
     "version": "1.0.105",
     "date": "2026-02-26",
     "notes": [

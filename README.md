@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.105
+# TAKNET-PS Aggregator v1.0.107
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of remote feeders connected via NetBird VPN, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -231,7 +231,9 @@ Checks GitHub for the latest version and runs the web update workflow with live 
 User management (admin only). Create users, assign roles, reset passwords.
 
 ### Health (`/config/health`)
-CPU, memory, disk and top processes. **Server-wide view:** the installer runs a host-side script every 30s (systemd timer) that writes snapshots to `var/health_history.json`; the dashboard mounts `var` and uses this for overview, history chart, and top processes (e.g. netbird, readsb, python) so you can see what drives CPU spikes. Requires `python3` and `psutil` on the host (installer installs psutil if needed). Without it, the page shows container-only metrics (mainly gunicorn).
+CPU, memory, disk and top processes. **Server-wide view:** the installer runs a host-side script every 30s (systemd timer) that writes snapshots to `var/health_history.json`; the dashboard mounts `var` and uses this for overview, history chart, and top processes (e.g. netbird, readsb, python) so you can see what drives CPU spikes. Requires `python3` and `psutil` on the host (installer installs psutil if needed). Without it, the page shows container-only metrics (mainly gunicorn). **Active feeder count** is shown in the Overview for capacity planning.
+
+**Capacity planning (how many more feeders):** Note baseline and peak CPU at your current active feeder count. After adding feeders, compare; if baseline/peak rise roughly linearly, you can extrapolate. Keep peak under ~70–80% to leave headroom. Use the History chart to see what drives spikes (e.g. NetBird) and the Top processes table (refreshes every 5s) to confirm.
 
 ---
 
@@ -516,4 +518,4 @@ Stops containers, optionally removes data volumes, removes install directory and
 
 ---
 
-*TAKNET-PS Aggregator v1.0.105 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.107 — Built for public safety ADS-B operations.*

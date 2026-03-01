@@ -682,6 +682,7 @@ def _get_system_info():
 
 def _get_health_detail():
     """Detailed health for System Health page. Uses host snapshot when available (full server view)."""
+    feeder_stats = FeederModel.get_stats()
     host = get_host_snapshot()
     if host:
         base = _get_system_info()
@@ -713,6 +714,9 @@ def _get_health_detail():
             for p in procs[:50]
         ]
         base["from_host"] = True
+        base["feeder_total"] = feeder_stats.get("total", 0)
+        base["feeder_active"] = feeder_stats.get("active", 0)
+        base["feeder_breakdown"] = feeder_stats.get("breakdown") or []
         return base
 
     vm = psutil.virtual_memory()
@@ -775,6 +779,9 @@ def _get_health_detail():
     base["disk_partitions"] = disk_partitions
     base["processes"] = processes
     base["from_host"] = False
+    base["feeder_total"] = feeder_stats.get("total", 0)
+    base["feeder_active"] = feeder_stats.get("active", 0)
+    base["feeder_breakdown"] = feeder_stats.get("breakdown") or []
     return base
 
 
