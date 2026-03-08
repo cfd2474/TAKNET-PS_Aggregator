@@ -398,6 +398,19 @@ def aircraft():
     return jsonify(data)
 
 
+@bp.route("/aircraft.json")
+@login_required_any
+def aircraft_json():
+    """Full aircraft.json from merger (for Merged map); avoids nginx /data/ routing."""
+    try:
+        resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
+        if resp.status_code == 200:
+            return Response(resp.content, mimetype="application/json")
+    except Exception:
+        pass
+    return jsonify({"aircraft": [], "now": 0, "messages": 0})
+
+
 # ── VPN Status ───────────────────────────────────────────────────────────────
 
 @bp.route("/vpn/status")

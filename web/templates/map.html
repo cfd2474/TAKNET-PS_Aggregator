@@ -60,7 +60,7 @@ function initMergedMap() {
 
 function refreshMergedAircraft() {
     if (!mergedMap) return;
-    fetch('/data/aircraft.json?t=' + Date.now())
+    fetch('/api/aircraft.json?t=' + Date.now())
         .then(r => r.json())
         .then(data => {
             const aircraft = data.aircraft || [];
