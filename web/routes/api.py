@@ -173,6 +173,33 @@ def _get_adsbhub_connection_status():
     return out
 
 
+def _get_airplanes_live_connection_status():
+    """Read Airplanes.live receive status from shared volume (written by aircraft-merger)."""
+    receive_enabled = _read_env_bool("AIRPLANES_LIVE_RECEIVE_ENABLED", False)
+    try:
+        path = os.path.join(ADSBHUB_STATUS_PATH, "airplanes_live_enabled")
+        if os.path.isfile(path):
+            with open(path, "r") as f:
+                receive_enabled = f.read().strip().lower() in ("1", "true", "yes")
+    except Exception:
+        pass
+    out = {
+        "receive_enabled": receive_enabled,
+        "receive_connected": None,
+        "receive_updated": None,
+    }
+    try:
+        path = os.path.join(ADSBHUB_STATUS_PATH, "airplanes_live.json")
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                data = json.load(f)
+            out["receive_connected"] = data.get("connected", False)
+            out["receive_updated"] = data.get("updated")
+    except Exception:
+        pass
+    return out
+
+
 # ── Status / Overview ────────────────────────────────────────────────────────
 
 @bp.route("/status")
@@ -184,6 +211,7 @@ def status():
     system = _get_system_info()
     activity = ActivityModel.get_recent(10)
     adsbhub = _get_adsbhub_connection_status()
+    airplanes_live = _get_airplanes_live_connection_status()
 
     return jsonify({
         "site_name": SITE_NAME,
@@ -193,6 +221,7 @@ def status():
         "activity": activity,
         "pending_users": UserModel.pending_count(),
         "adsbhub": adsbhub,
+        "airplanes_live": airplanes_live,
     })
 
 
@@ -760,6 +789,16 @@ def _write_receive_enabled_to_volume(enabled):
         print(f"[api] Write receive_enabled: {e}")
 
 
+def _write_airplanes_live_enabled_to_volume(enabled):
+    """Write airplanes_live_enabled to shared volume so aircraft-merger drops Airplanes.live data when disabled."""
+    try:
+        path = os.path.join(ADSBHUB_STATUS_PATH, "airplanes_live_enabled")
+        with open(path, "w") as f:
+            f.write("true" if enabled else "false")
+    except Exception as e:
+        print(f"[api] Write airplanes_live_enabled: {e}")
+
+
 @bp.route("/settings/adsbhub", methods=["POST"])
 @admin_required
 def set_adsbhub_settings():
@@ -781,6 +820,41 @@ def set_adsbhub_settings():
     })
 
 
+# ── Airplanes.live settings (Config → Services) ──────────────────────────────
+
+@bp.route("/settings/airplanes_live", methods=["GET"])
+@admin_required
+def get_airplanes_live_settings():
+    """Return current Airplanes.live receive flag from .env."""
+    return jsonify({
+        "receive_enabled": _read_env_bool("AIRPLANES_LIVE_RECEIVE_ENABLED", False),
+    })
+
+
+def _restart_aircraft_merger_background():
+    """Restart aircraft-merger so it picks up airplanes_live enable flag from volume."""
+    try:
+        restart_container("taknet-aircraft-merger")
+    except Exception as e:
+        print(f"[api] Background restart taknet-aircraft-merger: {e}")
+
+
+@bp.route("/settings/airplanes_live", methods=["POST"])
+@admin_required
+def set_airplanes_live_settings():
+    """Update Airplanes.live receive flag in .env; write airplanes_live_enabled to shared volume; restart aircraft-merger in background."""
+    data = request.get_json() or {}
+    receive = data.get("receive_enabled", False)
+    _persist_env_var("AIRPLANES_LIVE_RECEIVE_ENABLED", "true" if receive else "false")
+    _write_airplanes_live_enabled_to_volume(receive)
+    thread = threading.Thread(target=_restart_aircraft_merger_background, daemon=True)
+    thread.start()
+    return jsonify({
+        "success": True,
+        "message": "Airplanes.live settings saved. Aircraft merger is restarting in the background.",
+    })
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _get_aircraft_count():
@@ -797,19 +871,21 @@ def _get_aircraft_data():
             data = resp.json()
             aircraft = data.get("aircraft", [])
             with_pos = [a for a in aircraft if "lat" in a and "lon" in a]
-            direct = sum(1 for a in aircraft if (a.get("source") or "").lower() != "adsbhub")
+            direct = sum(1 for a in aircraft if (a.get("source") or "").lower() not in ("adsbhub", "airplaneslive"))
             network = sum(1 for a in aircraft if (a.get("source") or "").lower() == "adsbhub")
+            airplanes_live = sum(1 for a in aircraft if (a.get("source") or "").lower() == "airplaneslive")
             return {
                 "total": len(aircraft),
                 "with_position": len(with_pos),
                 "direct": direct,
                 "network": network,
+                "airplanes_live": airplanes_live,
                 "messages": data.get("messages", 0),
             }
     except Exception:
         pass
 
-    return {"total": 0, "with_position": 0, "direct": 0, "network": 0, "messages": 0}
+    return {"total": 0, "with_position": 0, "direct": 0, "network": 0, "airplanes_live": 0, "messages": 0}
 
 
 def _get_system_info():

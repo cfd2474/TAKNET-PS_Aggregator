@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.125",
+    "date": "2026-02-26",
+    "notes": [
+      "Feature: Airplanes.live incoming — receive merged aircraft from airplanes.live API (point/radius). Config → Services: toggle Receive from Airplanes.live; dashboard status card; feeder data remains primary when duplicates exist; 10s staleness; data cleared when off."
+    ]
+  },
+  {
     "version": "1.0.124",
     "date": "2026-02-26",
     "notes": [

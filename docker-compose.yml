@@ -187,6 +187,10 @@ services:
       - ADSBHUB_HOST=${ADSBHUB_HOST:-data.adsbhub.org}
       - ADSBHUB_PORT=${ADSBHUB_PORT:-5002}
       - MERGER_PORT=8090
+      - SITE_LAT=${SITE_LAT:-33.8753}
+      - SITE_LON=${SITE_LON:--117.5664}
+      - AIRPLANES_LIVE_RECEIVE_ENABLED=${AIRPLANES_LIVE_RECEIVE_ENABLED:-false}
+      - AIRPLANES_LIVE_POLL_MS=${AIRPLANES_LIVE_POLL_MS:-2000}
     volumes:
       - adsbhub-status:/status
     networks:

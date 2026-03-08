@@ -118,7 +118,7 @@ function showSidebar(ac) {
     document.getElementById('sidebar-squawk').textContent = ac.squawk || '—';
     const lat = fmtNum(ac.lat), lon = fmtNum(ac.lon);
     document.getElementById('sidebar-pos').textContent = (lat != null && lon != null) ? lat.toFixed(5) + ', ' + lon.toFixed(5) : '—';
-    document.getElementById('sidebar-source').textContent = ac.source === 'adsbhub' ? 'ADSBHub' : (ac.source || 'Local');
+    document.getElementById('sidebar-source').textContent = ac.source === 'adsbhub' ? 'ADSBHub' : ac.source === 'airplaneslive' ? 'Airplanes.live' : (ac.source || 'Local');
     document.getElementById('sidebar-onground').textContent = ac.on_ground === true ? 'Yes' : (ac.on_ground === false ? 'No' : '—');
 }
 

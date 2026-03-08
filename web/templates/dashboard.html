@@ -66,6 +66,15 @@
     <div id="adsbhub-status" style="font-size:13px;">Loading...</div>
 </a>
 
+<!-- Airplanes.live connection status -->
+<a href="/config/services" class="card" style="margin-top:16px;display:block;text-decoration:none;color:inherit;">
+    <div class="card-header">
+        <h3>Airplanes.live</h3>
+        <span id="airplanes-live-badge" class="badge badge-offline">—</span>
+    </div>
+    <div id="airplanes-live-status" style="font-size:13px;">Loading...</div>
+</a>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -105,10 +114,14 @@ async function loadDashboard() {
                 (ac.with_position || 0) + ' with position';
             const direct = ac.direct != null ? ac.direct : ac.total;
             const network = ac.network != null ? ac.network : 0;
+            const airplanesLive = ac.airplanes_live != null ? ac.airplanes_live : 0;
             const breakdownEl = document.getElementById('stat-aircraft-breakdown');
             if (breakdownEl) {
-                if (ac.direct != null || ac.network != null) {
-                    breakdownEl.textContent = (direct || 0) + ' direct (feeders) · ' + (network || 0) + ' network (ADSBHub)';
+                if (ac.direct != null || ac.network != null || airplanesLive > 0) {
+                    let parts = [(direct || 0) + ' direct (feeders)'];
+                    if ((network || 0) > 0) parts.push((network || 0) + ' ADSBHub');
+                    if (airplanesLive > 0) parts.push(airplanesLive + ' Airplanes.live');
+                    breakdownEl.textContent = parts.join(' · ');
                     breakdownEl.style.display = '';
                 } else {
                     breakdownEl.style.display = 'none';
@@ -183,6 +196,25 @@ async function loadDashboard() {
         if (anyConnected) { badge.textContent = 'Connected'; badge.className = 'badge badge-live'; }
         else if (anyEnabled) { badge.textContent = 'Disconnected'; badge.className = 'badge badge-offline'; }
         else { badge.textContent = 'Off'; badge.className = 'badge badge-offline'; }
+
+        // Airplanes.live connection status
+        const airplanesLive = d.airplanes_live || {};
+        const alReceiveEnabled = !!airplanesLive.receive_enabled;
+        const alReceiveConnected = airplanesLive.receive_connected;
+        const alStatusEl = document.getElementById('airplanes-live-status');
+        if (!alReceiveEnabled) {
+            alStatusEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--text-muted);">Receive from Airplanes.live</span><span style="color:var(--text-muted);">Disabled</span></div>';
+        } else if (alReceiveConnected === true) {
+            alStatusEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--green);">●</span><span>Receive from Airplanes.live</span><span style="color:var(--green);font-weight:500;">Connected</span></div>';
+        } else if (alReceiveConnected === false) {
+            alStatusEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--red);">●</span><span>Receive from Airplanes.live</span><span style="color:var(--red);">Disconnected</span></div>';
+        } else {
+            alStatusEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--text-muted);">○</span><span>Receive from Airplanes.live</span><span style="color:var(--text-muted);">—</span></div>';
+        }
+        const alBadge = document.getElementById('airplanes-live-badge');
+        if (alReceiveConnected === true) { alBadge.textContent = 'Connected'; alBadge.className = 'badge badge-live'; }
+        else if (alReceiveEnabled) { alBadge.textContent = 'Disconnected'; alBadge.className = 'badge badge-offline'; }
+        else { alBadge.textContent = 'Off'; alBadge.className = 'badge badge-offline'; }
 
         // Activity log
         const activity = d.activity || [];
