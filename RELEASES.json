@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.126",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: Airplanes.live — parse API response using \"ac\" key (airplanes.live returns aircraft array as \"ac\", not \"aircraft\"). Receive and map data now connect correctly."
+    ]
+  },
+  {
     "version": "1.0.125",
     "date": "2026-02-26",
     "notes": [

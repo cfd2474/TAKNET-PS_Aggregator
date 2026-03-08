@@ -168,8 +168,10 @@ def _fetch_airplanes_live():
             data = json.loads(r.read().decode())
     except Exception:
         return {}
+    # API returns aircraft array as "ac" (see airplanes.live API); fallback to "aircraft"
+    aircraft_list = data.get("ac", data.get("aircraft", []))
     by_hex = {}
-    for ac in data.get("aircraft", []):
+    for ac in aircraft_list:
         hex_ = (ac.get("hex") or "").strip().upper().lstrip("~")
         if not hex_ or len(hex_) != 6:
             continue
