@@ -77,6 +77,11 @@ def _parse_sbs_line(line):
                 out["squawk"] = str(int(float(parts[17]))).zfill(4)
             except (ValueError, TypeError):
                 pass
+        if len(parts) > 18 and parts[18]:
+            try:
+                out["on_ground"] = bool(int(float(parts[18])))
+            except (ValueError, TypeError):
+                pass
         return out
     except (IndexError, ValueError, TypeError):
         return None

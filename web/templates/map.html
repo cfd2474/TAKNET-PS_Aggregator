@@ -15,8 +15,25 @@
             <a href="/tar1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
         </div>
     </div>
-    <div id="map-merged-wrap" style="flex:1;position:relative;min-height:0;">
-        <div id="map-merged" style="width:100%;height:100%;background:var(--bg-primary);"></div>
+    <div id="map-merged-wrap" style="flex:1;display:flex;min-height:0;">
+        <div id="map-merged" style="flex:1;background:var(--bg-primary);"></div>
+        <div id="map-sidebar" style="width:280px;background:var(--bg-secondary);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;">
+            <div id="map-sidebar-placeholder" style="padding:20px;color:var(--text-muted);font-size:13px;text-align:center;">Click an aircraft for details</div>
+            <div id="map-sidebar-detail" style="display:none;padding:16px;font-size:13px;overflow-y:auto;">
+                <div style="font-weight:600;font-size:14px;margin-bottom:12px;color:var(--text-primary);" id="sidebar-callsign">—</div>
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);vertical-align:top;">ICAO</td><td style="padding:4px 0;" id="sidebar-hex">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">Altitude</td><td style="padding:4px 0;" id="sidebar-alt">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">Speed</td><td style="padding:4px 0;" id="sidebar-gs">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">Track</td><td style="padding:4px 0;" id="sidebar-track">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">Vert. rate</td><td style="padding:4px 0;" id="sidebar-barorate">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">Squawk</td><td style="padding:4px 0;" id="sidebar-squawk">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">Position</td><td style="padding:4px 0;" id="sidebar-pos">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">Source</td><td style="padding:4px 0;" id="sidebar-source">—</td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);">On ground</td><td style="padding:4px 0;" id="sidebar-onground">—</td></tr>
+                </table>
+            </div>
+        </div>
     </div>
     <div id="map-iframe-wrap" style="flex:1;display:none;min-height:0;">
         <iframe src="/tar1090/" style="width:100%;height:100%;border:none;display:block;"></iframe>
@@ -33,9 +50,10 @@ const SITE_LON = {{ site_lon | default(-117.5664) }};
 
 let mergedMap = null;
 let mergedMarkers = {};
+let selectedHex = null;
 
 function showMerged() {
-    document.getElementById('map-merged-wrap').style.display = 'block';
+    document.getElementById('map-merged-wrap').style.display = 'flex';
     document.getElementById('map-iframe-wrap').style.display = 'none';
     document.getElementById('btn-merged').className = 'btn btn-sm btn-primary';
     document.getElementById('btn-tar1090').className = 'btn btn-sm';
@@ -56,6 +74,40 @@ function initMergedMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
     }).addTo(mergedMap);
+    mergedMap.on('click', function() {
+        selectedHex = null;
+        showSidebar(null);
+        Object.keys(mergedMarkers).forEach(h => {
+            mergedMarkers[h].setStyle({ fillColor: '#3b82f6', color: '#1e3a5f', weight: 1 });
+        });
+    });
+}
+
+function fmtNum(v) { return v != null && v !== '' ? Number(v) : null; }
+function showSidebar(ac) {
+    if (!ac) {
+        document.getElementById('map-sidebar-placeholder').style.display = 'block';
+        document.getElementById('map-sidebar-detail').style.display = 'none';
+        return;
+    }
+    document.getElementById('map-sidebar-placeholder').style.display = 'none';
+    document.getElementById('map-sidebar-detail').style.display = 'block';
+    const flight = (ac.flight || ac.callsign || '').trim() || (ac.hex || '—');
+    document.getElementById('sidebar-callsign').textContent = flight;
+    document.getElementById('sidebar-hex').textContent = ac.hex || '—';
+    const alt = fmtNum(ac.alt_baro);
+    document.getElementById('sidebar-alt').textContent = alt != null ? alt + ' ft' : '—';
+    const gs = fmtNum(ac.gs);
+    document.getElementById('sidebar-gs').textContent = gs != null ? gs + ' kt' : '—';
+    const track = fmtNum(ac.track);
+    document.getElementById('sidebar-track').textContent = track != null ? track + '°' : '—';
+    const baro = fmtNum(ac.baro_rate);
+    document.getElementById('sidebar-barorate').textContent = baro != null ? baro + ' ft/min' : '—';
+    document.getElementById('sidebar-squawk').textContent = ac.squawk || '—';
+    const lat = fmtNum(ac.lat), lon = fmtNum(ac.lon);
+    document.getElementById('sidebar-pos').textContent = (lat != null && lon != null) ? lat.toFixed(5) + ', ' + lon.toFixed(5) : '—';
+    document.getElementById('sidebar-source').textContent = ac.source === 'adsbhub' ? 'ADSBHub' : (ac.source || 'Local');
+    document.getElementById('sidebar-onground').textContent = ac.on_ground === true ? 'Yes' : (ac.on_ground === false ? 'No' : '—');
 }
 
 function refreshMergedAircraft() {
@@ -77,6 +129,7 @@ function refreshMergedAircraft() {
                 if (!byHex[hex]) {
                     mergedMap.removeLayer(mergedMarkers[hex]);
                     delete mergedMarkers[hex];
+                    if (selectedHex === hex) { selectedHex = null; showSidebar(null); }
                 }
             });
             Object.keys(byHex).forEach(hex => {
@@ -84,23 +137,46 @@ function refreshMergedAircraft() {
                 const lat = a.lat, lon = a.lon;
                 if (lat == null || lon == null) return;
                 const flight = (a.flight || a.callsign || '').trim() || hex;
+                const isSelected = selectedHex === hex;
                 if (mergedMarkers[hex]) {
                     mergedMarkers[hex].setLatLng([lat, lon]);
-                    mergedMarkers[hex].setTooltipContent(flight + ' · ' + (a.alt_baro != null ? a.alt_baro + ' ft' : ''));
+                    mergedMarkers[hex].setTooltipContent(flight + (a.alt_baro != null ? ' · ' + a.alt_baro + ' ft' : ''));
+                    mergedMarkers[hex].setStyle({
+                        fillColor: isSelected ? '#22c55e' : '#3b82f6',
+                        color: isSelected ? '#16a34a' : '#1e3a5f',
+                        weight: isSelected ? 2 : 1
+                    });
+                    mergedMarkers[hex]._ac = a;
                 } else {
                     const m = L.circleMarker([lat, lon], {
                         radius: 5,
-                        fillColor: '#3b82f6',
-                        color: '#1e3a5f',
-                        weight: 1,
+                        fillColor: isSelected ? '#22c55e' : '#3b82f6',
+                        color: isSelected ? '#16a34a' : '#1e3a5f',
+                        weight: isSelected ? 2 : 1,
                         fillOpacity: 0.9
-                    }).bindTooltip(flight + (a.alt_baro != null ? ' · ' + a.alt_baro + ' ft' : ''), {
+                    });
+                    m._ac = a;
+                    m.bindTooltip(flight + (a.alt_baro != null ? ' · ' + a.alt_baro + ' ft' : ''), {
                         permanent: false,
                         direction: 'top'
-                    }).addTo(mergedMap);
+                    });
+                    m.on('click', function() {
+                        selectedHex = hex;
+                        showSidebar(a);
+                        Object.keys(mergedMarkers).forEach(h => {
+                            const ac2 = mergedMarkers[h]._ac;
+                            mergedMarkers[h].setStyle({
+                                fillColor: h === hex ? '#22c55e' : '#3b82f6',
+                                color: h === hex ? '#16a34a' : '#1e3a5f',
+                                weight: h === hex ? 2 : 1
+                            });
+                        });
+                    });
+                    m.addTo(mergedMap);
                     mergedMarkers[hex] = m;
                 }
             });
+            if (selectedHex && byHex[selectedHex]) showSidebar(byHex[selectedHex]);
         })
         .catch(() => {});
 }

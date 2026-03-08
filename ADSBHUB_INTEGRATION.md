@@ -52,6 +52,25 @@ This document describes how the aggregator exchanges data with ADSBHub.org: feed
 | `ADSBHUB_PORT` | `5002` | ADSBHub port for SBS feed. |
 | `TAR1090_URL` | (internal) | URL for local aircraft.json (used by merger). |
 
+## Data from ADSBHub receive feed
+
+ADSBHub sends SBS message types 1, 3, and 4. The aircraft-merger parses and merges them by ICAO into one record per aircraft. Available fields (when present) for ADSBHub-sourced aircraft:
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| `hex` | all | ICAO 24-bit address |
+| `flight` | MSG,1 | Callsign |
+| `alt_baro` | MSG,3 | Barometric altitude (ft) |
+| `lat`, `lon` | MSG,3 | Position |
+| `gs` | MSG,4 | Ground speed (kt) |
+| `track` | MSG,4 | Track (degrees) |
+| `baro_rate` | MSG,4 | Vertical rate (ft/min) |
+| `squawk` | MSG,6 if present | Transponder code |
+| `on_ground` | MSG,3 | Whether aircraft is on ground |
+| `source` | (set by merger) | `"adsbhub"` for feed aircraft |
+
+Local (feeder) aircraft can include additional fields from readsb/tar1090 (e.g. messages, seen, rssi, type, registration). The Merged map sidebar shows all of the above when you click an aircraft.
+
 ## Setup checklist
 
 1. Register at [ADSBHub](https://www.adsbhub.org/register.php) and add your station (Settings → New Station). Set Data Protocol to **SBS**, Station mode to **Client**, Station Host/IP to your public IP. Copy the **Station dynamic IP key (CLIENTKEY)**.

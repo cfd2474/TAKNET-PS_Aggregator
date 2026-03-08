@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.117",
+    "date": "2026-03-07",
+    "notes": [
+      "Merged map: tar1090-style sidebar — click aircraft for details (ICAO, callsign, altitude, speed, track, vert rate, squawk, position, source, on ground); click map to clear",
+      "ADSBHub merger: parse on_ground from MSG,3; ADSBHUB_INTEGRATION.md documents all fields from feed"
+    ]
+  },
+  {
     "version": "1.0.116",
     "date": "2026-03-07",
     "notes": [
