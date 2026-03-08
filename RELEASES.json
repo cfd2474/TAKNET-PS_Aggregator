@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.120",
+    "date": "2026-02-26",
+    "notes": [
+      "Map: fix aircraft marker click — map click no longer clears sidebar when clicking a dot; larger hit area (radius 8); L.DomEvent.stopPropagation and ev.target for reliable sidebar details. REST API docs: document merger-added fields source and on_ground."
+    ]
+  },
+  {
     "version": "1.0.119",
     "date": "2026-02-26",
     "notes": [
