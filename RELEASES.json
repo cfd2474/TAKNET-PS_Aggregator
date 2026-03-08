@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.119",
+    "date": "2026-02-26",
+    "notes": [
+      "Map: Merged view is default; tar1090 iframe loads only when you switch to tar1090 (avoids 404s in console). Clear hint: 'Click a blue dot → details in sidebar' and banner on tar1090 view: 'For aircraft detail sidebar, switch to Merged (all) above.'"
+    ]
+  },
+  {
     "version": "1.0.118",
     "date": "2026-03-07",
     "notes": [

@@ -8,17 +8,19 @@
 <div style="display:flex;flex-direction:column;height:100vh;width:100%;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;height:44px;background:var(--bg-secondary);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;">
         <span id="map-aircraft" style="font-size:13px;color:var(--text-secondary);">Loading map...</span>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span style="font-size:12px;color:var(--text-muted);">View:</span>
-            <button type="button" id="btn-merged" class="btn btn-sm btn-primary">Merged (all)</button>
-            <button type="button" id="btn-tar1090" class="btn btn-sm">tar1090</button>
+            <button type="button" id="btn-merged" class="btn btn-sm btn-primary" title="Map with detail sidebar — click any aircraft">Merged (all)</button>
+            <button type="button" id="btn-tar1090" class="btn btn-sm" title="Full tar1090 UI (no sidebar here)">tar1090</button>
             <a href="/tar1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
+            <span id="map-view-hint" style="font-size:11px;color:var(--text-muted);">Click a blue dot → details in sidebar</span>
         </div>
     </div>
     <div id="map-merged-wrap" style="flex:1;display:flex;min-height:0;">
         <div id="map-merged" style="flex:1;background:var(--bg-primary);"></div>
         <div id="map-sidebar" style="width:280px;background:var(--bg-secondary);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;">
-            <div id="map-sidebar-placeholder" style="padding:20px;color:var(--text-muted);font-size:13px;text-align:center;">Click an aircraft on the map for details.<br><span style="font-size:11px;margin-top:8px;display:block;">(Blue dots = aircraft)</span></div>
+            <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;">Details</div>
+            <div id="map-sidebar-placeholder" style="padding:20px;color:var(--text-muted);font-size:13px;text-align:center;">Click an aircraft on the map (blue dot) for details here.</div>
             <div id="map-sidebar-detail" style="display:none;padding:16px;font-size:13px;overflow-y:auto;">
                 <div style="font-weight:600;font-size:14px;margin-bottom:12px;color:var(--text-primary);" id="sidebar-callsign">—</div>
                 <table style="width:100%;border-collapse:collapse;">
@@ -35,8 +37,9 @@
             </div>
         </div>
     </div>
-    <div id="map-iframe-wrap" style="flex:1;display:none;min-height:0;">
-        <iframe src="/tar1090/" style="width:100%;height:100%;border:none;display:block;"></iframe>
+    <div id="map-iframe-wrap" style="flex:1;display:none;min-height:0;position:relative;">
+        <div id="map-tar1090-banner" style="position:absolute;top:0;left:0;right:0;z-index:10;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:8px 16px;font-size:12px;color:var(--text-secondary);">For aircraft detail sidebar, switch to <strong>Merged (all)</strong> above.</div>
+        <iframe id="map-tar1090-iframe" style="width:100%;height:100%;border:none;display:block;" src="about:blank"></iframe>
     </div>
 </div>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
@@ -55,6 +58,7 @@ let selectedHex = null;
 function showMerged() {
     document.getElementById('map-merged-wrap').style.display = 'flex';
     document.getElementById('map-iframe-wrap').style.display = 'none';
+    document.getElementById('map-view-hint').textContent = 'Click a blue dot → details in sidebar';
     document.getElementById('btn-merged').className = 'btn btn-sm btn-primary';
     document.getElementById('btn-tar1090').className = 'btn btn-sm';
     if (!mergedMap) initMergedMap();
@@ -67,8 +71,11 @@ function showMerged() {
 function showTar1090() {
     document.getElementById('map-merged-wrap').style.display = 'none';
     document.getElementById('map-iframe-wrap').style.display = 'block';
+    document.getElementById('map-view-hint').textContent = 'Detail sidebar only in Merged view';
     document.getElementById('btn-merged').className = 'btn btn-sm';
     document.getElementById('btn-tar1090').className = 'btn btn-sm btn-primary';
+    var ifr = document.getElementById('map-tar1090-iframe');
+    if (ifr.src === 'about:blank' || !ifr.src) ifr.src = '/tar1090/';
 }
 
 function initMergedMap() {
