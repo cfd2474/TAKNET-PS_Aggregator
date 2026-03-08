@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.127",
+    "date": "2026-02-26",
+    "notes": [
+      "Fix: Airplanes.live rate limit (429) — default poll interval 5s to stay under 1 req/sec; on 429 back off 60s and keep last data instead of clearing map."
+    ]
+  },
+  {
     "version": "1.0.126",
     "date": "2026-02-26",
     "notes": [

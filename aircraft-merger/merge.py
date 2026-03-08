@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 TAR1090_URL = os.environ.get("TAR1090_URL", "http://tar1090:80/data/aircraft.json")
@@ -23,7 +24,8 @@ STATUS_DIR = os.environ.get("ADSBHUB_STATUS_DIR", "/status")
 STALE_SECONDS = float(os.environ.get("MERGER_STALE_SECONDS", "10"))
 # Airplanes.live: https://airplanes.live/api-guide/ — /point/lat/lon/radius_nm (max 250 nm), rate limit 1 req/sec
 AIRPLANES_LIVE_BASE = os.environ.get("AIRPLANES_LIVE_API_BASE", "https://api.airplanes.live/v2")
-AIRPLANES_LIVE_POLL_MS = float(os.environ.get("AIRPLANES_LIVE_POLL_MS", "2000")) / 1000.0
+# API rate limit 1 req/sec; default 5s between requests to stay under limit
+AIRPLANES_LIVE_POLL_MS = float(os.environ.get("AIRPLANES_LIVE_POLL_MS", "5000")) / 1000.0
 SITE_LAT = float(os.environ.get("SITE_LAT", "33.8753"))
 SITE_LON = float(os.environ.get("SITE_LON", "-117.5664"))
 AIRPLANES_LIVE_RADIUS_NM = int(os.environ.get("AIRPLANES_LIVE_RADIUS_NM", "250"))
@@ -161,12 +163,17 @@ def _write_airplanes_live_status(connected):
 
 
 def _fetch_airplanes_live():
-    """Fetch aircraft from Airplanes.live /point/lat/lon/radius (rate limit 1/sec). Return dict hex -> ac with source=airplaneslive."""
+    """Fetch aircraft from Airplanes.live /point/lat/lon/radius (rate limit 1/sec). Return dict hex -> ac with source=airplaneslive. Raises HTTPError on 429."""
     url = f"{AIRPLANES_LIVE_BASE}/point/{SITE_LAT}/{SITE_LON}/{AIRPLANES_LIVE_RADIUS_NM}"
     try:
         req = Request(url, headers={"User-Agent": "TAKNET-PS-Aggregator/1.0"})
         with urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode())
+    except HTTPError as e:
+        if e.code == 429:
+            raise  # let caller back off
+        print(f"[airplanes.live] fetch failed: {e}", file=sys.stderr)
+        return {}
     except Exception as e:
         print(f"[airplanes.live] fetch failed: {e}", file=sys.stderr)
         return {}
@@ -211,6 +218,13 @@ def _run_airplanes_live_poll_loop():
             if by_hex and (now_ts - _last_ok_log) >= 30:
                 _last_ok_log = now_ts
                 print(f"[airplanes.live] ok: {len(by_hex)} aircraft", file=sys.stderr)
+        except HTTPError as e:
+            if e.code == 429:
+                print("[airplanes.live] rate limited (429); backing off 60s, keeping last data", file=sys.stderr)
+                time.sleep(60)
+                continue
+            print(f"[airplanes.live] poll error: {e}", file=sys.stderr)
+            _write_airplanes_live_status(False)
         except Exception as e:
             print(f"[airplanes.live] poll error: {e}", file=sys.stderr)
             _write_airplanes_live_status(False)
