@@ -1,0 +1,19 @@
+---
+description: Every code push must include a version bump and ARCHIVE tarball
+alwaysApply: true
+---
+
+# Release checklist (required for every push)
+
+**All code we push must come with:**
+
+1. **Version update**
+   - Bump version in: `VERSION`, `web/VERSION`, `RELEASES.json` (new entry at top with version, date, notes), and `env.example` (header comment).
+   - Add a concise entry to `RELEASES.json` describing the change.
+
+2. **ARCHIVE tarball**
+   - Build the release tarball (e.g. `taknet-aggregator-vX.Y.Z.tar.gz`) and **push it to the `ARCHIVE/` directory**.
+   - Do not remove old tarballs from ARCHIVE — only add new ones.
+   - Every submission to GitHub is a version change: bump version files, then add the new ARCHIVE tarball.
+
+When implementing a feature or fix, include the version bump and ARCHIVE tarball step in the same work (or explicitly remind the user to run the tarball step if they deploy manually).

@@ -56,6 +56,15 @@
     {% endif %}
 </div>
 
+<!-- ADSBHub connection status (live feed/receive to data.adsbhub.org) -->
+<a href="/config/services" class="card" style="margin-top:16px;display:block;text-decoration:none;color:inherit;">
+    <div class="card-header">
+        <h3>ADSBHub</h3>
+        <span id="adsbhub-badge" class="badge badge-offline">—</span>
+    </div>
+    <div id="adsbhub-status" style="font-size:13px;">Loading...</div>
+</a>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -140,6 +149,28 @@ async function loadDashboard() {
         shtml += '<div class="progress-bar"><div class="fill ' + progressColor(disk.percent||0) + '" style="width:' + (disk.percent||0) + '%"></div></div>';
         shtml += '</div>';
         document.getElementById('system-health').innerHTML = shtml;
+
+        // ADSBHub connection status (live feed/receive, not just container up)
+        const adsbhub = d.adsbhub || {};
+        const feedEnabled = !!adsbhub.feed_enabled;
+        const feedConnected = adsbhub.feed_connected;
+        const receiveEnabled = !!adsbhub.receive_enabled;
+        const receiveConnected = adsbhub.receive_connected;
+        function adsbhubStatusLine(label, enabled, connected) {
+            if (!enabled) return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--text-muted);">' + label + '</span><span style="color:var(--text-muted);">Disabled</span></div>';
+            if (connected === true) return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--green);">●</span><span>' + label + '</span><span style="color:var(--green);font-weight:500;">Connected</span></div>';
+            if (connected === false) return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--red);">●</span><span>' + label + '</span><span style="color:var(--red);">Disconnected</span></div>';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><span style="color:var(--text-muted);">○</span><span>' + label + '</span><span style="color:var(--text-muted);">—</span></div>';
+        }
+        document.getElementById('adsbhub-status').innerHTML =
+            adsbhubStatusLine('Feed to ADSBHub', feedEnabled, feedConnected) +
+            adsbhubStatusLine('Receive from ADSBHub', receiveEnabled, receiveConnected);
+        const anyConnected = feedConnected === true || receiveConnected === true;
+        const anyEnabled = feedEnabled || receiveEnabled;
+        const badge = document.getElementById('adsbhub-badge');
+        if (anyConnected) { badge.textContent = 'Connected'; badge.className = 'badge badge-live'; }
+        else if (anyEnabled) { badge.textContent = 'Disconnected'; badge.className = 'badge badge-offline'; }
+        else { badge.textContent = 'Off'; badge.className = 'badge badge-offline'; }
 
         // Activity log
         const activity = d.activity || [];
