@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.118",
+    "date": "2026-03-07",
+    "notes": [
+      "Fix: Merged map sidebar — stop click propagation on aircraft marker so map click does not clear selection; invalidateSize when showing Merged view; use marker._ac for sidebar"
+    ]
+  },
+  {
     "version": "1.0.117",
     "date": "2026-03-07",
     "notes": [

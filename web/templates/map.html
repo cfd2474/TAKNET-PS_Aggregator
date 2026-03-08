@@ -18,7 +18,7 @@
     <div id="map-merged-wrap" style="flex:1;display:flex;min-height:0;">
         <div id="map-merged" style="flex:1;background:var(--bg-primary);"></div>
         <div id="map-sidebar" style="width:280px;background:var(--bg-secondary);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;">
-            <div id="map-sidebar-placeholder" style="padding:20px;color:var(--text-muted);font-size:13px;text-align:center;">Click an aircraft for details</div>
+            <div id="map-sidebar-placeholder" style="padding:20px;color:var(--text-muted);font-size:13px;text-align:center;">Click an aircraft on the map for details.<br><span style="font-size:11px;margin-top:8px;display:block;">(Blue dots = aircraft)</span></div>
             <div id="map-sidebar-detail" style="display:none;padding:16px;font-size:13px;overflow-y:auto;">
                 <div style="font-weight:600;font-size:14px;margin-bottom:12px;color:var(--text-primary);" id="sidebar-callsign">—</div>
                 <table style="width:100%;border-collapse:collapse;">
@@ -58,7 +58,10 @@ function showMerged() {
     document.getElementById('btn-merged').className = 'btn btn-sm btn-primary';
     document.getElementById('btn-tar1090').className = 'btn btn-sm';
     if (!mergedMap) initMergedMap();
-    refreshMergedAircraft();
+    setTimeout(function() {
+        if (mergedMap) mergedMap.invalidateSize();
+        refreshMergedAircraft();
+    }, 50);
 }
 
 function showTar1090() {
@@ -160,15 +163,17 @@ function refreshMergedAircraft() {
                         permanent: false,
                         direction: 'top'
                     });
-                    m.on('click', function() {
-                        selectedHex = hex;
-                        showSidebar(a);
+                    m.on('click', function(ev) {
+                        if (ev.originalEvent) ev.originalEvent.stopPropagation();
+                        var ac = this._ac;
+                        if (!ac) return;
+                        selectedHex = (ac.hex || '').toString().replace(/^~/, '').toUpperCase();
+                        showSidebar(ac);
                         Object.keys(mergedMarkers).forEach(h => {
-                            const ac2 = mergedMarkers[h]._ac;
                             mergedMarkers[h].setStyle({
-                                fillColor: h === hex ? '#22c55e' : '#3b82f6',
-                                color: h === hex ? '#16a34a' : '#1e3a5f',
-                                weight: h === hex ? 2 : 1
+                                fillColor: h === selectedHex ? '#22c55e' : '#3b82f6',
+                                color: h === selectedHex ? '#16a34a' : '#1e3a5f',
+                                weight: h === selectedHex ? 2 : 1
                             });
                         });
                     });
