@@ -63,6 +63,11 @@ The `aircraft` entries are passed through from `tar1090`/`readsb`. Common fields
 - `gs`, `ias`, `tas` – speeds
 - `dbFlags` – bitmask flags for MIL, PIA, LADD, etc.
 
+When the aggregator uses the **aircraft merger** (local + ADSBHub), each aircraft may also include:
+
+- `source` – `"adsbhub"` when the position came from the ADSBHub feed; omitted or `"local"` for direct feeders.
+- `on_ground` – `true` / `false` when known (from ADSBHub MSG,3 or local).
+
 For `/v2/point/...` results, each aircraft is additionally annotated with:
 
 - `dst` – distance in nautical miles from the query point (float, rounded to 2 decimals)
