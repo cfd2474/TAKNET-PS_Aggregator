@@ -8,6 +8,7 @@ Serves aircraft.json in tar1090 format so map and REST API work unchanged.
 import json
 import os
 import socket
+import sys
 import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -166,7 +167,8 @@ def _fetch_airplanes_live():
         req = Request(url, headers={"User-Agent": "TAKNET-PS-Aggregator/1.0"})
         with urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode())
-    except Exception:
+    except Exception as e:
+        print(f"[airplanes.live] fetch failed: {e}", file=sys.stderr)
         return {}
     # API returns aircraft array as "ac" (see airplanes.live API); fallback to "aircraft"
     aircraft_list = data.get("ac", data.get("aircraft", []))
@@ -184,14 +186,20 @@ def _fetch_airplanes_live():
 
 def _run_airplanes_live_poll_loop():
     """Poll Airplanes.live API periodically when enabled; update _state['_airplanes_live'] and status."""
+    _logged_disabled = False
+    _last_ok_log = 0.0
     while True:
         if not _is_airplanes_live_enabled():
+            if not _logged_disabled:
+                print("[airplanes.live] receive disabled (enable in Config → Services)", file=sys.stderr)
+                _logged_disabled = True
             with _lock:
                 _state["_airplanes_live"] = {}
                 _airplanes_live_last_seen.clear()
             _write_airplanes_live_status(False)
             time.sleep(2)
             continue
+        _logged_disabled = False
         try:
             by_hex = _fetch_airplanes_live()
             now_ts = time.time()
@@ -200,7 +208,11 @@ def _run_airplanes_live_poll_loop():
                     _airplanes_live_last_seen[hex_] = now_ts
                 _state["_airplanes_live"] = by_hex
             _write_airplanes_live_status(True)
-        except Exception:
+            if by_hex and (now_ts - _last_ok_log) >= 30:
+                _last_ok_log = now_ts
+                print(f"[airplanes.live] ok: {len(by_hex)} aircraft", file=sys.stderr)
+        except Exception as e:
+            print(f"[airplanes.live] poll error: {e}", file=sys.stderr)
             _write_airplanes_live_status(False)
         time.sleep(AIRPLANES_LIVE_POLL_MS)
 
