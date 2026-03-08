@@ -33,24 +33,6 @@
     </div>
 </div>
 
-<!-- Airplanes.live settings -->
-<div class="card" style="margin-bottom:16px;">
-    <div class="card-header">
-        <div>
-            <h3>Airplanes.live</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">Receive merged aircraft from <a href="https://airplanes.live/api-guide/" target="_blank" rel="noopener">Airplanes.live</a> API (point/radius). Feeder data remains primary when duplicates exist.</p>
-        </div>
-        <button class="btn btn-primary" id="airplanes-live-save-btn" onclick="saveAirplanesLive()" style="white-space:nowrap;">Save</button>
-    </div>
-    <div style="padding:0 20px 20px;">
-        <label class="toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <input type="checkbox" id="airplanes-live-receive" class="toggle">
-            <span>Receive from Airplanes.live</span>
-        </label>
-        <p id="airplanes-live-msg" style="font-size:12px;color:var(--text-muted);margin-top:12px;margin-bottom:0;"></p>
-    </div>
-</div>
-
 <!-- Restart All card -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
@@ -130,47 +112,6 @@ async function loadAdsbhubSettings() {
         document.getElementById('adsbhub-msg').textContent = '';
     } catch (e) {
         document.getElementById('adsbhub-msg').textContent = 'Could not load ADSBHub settings.';
-    }
-}
-
-async function loadAirplanesLiveSettings() {
-    try {
-        const r = await fetch('/api/settings/airplanes_live');
-        const d = await r.json();
-        document.getElementById('airplanes-live-receive').checked = !!d.receive_enabled;
-        document.getElementById('airplanes-live-msg').textContent = '';
-    } catch (e) {
-        document.getElementById('airplanes-live-msg').textContent = 'Could not load Airplanes.live settings.';
-    }
-}
-
-async function saveAirplanesLive() {
-    const receive = document.getElementById('airplanes-live-receive').checked;
-    const btn = document.getElementById('airplanes-live-save-btn');
-    const msgEl = document.getElementById('airplanes-live-msg');
-    btn.disabled = true;
-    msgEl.textContent = 'Saving and restarting aircraft merger...';
-    msgEl.style.color = 'var(--accent)';
-    try {
-        const r = await fetch('/api/settings/airplanes_live', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ receive_enabled: receive })
-        });
-        const d = await r.json();
-        if (d.success) {
-            msgEl.textContent = d.message || 'Saved.';
-            msgEl.style.color = 'var(--green)';
-            loadContainers();
-        } else {
-            msgEl.textContent = d.error || 'Save failed.';
-            msgEl.style.color = 'var(--red)';
-        }
-    } catch (e) {
-        msgEl.textContent = 'Error: ' + e.message;
-        msgEl.style.color = 'var(--red)';
-    } finally {
-        btn.disabled = false;
     }
 }
 
@@ -323,7 +264,6 @@ document.getElementById('logs-modal').addEventListener('click', function(e) {
 });
 
 loadAdsbhubSettings();
-loadAirplanesLiveSettings();
 loadContainers();
 setInterval(loadContainers, 30000);
 </script>
