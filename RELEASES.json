@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.111",
+    "date": "2026-02-26",
+    "notes": [
+      "ADSBHub: Config → Services — Feed/Receive toggles plus CLIENTKEY field; key and toggles persisted to .env and feeder/merger restarted on Save",
+      "ADSBHub feed: SBS from readsb:30003, CLIENTKEY sent as first line to data.adsbhub.org:5001 (per Connection Guide); ADSBHUB_CLIENT_KEY in env and compose"
+    ]
+  },
+  {
     "version": "1.0.110",
     "date": "2026-02-26",
     "notes": [
