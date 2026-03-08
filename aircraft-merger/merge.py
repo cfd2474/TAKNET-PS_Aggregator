@@ -18,6 +18,7 @@ ADSBHUB_HOST = os.environ.get("ADSBHUB_HOST", "data.adsbhub.org")
 ADSBHUB_PORT = int(os.environ.get("ADSBHUB_PORT", "5002"))
 POLL_INTERVAL = float(os.environ.get("MERGER_POLL_MS", "1500")) / 1000.0  # local fetch
 SBS_BUFFER_SIZE = 65536
+STATUS_DIR = os.environ.get("ADSBHUB_STATUS_DIR", "/status")
 
 # Shared state: merged aircraft list, now, messages (updated by merger thread)
 _state = {"aircraft": [], "now": 0, "messages": 0}
@@ -95,15 +96,28 @@ def _fetch_local():
         return [], time.time(), 0
 
 
+def _write_receive_status(connected):
+    """Write receive connection status to shared volume for dashboard."""
+    try:
+        path = os.path.join(STATUS_DIR, "receive.json")
+        data = {"connected": connected, "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        with open(path, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
 def _run_sbs_client():
     """Connect to ADSBHub:5002, parse SBS, update shared adsbhub_by_hex."""
     adsbhub_by_hex = {}
     reconnect_delay = 5
     while True:
+        sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(30)
             sock.connect((ADSBHUB_HOST, ADSBHUB_PORT))
+            _write_receive_status(True)
             sock.settimeout(300)
             buf = b""
             while True:
@@ -128,8 +142,10 @@ def _run_sbs_client():
                     _state["_adsbhub"] = dict(adsbhub_by_hex)
         except (socket.error, OSError, Exception):
             pass
+        _write_receive_status(False)
         try:
-            sock.close()
+            if sock:
+                sock.close()
         except Exception:
             pass
         time.sleep(reconnect_delay)

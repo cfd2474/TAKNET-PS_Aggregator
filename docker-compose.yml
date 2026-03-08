@@ -160,6 +160,7 @@ services:
       - /opt/taknet-aggregator/RELEASES.json:/app/RELEASES.json:ro
       - /opt/taknet-aggregator/.env:/opt/taknet-aggregator/.env:rw
       - ${INSTALL_DIR:-/opt/taknet-aggregator}/var:/app/var:ro
+      - adsbhub-status:/app/var/adsbhub-status:ro
     networks:
       - taknet-internal
     depends_on:
@@ -185,6 +186,8 @@ services:
       - ADSBHUB_HOST=${ADSBHUB_HOST:-data.adsbhub.org}
       - ADSBHUB_PORT=${ADSBHUB_PORT:-5002}
       - MERGER_PORT=8090
+    volumes:
+      - adsbhub-status:/status
     networks:
       - taknet-internal
     depends_on:
@@ -205,6 +208,8 @@ services:
       - ADSBHUB_FEED_HOST=${ADSBHUB_FEED_HOST:-data.adsbhub.org}
       - ADSBHUB_FEED_PORT=${ADSBHUB_FEED_PORT:-5001}
       - 'ADSBHUB_CLIENT_KEY=${ADSBHUB_CLIENT_KEY}'
+    volumes:
+      - adsbhub-status:/status
     networks:
       - taknet-internal
     depends_on:
@@ -258,6 +263,8 @@ volumes:
     name: taknet-graphs1090-data
   mlat-work:
     name: taknet-mlat-work
+  adsbhub-status:
+    name: taknet-adsbhub-status
 
 networks:
   taknet-internal:

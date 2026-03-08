@@ -26,6 +26,8 @@ GITHUB_REPO = os.environ.get("GITHUB_REPO", "cfd2474/TAKNET-PS_Aggregator")
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
 # Merged aircraft (local + optional ADSBHub) when aircraft-merger is used
 AIRCRAFT_JSON_URL = os.environ.get("AIRCRAFT_JSON_URL", "http://tar1090:80/data/aircraft.json")
+# Shared volume mount where feeder/merger write connection status (read-only in dashboard)
+ADSBHUB_STATUS_PATH = os.environ.get("ADSBHUB_STATUS_PATH", "/app/var/adsbhub-status")
 
 _start_time = time.time()
 
@@ -138,6 +140,39 @@ echo "DONE:$NEW_VER"
         _update_running = False
 
 
+def _get_adsbhub_connection_status():
+    """Read live feed/receive connection status from shared volume (written by feeder and merger)."""
+    feed_enabled = _read_env_bool("ADSBHUB_FEED_ENABLED", False)
+    receive_enabled = _read_env_bool("ADSBHUB_RECEIVE_ENABLED", False)
+    out = {
+        "feed_enabled": feed_enabled,
+        "feed_connected": None,
+        "feed_updated": None,
+        "receive_enabled": receive_enabled,
+        "receive_connected": None,
+        "receive_updated": None,
+    }
+    try:
+        feed_path = os.path.join(ADSBHUB_STATUS_PATH, "feed.json")
+        if os.path.exists(feed_path):
+            with open(feed_path, "r") as f:
+                data = json.load(f)
+            out["feed_connected"] = data.get("connected", False)
+            out["feed_updated"] = data.get("updated")
+    except Exception:
+        pass
+    try:
+        recv_path = os.path.join(ADSBHUB_STATUS_PATH, "receive.json")
+        if os.path.exists(recv_path):
+            with open(recv_path, "r") as f:
+                data = json.load(f)
+            out["receive_connected"] = data.get("connected", False)
+            out["receive_updated"] = data.get("updated")
+    except Exception:
+        pass
+    return out
+
+
 # ── Status / Overview ────────────────────────────────────────────────────────
 
 @bp.route("/status")
@@ -148,6 +183,7 @@ def status():
     aircraft = _get_aircraft_data()
     system = _get_system_info()
     activity = ActivityModel.get_recent(10)
+    adsbhub = _get_adsbhub_connection_status()
 
     return jsonify({
         "site_name": SITE_NAME,
@@ -156,6 +192,7 @@ def status():
         "system": system,
         "activity": activity,
         "pending_users": UserModel.pending_count(),
+        "adsbhub": adsbhub,
     })
 
 

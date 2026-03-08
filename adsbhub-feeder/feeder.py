@@ -8,8 +8,8 @@ sent as the first line after connection.
 """
 
 import asyncio
+import json
 import os
-import sys
 import time
 
 READSB_HOST = os.environ.get("READSB_HOST", "readsb")
@@ -18,11 +18,23 @@ ADSBHUB_HOST = os.environ.get("ADSBHUB_FEED_HOST", "data.adsbhub.org")
 ADSBHUB_PORT = int(os.environ.get("ADSBHUB_FEED_PORT", "5001"))
 CLIENTKEY = os.environ.get("ADSBHUB_CLIENT_KEY", "").strip()
 RECONNECT_DELAY = 15
+STATUS_DIR = os.environ.get("ADSBHUB_STATUS_DIR", "/status")
+
+
+def _write_status(connected: bool):
+    try:
+        path = os.path.join(STATUS_DIR, "feed.json")
+        data = {"connected": connected, "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        with open(path, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
 
 
 async def forward():
     while True:
         if not CLIENTKEY:
+            _write_status(False)
             print("[adsbhub-feeder] ADSBHUB_CLIENT_KEY not set; cannot feed.", flush=True)
             await asyncio.sleep(RECONNECT_DELAY)
             continue
@@ -36,6 +48,7 @@ async def forward():
                 # CLIENTKEY must be the first line after connection (Connection Guide)
                 writer_remote.write((CLIENTKEY + "\r\n").encode("ascii"))
                 await writer_remote.drain()
+                _write_status(True)
                 print(
                     f"[adsbhub-feeder] Connected: {READSB_HOST}:{READSB_SBS_PORT} -> {ADSBHUB_HOST}:{ADSBHUB_PORT} (CLIENTKEY sent)",
                     flush=True,
@@ -53,6 +66,7 @@ async def forward():
                     writer_remote.write(line)
                     await writer_remote.drain()
             finally:
+                _write_status(False)
                 if writer_remote:
                     try:
                         writer_remote.close()
@@ -65,6 +79,7 @@ async def forward():
                 except Exception:
                     pass
         except (OSError, asyncio.CancelledError, ConnectionResetError, BrokenPipeError) as e:
+            _write_status(False)
             print(f"[adsbhub-feeder] Disconnected or connect failed: {e}", flush=True)
         await asyncio.sleep(RECONNECT_DELAY)
 
