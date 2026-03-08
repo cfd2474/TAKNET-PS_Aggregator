@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.124",
+    "date": "2026-02-26",
+    "notes": [
+      "Docs: ADSBHUB_INTEGRATION.md — add Verification section (receive off discards ADSBHub data; 10s staleness for local and ADSBHub; manual checks)."
+    ]
+  },
+  {
     "version": "1.0.123",
     "date": "2026-02-26",
     "notes": [

@@ -75,6 +75,23 @@ ADSBHub sends SBS message types 1, 3, and 4. The aircraft-merger parses and merg
 
 Local (feeder) aircraft can include additional fields from readsb/tar1090 (e.g. messages, seen, rssi, type, registration). The Merged map sidebar shows all of the above when you click an aircraft.
 
+## Verification: receive off and 10s staleness
+
+**1. ADSBHub data discarded when Receive is turned off**
+
+- On save (Config → Services), the dashboard writes `receive_enabled` (`true`/`false`) to the shared volume at `ADSBHUB_STATUS_PATH/receive_enabled` (same volume the merger sees as `STATUS_DIR/receive_enabled`).
+- Each merge cycle (~1.5s), the merger calls `_is_receive_enabled()`. If the file is `false`: it uses an empty ADSBHub map, clears `_state["_adsbhub"]` and `_adsbhub_last_seen`, so no ADSBHub aircraft are added to the merged list. Map and API then show only local aircraft within one or two cycles.
+
+**2. Data stales out after 10 seconds (MERGER_STALE_SECONDS)**
+
+- **Local aircraft:** Tar1090 provides a `seen` field (seconds since last message). The merger drops any local aircraft with `seen > MERGER_STALE_SECONDS` (default 10).
+- **ADSBHub aircraft:** Each SBS update sets `_adsbhub_last_seen[hex] = time.time()`. In the merge loop, `cutoff = time.time() - STALE_SECONDS`; an ADSBHub aircraft is included only if `_adsbhub_last_seen.get(hex, 0) >= cutoff`. So if an aircraft has had no update in the last 10 seconds, it is omitted. Old hexes are purged from `_adsbhub_last_seen` to avoid unbounded growth.
+
+**Manual checks**
+
+- **Receive off:** With receive on, note aircraft count (dashboard “Aircraft Tracked” or Map). Turn off “Receive from ADSBHub” in Config → Services and save. Within a few seconds the map and `/api/aircraft.json` or `/v2/all` should show fewer aircraft (only direct); any previously ADSBHub-only targets should disappear.
+- **10s staleness:** With receive on, call `/api/aircraft.json` or `/v2/all` and note aircraft with `"source": "adsbhub"`. Stop receiving (turn off receive and save, or disconnect ADSBHub). Within ~10 seconds those ADSBHub-sourced aircraft should disappear from the response. Local aircraft without recent messages (tar1090 `seen` > 10) also disappear from the merged output.
+
 ## Setup checklist
 
 1. Register at [ADSBHub](https://www.adsbhub.org/register.php) and add your station (Settings → New Station). Set Data Protocol to **SBS**, Station mode to **Client**, Station Host/IP to your public IP. Copy the **Station dynamic IP key (CLIENTKEY)**.
