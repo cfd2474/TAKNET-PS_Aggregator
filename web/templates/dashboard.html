@@ -24,6 +24,7 @@
         <div class="label">Aircraft Tracked</div>
         <div class="value" id="stat-aircraft">—</div>
         <div class="sub" id="stat-aircraft-sub"></div>
+        <div class="sub" id="stat-aircraft-breakdown" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
     </a>
     <a href="/config/services" class="stat-card">
         <div class="label">Uptime</div>
@@ -102,6 +103,17 @@ async function loadDashboard() {
             document.getElementById('stat-aircraft').textContent = ac.total || 0;
             document.getElementById('stat-aircraft-sub').textContent =
                 (ac.with_position || 0) + ' with position';
+            const direct = ac.direct != null ? ac.direct : ac.total;
+            const network = ac.network != null ? ac.network : 0;
+            const breakdownEl = document.getElementById('stat-aircraft-breakdown');
+            if (breakdownEl) {
+                if (ac.direct != null || ac.network != null) {
+                    breakdownEl.textContent = (direct || 0) + ' direct (feeders) · ' + (network || 0) + ' network (ADSBHub)';
+                    breakdownEl.style.display = '';
+                } else {
+                    breakdownEl.style.display = 'none';
+                }
+            }
         } else {
             document.getElementById('stat-aircraft').textContent = ac;
         }

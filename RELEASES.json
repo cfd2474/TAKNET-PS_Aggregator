@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.121",
+    "date": "2026-02-26",
+    "notes": [
+      "Dashboard: Aircraft Tracked card shows breakdown — direct (feeders) and network (ADSBHub); API status returns aircraft.direct and aircraft.network from merger source field."
+    ]
+  },
+  {
     "version": "1.0.120",
     "date": "2026-02-26",
     "notes": [

@@ -786,15 +786,19 @@ def _get_aircraft_data():
             data = resp.json()
             aircraft = data.get("aircraft", [])
             with_pos = [a for a in aircraft if "lat" in a and "lon" in a]
+            direct = sum(1 for a in aircraft if (a.get("source") or "").lower() != "adsbhub")
+            network = sum(1 for a in aircraft if (a.get("source") or "").lower() == "adsbhub")
             return {
                 "total": len(aircraft),
                 "with_position": len(with_pos),
+                "direct": direct,
+                "network": network,
                 "messages": data.get("messages", 0),
             }
     except Exception:
         pass
 
-    return {"total": 0, "with_position": 0, "messages": 0}
+    return {"total": 0, "with_position": 0, "direct": 0, "network": 0, "messages": 0}
 
 
 def _get_system_info():
