@@ -750,10 +750,20 @@ def _restart_adsbhub_containers_background():
             print(f"[api] Background restart {name}: {e}")
 
 
+def _write_receive_enabled_to_volume(enabled):
+    """Write receive_enabled to shared volume so aircraft-merger drops ADSBHub data immediately when disabled."""
+    try:
+        path = os.path.join(ADSBHUB_STATUS_PATH, "receive_enabled")
+        with open(path, "w") as f:
+            f.write("true" if enabled else "false")
+    except Exception as e:
+        print(f"[api] Write receive_enabled: {e}")
+
+
 @bp.route("/settings/adsbhub", methods=["POST"])
 @admin_required
 def set_adsbhub_settings():
-    """Update ADSBHub flags and client key in .env; restart adsbhub-feeder and aircraft-merger in background."""
+    """Update ADSBHub flags and client key in .env; write receive_enabled to shared volume; restart adsbhub-feeder and aircraft-merger in background."""
     data = request.get_json() or {}
     feed = data.get("feed_enabled", False)
     receive = data.get("receive_enabled", False)
@@ -761,6 +771,7 @@ def set_adsbhub_settings():
     _persist_env_var("ADSBHUB_FEED_ENABLED", "true" if feed else "false")
     _persist_env_var("ADSBHUB_RECEIVE_ENABLED", "true" if receive else "false")
     _persist_env_var("ADSBHUB_CLIENT_KEY", client_key)
+    _write_receive_enabled_to_volume(receive)
     # Restart containers in background so we don't timeout (restarts can take 30+ s each)
     thread = threading.Thread(target=_restart_adsbhub_containers_background, daemon=True)
     thread.start()

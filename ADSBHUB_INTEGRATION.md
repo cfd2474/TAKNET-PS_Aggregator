@@ -25,7 +25,9 @@ This document describes how the aggregator exchanges data with ADSBHub.org: feed
   - Connects to `data.adsbhub.org:5002` and parses the **SBS** stream into aircraft state by ICAO.
   - **Merge rule (dedupe):** For each ICAO, **prefer local** if we have that aircraft from our feeders; otherwise use ADSBHub. This keeps your direct feeder data (more accurate time-wise) and fills in aircraft we don’t see locally.
 - **Output:** Serves merged `aircraft.json` in the same format as tar1090 (`aircraft`, `now`, `messages`) so the map and REST API work unchanged.
-- **Config:** `ADSBHUB_RECEIVE_ENABLED=true`, optional `ADSBHUB_HOST`, `ADSBHUB_PORT=5002`. Optional `MERGER_POLL_MS` for local fetch interval.
+- **Config:** `ADSBHUB_RECEIVE_ENABLED=true`, optional `ADSBHUB_HOST`, `ADSBHUB_PORT=5002`. Optional `MERGER_POLL_MS` for local fetch interval. Optional `MERGER_STALE_SECONDS=10` (drop aircraft not seen in this many seconds; map and API get no stale data).
+- **When Receive is disabled:** The dashboard writes `receive_enabled` to the shared volume on save; the merger reads it each cycle and immediately drops all ADSBHub-sourced aircraft, so the map and API clear without waiting for a container restart.
+- **Staleness:** Any aircraft (local or ADSBHub) not updated within `MERGER_STALE_SECONDS` (default 10s) is removed from the merged output and is not served to the map or REST API.
 
 ### 3. Nginx
 
@@ -51,6 +53,8 @@ This document describes how the aggregator exchanges data with ADSBHub.org: feed
 | `ADSBHUB_HOST` | `data.adsbhub.org` | ADSBHub host for receiving. |
 | `ADSBHUB_PORT` | `5002` | ADSBHub port for SBS feed. |
 | `TAR1090_URL` | (internal) | URL for local aircraft.json (used by merger). |
+| `ADSBHUB_STATUS_DIR` | `/status` | Path inside feeder/merger containers for feed.json, receive.json, receive_enabled (dashboard reads via its own mount). |
+| `MERGER_STALE_SECONDS` | `10` | Drop aircraft not seen in this many seconds; map/API get no stale data. |
 
 ## Data from ADSBHub receive feed
 

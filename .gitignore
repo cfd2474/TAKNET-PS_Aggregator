@@ -1,0 +1,2 @@
+# Release tarballs — do not commit (GitHub 100 MB limit). Build locally and upload to GitHub Releases (or elsewhere) yourself.
+ARCHIVE/*.tar.gz

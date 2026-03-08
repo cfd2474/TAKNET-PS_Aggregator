@@ -19,10 +19,13 @@ ADSBHUB_PORT = int(os.environ.get("ADSBHUB_PORT", "5002"))
 POLL_INTERVAL = float(os.environ.get("MERGER_POLL_MS", "1500")) / 1000.0  # local fetch
 SBS_BUFFER_SIZE = 65536
 STATUS_DIR = os.environ.get("ADSBHUB_STATUS_DIR", "/status")
+STALE_SECONDS = float(os.environ.get("MERGER_STALE_SECONDS", "10"))
 
 # Shared state: merged aircraft list, now, messages (updated by merger thread)
 _state = {"aircraft": [], "now": 0, "messages": 0}
 _lock = threading.Lock()
+# ADSBHub: last time we got an update per hex (for 10s staleness purge)
+_adsbhub_last_seen = {}
 
 
 def _parse_sbs_line(line):
@@ -112,6 +115,19 @@ def _write_receive_status(connected):
         pass
 
 
+def _is_receive_enabled():
+    """True if Receive from ADSBHub is enabled (dashboard writes this file when user toggles)."""
+    try:
+        path = os.path.join(STATUS_DIR, "receive_enabled")
+        if os.path.isfile(path):
+            with open(path, "r") as f:
+                return (f.read().strip().lower() in ("1", "true", "yes"))
+    except Exception:
+        pass
+    # Fallback: env at startup (used until dashboard writes the file)
+    return os.environ.get("ADSBHUB_RECEIVE_ENABLED", "").lower() in ("1", "true", "yes")
+
+
 def _run_sbs_client():
     """Connect to ADSBHub:5002, parse SBS, update shared adsbhub_by_hex."""
     adsbhub_by_hex = {}
@@ -148,6 +164,7 @@ def _run_sbs_client():
                                 if k != "hex" and v is not None:
                                     base[k] = v
                             adsbhub_by_hex[hex_] = base
+                            _adsbhub_last_seen[hex_] = time.time()
                 with _lock:
                     _state["_adsbhub"] = dict(adsbhub_by_hex)
         except (socket.error, OSError, Exception):
@@ -162,25 +179,48 @@ def _run_sbs_client():
 
 
 def _merge_loop():
-    """Periodically fetch local, merge with ADSBHub state (prefer local), update _state."""
+    """Periodically fetch local, merge with ADSBHub state (prefer local), purge stale > STALE_SECONDS, update _state."""
+    now_ts = time.time()
     while True:
         local_aircraft, now_ts, messages = _fetch_local()
-        local_by_hex = {str(a.get("hex", "")).strip().upper().lstrip("~"): a for a in local_aircraft if a.get("hex")}
+        receive_on = _is_receive_enabled()
         with _lock:
-            adsbhub = _state.get("_adsbhub") or {}
+            adsbhub = (_state.get("_adsbhub") or {}).copy() if receive_on else {}
+            if not receive_on:
+                _state["_adsbhub"] = {}
+                _adsbhub_last_seen.clear()
+        # Staleness: drop local aircraft with seen > STALE_SECONDS (seen = seconds ago)
+        fresh_local = []
+        for ac in local_aircraft:
+            seen = ac.get("seen")
+            if seen is not None:
+                try:
+                    if float(seen) > STALE_SECONDS:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            fresh_local.append(ac)
         merged = []
         seen_hex = set()
-        # Prefer local: add all local first
-        for ac in local_aircraft:
+        # Prefer local: add all local first (already filtered stale)
+        for ac in fresh_local:
             hex_ = str(ac.get("hex", "")).strip().upper().lstrip("~")
             if hex_ and hex_ not in seen_hex:
                 seen_hex.add(hex_)
                 merged.append(ac)
-        # Fill in from ADSBHub where we don't have local
-        for hex_, ac in adsbhub.items():
-            if hex_ not in seen_hex:
-                seen_hex.add(hex_)
-                merged.append(ac)
+        # Fill in from ADSBHub where we don't have local; drop if stale > STALE_SECONDS
+        cutoff = time.time() - STALE_SECONDS
+        for hex_, ac in list(adsbhub.items()):
+            if hex_ in seen_hex:
+                continue
+            if _adsbhub_last_seen.get(hex_, 0) < cutoff:
+                continue
+            seen_hex.add(hex_)
+            merged.append(ac)
+        # Purge old entries from _adsbhub_last_seen to avoid unbounded growth
+        for hex_ in list(_adsbhub_last_seen.keys()):
+            if _adsbhub_last_seen[hex_] < cutoff:
+                del _adsbhub_last_seen[hex_]
         with _lock:
             _state["aircraft"] = merged
             _state["now"] = now_ts
@@ -208,6 +248,18 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def _write_receive_enabled_file(enabled):
+    """Write receive_enabled flag only if file does not exist (dashboard is source of truth after first save)."""
+    try:
+        path = os.path.join(STATUS_DIR, "receive_enabled")
+        if os.path.isfile(path):
+            return
+        with open(path, "w") as f:
+            f.write("true" if enabled else "false")
+    except Exception:
+        pass
+
+
 def main():
     # Initial fetch so first request has data
     local_aircraft, now_ts, messages = _fetch_local()
@@ -215,7 +267,9 @@ def main():
         _state["aircraft"] = local_aircraft
         _state["now"] = now_ts
         _state["messages"] = messages
-    if os.environ.get("ADSBHUB_RECEIVE_ENABLED", "").lower() not in ("1", "true", "yes"):
+    receive_enabled = os.environ.get("ADSBHUB_RECEIVE_ENABLED", "").lower() in ("1", "true", "yes")
+    _write_receive_enabled_file(receive_enabled)
+    if not receive_enabled:
         # Pass-through only: keep fetching local
         t = threading.Thread(target=_merge_loop, daemon=True)
         t.start()

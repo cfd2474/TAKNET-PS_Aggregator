@@ -1,5 +1,5 @@
 ---
-description: Every code push must include a version bump and ARCHIVE tarball
+description: Every code push must include a version bump; tarballs are not committed
 alwaysApply: true
 ---
 
@@ -11,9 +11,9 @@ alwaysApply: true
    - Bump version in: `VERSION`, `web/VERSION`, `RELEASES.json` (new entry at top with version, date, notes), and `env.example` (header comment).
    - Add a concise entry to `RELEASES.json` describing the change.
 
-2. **ARCHIVE tarball**
-   - Build the release tarball (e.g. `taknet-aggregator-vX.Y.Z.tar.gz`) and **push it to the `ARCHIVE/` directory**.
-   - Do not remove old tarballs from ARCHIVE — only add new ones.
-   - Every submission to GitHub is a version change: bump version files, then add the new ARCHIVE tarball.
+2. **Tarball (do not commit)**
+   - Build the release tarball locally when you need it (e.g. `tar --exclude='.git' --exclude='v139_work' --exclude='ARCHIVE' -czvf taknet-aggregator-vX.Y.Z.tar.gz .`).
+   - **Do not commit** tarballs to the repo — they are gitignored (`ARCHIVE/*.tar.gz`). Download or build the tarball and upload it yourself (e.g. as a GitHub Release asset) if needed.
+   - Every submission to GitHub is a version change: bump version files. No tarball in the repo.
 
-**Always** include the version bump and ARCHIVE tarball in the same work as the code change — every feature or fix, without exception.
+**Always** include the version bump in the same work as the code change — every feature or fix, without exception.

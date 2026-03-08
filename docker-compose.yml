@@ -161,7 +161,7 @@ services:
       - /opt/taknet-aggregator/RELEASES.json:/app/RELEASES.json:ro
       - /opt/taknet-aggregator/.env:/opt/taknet-aggregator/.env:rw
       - ${INSTALL_DIR:-/opt/taknet-aggregator}/var:/app/var:ro
-      - adsbhub-status:/app/adsbhub-status:ro
+      - adsbhub-status:/app/adsbhub-status:rw
     networks:
       - taknet-internal
     depends_on:

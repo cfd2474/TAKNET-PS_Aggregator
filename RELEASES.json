@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.123",
+    "date": "2026-02-26",
+    "notes": [
+      "Docs: document ADSBHUB_STATUS_DIR in env.example and ADSBHUB_INTEGRATION.md (feeder and merger status file path; used by dashboard for feed/receive connection status)."
+    ]
+  },
+  {
+    "version": "1.0.122",
+    "date": "2026-02-26",
+    "notes": [
+      "ADSBHub receive off: map and API clear immediately — dashboard writes receive_enabled to shared volume; merger reads each cycle and drops all ADSBHub aircraft when disabled. Staleness: aircraft not seen in 10s (MERGER_STALE_SECONDS) are purged from merged output so map/API get no stale data. Dashboard adsbhub-status volume rw for receive_enabled file."
+    ]
+  },
+  {
     "version": "1.0.121",
     "date": "2026-02-26",
     "notes": [
