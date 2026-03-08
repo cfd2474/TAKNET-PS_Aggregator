@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.115",
+    "date": "2026-03-07",
+    "notes": [
+      "Map: default view is 'Merged (all)' — Leaflet map fetches /data/aircraft.json so all aircraft (local + ADSBHub) show; toggle to tar1090 for full UI",
+      "Nginx: /tar1090/data/aircraft.json prefix match, pass query string, no-cache headers"
+    ]
+  },
+  {
     "version": "1.0.114",
     "date": "2026-03-07",
     "notes": [

@@ -16,4 +16,4 @@ alwaysApply: true
    - Do not remove old tarballs from ARCHIVE — only add new ones.
    - Every submission to GitHub is a version change: bump version files, then add the new ARCHIVE tarball.
 
-When implementing a feature or fix, include the version bump and ARCHIVE tarball step in the same work (or explicitly remind the user to run the tarball step if they deploy manually).
+**Always** include the version bump and ARCHIVE tarball in the same work as the code change — every feature or fix, without exception.

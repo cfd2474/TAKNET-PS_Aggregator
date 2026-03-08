@@ -6,25 +6,122 @@
 
 {% block content %}
 <div style="display:flex;flex-direction:column;height:100vh;width:100%;">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:44px;background:var(--bg-secondary);border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;height:44px;background:var(--bg-secondary);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;">
         <span id="map-aircraft" style="font-size:13px;color:var(--text-secondary);">Loading map...</span>
-        <a href="/tar1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--text-muted);">View:</span>
+            <button type="button" id="btn-merged" class="btn btn-sm btn-primary">Merged (all)</button>
+            <button type="button" id="btn-tar1090" class="btn btn-sm">tar1090</button>
+            <a href="/tar1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
+        </div>
     </div>
-    <iframe src="/tar1090/" style="flex:1;width:100%;border:none;display:block;"></iframe>
+    <div id="map-merged-wrap" style="flex:1;position:relative;min-height:0;">
+        <div id="map-merged" style="width:100%;height:100%;background:var(--bg-primary);"></div>
+    </div>
+    <div id="map-iframe-wrap" style="flex:1;display:none;min-height:0;">
+        <iframe src="/tar1090/" style="width:100%;height:100%;border:none;display:block;"></iframe>
+    </div>
 </div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+const SITE_LAT = {{ site_lat | default(33.8753) }};
+const SITE_LON = {{ site_lon | default(-117.5664) }};
+
+let mergedMap = null;
+let mergedMarkers = {};
+
+function showMerged() {
+    document.getElementById('map-merged-wrap').style.display = 'block';
+    document.getElementById('map-iframe-wrap').style.display = 'none';
+    document.getElementById('btn-merged').className = 'btn btn-sm btn-primary';
+    document.getElementById('btn-tar1090').className = 'btn btn-sm';
+    if (!mergedMap) initMergedMap();
+    refreshMergedAircraft();
+}
+
+function showTar1090() {
+    document.getElementById('map-merged-wrap').style.display = 'none';
+    document.getElementById('map-iframe-wrap').style.display = 'block';
+    document.getElementById('btn-merged').className = 'btn btn-sm';
+    document.getElementById('btn-tar1090').className = 'btn btn-sm btn-primary';
+}
+
+function initMergedMap() {
+    mergedMap = L.map('map-merged').setView([SITE_LAT, SITE_LON], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
+    }).addTo(mergedMap);
+}
+
+function refreshMergedAircraft() {
+    if (!mergedMap) return;
+    fetch('/data/aircraft.json?t=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+            const aircraft = data.aircraft || [];
+            const withPos = aircraft.filter(a => a.lat != null && a.lon != null);
+            document.getElementById('map-aircraft').textContent =
+                aircraft.length + ' aircraft tracked (' + withPos.length + ' with position)';
+            const byHex = {};
+            withPos.forEach(a => {
+                const hex = (a.hex || '').toString().replace(/^~/, '').toUpperCase();
+                if (!hex) return;
+                byHex[hex] = a;
+            });
+            Object.keys(mergedMarkers).forEach(hex => {
+                if (!byHex[hex]) {
+                    mergedMap.removeLayer(mergedMarkers[hex]);
+                    delete mergedMarkers[hex];
+                }
+            });
+            Object.keys(byHex).forEach(hex => {
+                const a = byHex[hex];
+                const lat = a.lat, lon = a.lon;
+                if (lat == null || lon == null) return;
+                const flight = (a.flight || a.callsign || '').trim() || hex;
+                if (mergedMarkers[hex]) {
+                    mergedMarkers[hex].setLatLng([lat, lon]);
+                    mergedMarkers[hex].setTooltipContent(flight + ' · ' + (a.alt_baro != null ? a.alt_baro + ' ft' : ''));
+                } else {
+                    const m = L.circleMarker([lat, lon], {
+                        radius: 5,
+                        fillColor: '#3b82f6',
+                        color: '#1e3a5f',
+                        weight: 1,
+                        fillOpacity: 0.9
+                    }).bindTooltip(flight + (a.alt_baro != null ? ' · ' + a.alt_baro + ' ft' : ''), {
+                        permanent: false,
+                        direction: 'top'
+                    }).addTo(mergedMap);
+                    mergedMarkers[hex] = m;
+                }
+            });
+        })
+        .catch(() => {});
+}
+
+document.getElementById('btn-merged').onclick = showMerged;
+document.getElementById('btn-tar1090').onclick = showTar1090;
+
+showMerged();
+setInterval(function() {
+    if (document.getElementById('map-merged-wrap').style.display !== 'none') refreshMergedAircraft();
+}, 4000);
+
 async function updateMapInfo() {
     try {
         const r = await fetch('/api/aircraft');
         const d = await r.json();
-        document.getElementById('map-aircraft').textContent =
-            (d.total || 0) + ' aircraft tracked (' + (d.with_position || 0) + ' with position)';
+        const el = document.getElementById('map-aircraft');
+        if (document.getElementById('map-iframe-wrap').style.display === 'block')
+            el.textContent = (d.total || 0) + ' aircraft tracked (' + (d.with_position || 0) + ' with position)';
     } catch(e) {}
 }
-updateMapInfo();
 setInterval(updateMapInfo, 15000);
 </script>
 {% endblock %}
