@@ -152,6 +152,7 @@ services:
       - GITHUB_REPO=${GITHUB_REPO:-cfd2474/TAKNET-PS_Aggregator}
       - INSTALL_DIR=/opt/taknet-aggregator
       - AIRCRAFT_JSON_URL=http://aircraft-merger:8090/data/aircraft.json
+      - ADSBHUB_STATUS_PATH=/app/adsbhub-status
     volumes:
       - db-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -160,7 +161,7 @@ services:
       - /opt/taknet-aggregator/RELEASES.json:/app/RELEASES.json:ro
       - /opt/taknet-aggregator/.env:/opt/taknet-aggregator/.env:rw
       - ${INSTALL_DIR:-/opt/taknet-aggregator}/var:/app/var:ro
-      - adsbhub-status:/app/var/adsbhub-status:ro
+      - adsbhub-status:/app/adsbhub-status:ro
     networks:
       - taknet-internal
     depends_on:

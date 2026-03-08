@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.112",
+    "date": "2026-03-07",
+    "notes": [
+      "Fix: dashboard container start failure — mount adsbhub-status at /app/adsbhub-status (not under read-only /app/var); set ADSBHUB_STATUS_PATH for dashboard",
+      "Docs: escape $ in ADSBHUB_CLIENT_KEY as $$ in .env when using Docker Compose"
+    ]
+  },
+  {
     "version": "1.0.111",
     "date": "2026-02-26",
     "notes": [
