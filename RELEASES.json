@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.114",
+    "date": "2026-03-07",
+    "notes": [
+      "Fix: tar1090 map now uses merged aircraft (local + ADSBHub) — nginx routes /tar1090/data/aircraft.json to aircraft-merger so map shows all positions"
+    ]
+  },
+  {
     "version": "1.0.113",
     "date": "2026-03-07",
     "notes": [
