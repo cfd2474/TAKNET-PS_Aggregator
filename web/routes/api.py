@@ -24,6 +24,8 @@ READSB_HOST = os.environ.get("READSB_HOST", "readsb")
 SITE_NAME = os.environ.get("SITE_NAME", "TAKNET-PS Aggregator")
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "cfd2474/TAKNET-PS_Aggregator")
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+# Merged aircraft (local + optional ADSBHub) when aircraft-merger is used
+AIRCRAFT_JSON_URL = os.environ.get("AIRCRAFT_JSON_URL", "http://tar1090:80/data/aircraft.json")
 
 _start_time = time.time()
 
@@ -628,6 +630,51 @@ def _persist_env_var(key, value):
         print(f"[api] Failed to persist {key} to .env: {e}")
 
 
+def _read_env_bool(key, default=False):
+    """Read a key from the host .env and return True only if value is 'true' (case-insensitive)."""
+    env_path = os.path.join(INSTALL_DIR, ".env")
+    try:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
+                        val = line.split("=", 1)[1].strip().strip('"').strip("'").lower()
+                        return val == "true"
+    except Exception:
+        pass
+    return default
+
+
+# ── ADSBHub settings (Config → Services) ──────────────────────────────────────
+
+@bp.route("/settings/adsbhub", methods=["GET"])
+@admin_required
+def get_adsbhub_settings():
+    """Return current ADSBHub feed/receive flags from .env."""
+    return jsonify({
+        "feed_enabled": _read_env_bool("ADSBHUB_FEED_ENABLED", False),
+        "receive_enabled": _read_env_bool("ADSBHUB_RECEIVE_ENABLED", False),
+    })
+
+
+@bp.route("/settings/adsbhub", methods=["POST"])
+@admin_required
+def set_adsbhub_settings():
+    """Update ADSBHub flags in .env and restart adsbhub-feeder and aircraft-merger."""
+    data = request.get_json() or {}
+    feed = data.get("feed_enabled", False)
+    receive = data.get("receive_enabled", False)
+    _persist_env_var("ADSBHUB_FEED_ENABLED", "true" if feed else "false")
+    _persist_env_var("ADSBHUB_RECEIVE_ENABLED", "true" if receive else "false")
+    # Restart containers so they pick up new env
+    for name in ("taknet-adsbhub-feeder", "taknet-aircraft-merger"):
+        ok, msg = restart_container(name)
+        if not ok and "No such container" not in msg:
+            return jsonify({"success": False, "error": f"Restart {name}: {msg}"}), 500
+    return jsonify({"success": True, "message": "ADSBHub settings saved and services restarted."})
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _get_aircraft_count():
@@ -637,12 +684,9 @@ def _get_aircraft_count():
 
 
 def _get_aircraft_data():
-    """Fetch aircraft.json from tar1090 or readsb."""
-    # tar1090 serves aircraft.json over HTTP
+    """Fetch aircraft.json (merged local + ADSBHub when merger is used)."""
     try:
-        resp = http_requests.get(
-            "http://tar1090:80/data/aircraft.json", timeout=3
-        )
+        resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=3)
         if resp.status_code == 200:
             data = resp.json()
             aircraft = data.get("aircraft", [])
@@ -916,9 +960,9 @@ def output_json_stream(raw_key):
     if output.get("output_type") != "json":
         return jsonify({"error": "This key is for a beast_raw output, not JSON"}), 400
 
-    # Fetch aircraft from readsb/tar1090
+    # Fetch aircraft (merged when aircraft-merger is used)
     try:
-        resp = http_requests.get("http://tar1090/data/aircraft.json", timeout=5)
+        resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
         if resp.status_code == 200:
             return Response(resp.content, content_type="application/json",
                             headers={"Access-Control-Allow-Origin": "*"})

@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.109
+# TAKNET-PS Aggregator v1.0.110
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of remote feeders connected via NetBird VPN, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -309,6 +309,11 @@ Feeders ──timing (30105)──▶ mlat-server ──▶ results (39001)─�
                                   └──▶ readsb (30006) ──▶ MLAT positions on map
 ```
 
+### ADSBHub.org (optional)
+
+- **Outbound:** `adsbhub-feeder` reads Beast from readsb:30005 and forwards to data.adsbhub.org:5001. Set `ADSBHUB_FEED_ENABLED=true`.
+- **Inbound:** Connect to data.adsbhub.org:5002 (SBS). `aircraft-merger` combines local (tar1090) + ADSBHub by ICAO and **prefers local** (direct feeders) for accuracy. Set `ADSBHUB_RECEIVE_ENABLED=true`. See **ADSBHUB_INTEGRATION.md**.
+
 ---
 
 ## Database
@@ -518,4 +523,4 @@ Stops containers, optionally removes data volumes, removes install directory and
 
 ---
 
-*TAKNET-PS Aggregator v1.0.109 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.110 — Built for public safety ADS-B operations.*

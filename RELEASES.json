@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.110",
+    "date": "2026-02-26",
+    "notes": [
+      "ADSBHub.org TCP integration: feed Beast to data.adsbhub.org:5001 (adsbhub-feeder); receive SBS from :5002 and merge with local (aircraft-merger); prefer local per ICAO for accuracy; ADSBHUB_INTEGRATION.md"
+    ]
+  },
+  {
     "version": "1.0.109",
     "date": "2026-02-26",
     "notes": [

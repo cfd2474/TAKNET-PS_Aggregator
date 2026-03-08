@@ -3,6 +3,30 @@
 
 {% block content %}
 
+<!-- ADSBHub settings -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <div>
+            <h3>ADSBHub</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">Feed your Beast data to ADSBHub and/or receive merged aircraft from ADSBHub.</p>
+        </div>
+        <button class="btn btn-primary" id="adsbhub-save-btn" onclick="saveAdsbhub()" style="white-space:nowrap;">Save</button>
+    </div>
+    <div style="padding:0 20px 20px;">
+        <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:center;">
+            <label class="toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="adsbhub-feed" class="toggle">
+                <span>Feed to ADSBHub</span>
+            </label>
+            <label class="toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="adsbhub-receive" class="toggle">
+                <span>Receive from ADSBHub</span>
+            </label>
+        </div>
+        <p id="adsbhub-msg" style="font-size:12px;color:var(--text-muted);margin-top:12px;margin-bottom:0;"></p>
+    </div>
+</div>
+
 <!-- Restart All card -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
@@ -72,6 +96,49 @@
 
 {% block extra_scripts %}
 <script>
+async function loadAdsbhubSettings() {
+    try {
+        const r = await fetch('/api/settings/adsbhub');
+        const d = await r.json();
+        document.getElementById('adsbhub-feed').checked = !!d.feed_enabled;
+        document.getElementById('adsbhub-receive').checked = !!d.receive_enabled;
+        document.getElementById('adsbhub-msg').textContent = '';
+    } catch (e) {
+        document.getElementById('adsbhub-msg').textContent = 'Could not load ADSBHub settings.';
+    }
+}
+
+async function saveAdsbhub() {
+    const feed = document.getElementById('adsbhub-feed').checked;
+    const receive = document.getElementById('adsbhub-receive').checked;
+    const btn = document.getElementById('adsbhub-save-btn');
+    const msgEl = document.getElementById('adsbhub-msg');
+    btn.disabled = true;
+    msgEl.textContent = 'Saving and restarting ADSBHub services...';
+    msgEl.style.color = 'var(--accent)';
+    try {
+        const r = await fetch('/api/settings/adsbhub', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ feed_enabled: feed, receive_enabled: receive })
+        });
+        const d = await r.json();
+        if (d.success) {
+            msgEl.textContent = d.message || 'Saved.';
+            msgEl.style.color = 'var(--green)';
+            loadContainers();
+        } else {
+            msgEl.textContent = d.error || 'Save failed.';
+            msgEl.style.color = 'var(--red)';
+        }
+    } catch (e) {
+        msgEl.textContent = 'Error: ' + e.message;
+        msgEl.style.color = 'var(--red)';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 async function loadContainers() {
     try {
         const r = await fetch('/api/docker/containers');
@@ -188,6 +255,7 @@ document.getElementById('logs-modal').addEventListener('click', function(e) {
     if (e.target === this) closeLogs();
 });
 
+loadAdsbhubSettings();
 loadContainers();
 setInterval(loadContainers, 30000);
 </script>

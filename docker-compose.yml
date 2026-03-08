@@ -151,6 +151,7 @@ services:
       - NETBIRD_API_TOKEN=${NETBIRD_API_TOKEN:-}
       - GITHUB_REPO=${GITHUB_REPO:-cfd2474/TAKNET-PS_Aggregator}
       - INSTALL_DIR=/opt/taknet-aggregator
+      - AIRCRAFT_JSON_URL=http://aircraft-merger:8090/data/aircraft.json
     volumes:
       - db-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -168,8 +169,48 @@ services:
         condition: service_started
       beast-proxy:
         condition: service_started
+      aircraft-merger:
+        condition: service_started
 
-  # REST API (airplanes.live-compatible v2 endpoints)
+  # Aircraft merger — merges local (tar1090) + optional ADSBHub SBS; prefer local per ICAO
+  aircraft-merger:
+    build:
+      context: ./aircraft-merger
+      dockerfile: Dockerfile
+    container_name: taknet-aircraft-merger
+    restart: unless-stopped
+    environment:
+      - TAR1090_URL=http://tar1090:80/data/aircraft.json
+      - ADSBHUB_RECEIVE_ENABLED=${ADSBHUB_RECEIVE_ENABLED:-false}
+      - ADSBHUB_HOST=${ADSBHUB_HOST:-data.adsbhub.org}
+      - ADSBHUB_PORT=${ADSBHUB_PORT:-5002}
+      - MERGER_PORT=8090
+    networks:
+      - taknet-internal
+    depends_on:
+      tar1090:
+        condition: service_started
+
+  # ADSBHub outbound feeder — Beast stream to data.adsbhub.org:5001
+  adsbhub-feeder:
+    build:
+      context: ./adsbhub-feeder
+      dockerfile: Dockerfile
+    container_name: taknet-adsbhub-feeder
+    restart: unless-stopped
+    environment:
+      - ADSBHUB_FEED_ENABLED=${ADSBHUB_FEED_ENABLED:-false}
+      - READSB_HOST=readsb
+      - READSB_PORT=30005
+      - ADSBHUB_FEED_HOST=${ADSBHUB_FEED_HOST:-data.adsbhub.org}
+      - ADSBHUB_FEED_PORT=${ADSBHUB_FEED_PORT:-5001}
+    networks:
+      - taknet-internal
+    depends_on:
+      readsb:
+        condition: service_started
+
+  # REST API (airplanes.live-compatible v2 endpoints) — reads merged aircraft
   api:
     build:
       context: ./api-server
@@ -177,12 +218,12 @@ services:
     container_name: taknet-api
     restart: unless-stopped
     environment:
-      - TAR1090_URL=http://tar1090:80/data/aircraft.json
+      - TAR1090_URL=http://aircraft-merger:8090/data/aircraft.json
       - SITE_NAME=${SITE_NAME:-TAKNET-PS Aggregator}
     networks:
       - taknet-internal
     depends_on:
-      tar1090:
+      aircraft-merger:
         condition: service_started
 
   # Nginx Reverse Proxy
@@ -202,6 +243,7 @@ services:
     depends_on:
       - dashboard
       - tar1090
+      - aircraft-merger
       - api
 
 volumes:
