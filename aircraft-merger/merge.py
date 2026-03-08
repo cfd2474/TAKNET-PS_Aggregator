@@ -137,7 +137,12 @@ def _run_sbs_client():
                     if rec:
                         hex_ = rec.get("hex")
                         if hex_:
-                            adsbhub_by_hex[hex_] = rec
+                            # Merge into existing record (ADSBHub sends MSG,1 / MSG,3 / MSG,4 separately)
+                            base = adsbhub_by_hex.get(hex_, {"hex": hex_, "source": "adsbhub"})
+                            for k, v in rec.items():
+                                if k != "hex" and v is not None:
+                                    base[k] = v
+                            adsbhub_by_hex[hex_] = base
                 with _lock:
                     _state["_adsbhub"] = dict(adsbhub_by_hex)
         except (socket.error, OSError, Exception):

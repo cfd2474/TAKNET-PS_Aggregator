@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.113",
+    "date": "2026-03-07",
+    "notes": [
+      "ADSBHub receive: aircraft-merger now merges SBS messages by ICAO (MSG,1 + MSG,3 + MSG,4) so ADSBHub aircraft show position on map instead of only callsign/velocity"
+    ]
+  },
+  {
     "version": "1.0.112",
     "date": "2026-03-07",
     "notes": [
