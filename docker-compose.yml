@@ -191,7 +191,7 @@ services:
       tar1090:
         condition: service_started
 
-  # ADSBHub outbound feeder — Beast stream to data.adsbhub.org:5001
+  # ADSBHub outbound feeder — SBS from readsb:30003, CLIENTKEY first line, then stream to data.adsbhub.org:5001
   adsbhub-feeder:
     build:
       context: ./adsbhub-feeder
@@ -201,9 +201,10 @@ services:
     environment:
       - ADSBHUB_FEED_ENABLED=${ADSBHUB_FEED_ENABLED:-false}
       - READSB_HOST=readsb
-      - READSB_PORT=30005
+      - READSB_SBS_PORT=30003
       - ADSBHUB_FEED_HOST=${ADSBHUB_FEED_HOST:-data.adsbhub.org}
       - ADSBHUB_FEED_PORT=${ADSBHUB_FEED_PORT:-5001}
+      - 'ADSBHUB_CLIENT_KEY=${ADSBHUB_CLIENT_KEY}'
     networks:
       - taknet-internal
     depends_on:

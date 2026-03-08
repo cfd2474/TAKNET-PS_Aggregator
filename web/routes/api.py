@@ -646,27 +646,48 @@ def _read_env_bool(key, default=False):
     return default
 
 
+def _read_env_value(key, default=""):
+    """Read a key from the host .env and return the raw value (stripping surrounding quotes)."""
+    env_path = os.path.join(INSTALL_DIR, ".env")
+    try:
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
+                        val = line.split("=", 1)[1].strip()
+                        if len(val) >= 2 and ((val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'"))):
+                            val = val[1:-1]
+                        return val
+    except Exception:
+        pass
+    return default
+
+
 # ── ADSBHub settings (Config → Services) ──────────────────────────────────────
 
 @bp.route("/settings/adsbhub", methods=["GET"])
 @admin_required
 def get_adsbhub_settings():
-    """Return current ADSBHub feed/receive flags from .env."""
+    """Return current ADSBHub feed/receive flags and client key from .env."""
     return jsonify({
         "feed_enabled": _read_env_bool("ADSBHUB_FEED_ENABLED", False),
         "receive_enabled": _read_env_bool("ADSBHUB_RECEIVE_ENABLED", False),
+        "client_key": _read_env_value("ADSBHUB_CLIENT_KEY", ""),
     })
 
 
 @bp.route("/settings/adsbhub", methods=["POST"])
 @admin_required
 def set_adsbhub_settings():
-    """Update ADSBHub flags in .env and restart adsbhub-feeder and aircraft-merger."""
+    """Update ADSBHub flags and client key in .env and restart adsbhub-feeder and aircraft-merger."""
     data = request.get_json() or {}
     feed = data.get("feed_enabled", False)
     receive = data.get("receive_enabled", False)
+    client_key = (data.get("client_key") or "").strip()
     _persist_env_var("ADSBHUB_FEED_ENABLED", "true" if feed else "false")
     _persist_env_var("ADSBHUB_RECEIVE_ENABLED", "true" if receive else "false")
+    _persist_env_var("ADSBHUB_CLIENT_KEY", client_key)
     # Restart containers so they pick up new env
     for name in ("taknet-adsbhub-feeder", "taknet-aircraft-merger"):
         ok, msg = restart_container(name)

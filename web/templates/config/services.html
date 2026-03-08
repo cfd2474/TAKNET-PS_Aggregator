@@ -8,11 +8,17 @@
     <div class="card-header">
         <div>
             <h3>ADSBHub</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">Feed your Beast data to ADSBHub and/or receive merged aircraft from ADSBHub.</p>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">Feed SBS to ADSBHub and/or receive merged aircraft. Set CLIENTKEY for feed.</p>
         </div>
         <button class="btn btn-primary" id="adsbhub-save-btn" onclick="saveAdsbhub()" style="white-space:nowrap;">Save</button>
     </div>
     <div style="padding:0 20px 20px;">
+        <div style="margin-bottom:16px;">
+            <label for="adsbhub-client-key" style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Station dynamic IP key (CLIENTKEY)</label>
+            <input type="password" id="adsbhub-client-key" class="form-control" placeholder="Paste key from ADSBHub Settings → New Station"
+                   style="max-width:400px;font-family:monospace;font-size:13px;" autocomplete="off">
+            <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Required for feeding. Get it from ADSBHub after adding your station; add your server IP in Data Access for receive.</p>
+        </div>
         <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:center;">
             <label class="toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
                 <input type="checkbox" id="adsbhub-feed" class="toggle">
@@ -102,6 +108,7 @@ async function loadAdsbhubSettings() {
         const d = await r.json();
         document.getElementById('adsbhub-feed').checked = !!d.feed_enabled;
         document.getElementById('adsbhub-receive').checked = !!d.receive_enabled;
+        document.getElementById('adsbhub-client-key').value = d.client_key || '';
         document.getElementById('adsbhub-msg').textContent = '';
     } catch (e) {
         document.getElementById('adsbhub-msg').textContent = 'Could not load ADSBHub settings.';
@@ -111,6 +118,7 @@ async function loadAdsbhubSettings() {
 async function saveAdsbhub() {
     const feed = document.getElementById('adsbhub-feed').checked;
     const receive = document.getElementById('adsbhub-receive').checked;
+    const clientKey = document.getElementById('adsbhub-client-key').value.trim();
     const btn = document.getElementById('adsbhub-save-btn');
     const msgEl = document.getElementById('adsbhub-msg');
     btn.disabled = true;
@@ -120,7 +128,7 @@ async function saveAdsbhub() {
         const r = await fetch('/api/settings/adsbhub', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ feed_enabled: feed, receive_enabled: receive })
+            body: JSON.stringify({ feed_enabled: feed, receive_enabled: receive, client_key: clientKey })
         });
         const d = await r.json();
         if (d.success) {

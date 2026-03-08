@@ -311,7 +311,7 @@ Feeders ──timing (30105)──▶ mlat-server ──▶ results (39001)─�
 
 ### ADSBHub.org (optional)
 
-- **Outbound:** `adsbhub-feeder` reads Beast from readsb:30005 and forwards to data.adsbhub.org:5001. Set `ADSBHUB_FEED_ENABLED=true`.
+- **Outbound:** `adsbhub-feeder` reads SBS from readsb:30003, sends CLIENTKEY then SBS stream to data.adsbhub.org:5001. Set `ADSBHUB_FEED_ENABLED=true` and `ADSBHUB_CLIENT_KEY` (from ADSBHub station settings).
 - **Inbound:** Connect to data.adsbhub.org:5002 (SBS). `aircraft-merger` combines local (tar1090) + ADSBHub by ICAO and **prefers local** (direct feeders) for accuracy. Set `ADSBHUB_RECEIVE_ENABLED=true`. See **ADSBHUB_INTEGRATION.md**.
 
 ---
