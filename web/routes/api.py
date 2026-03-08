@@ -606,9 +606,21 @@ def _get_current_version():
     return "unknown"
 
 
+def _env_value_escape(value):
+    """Escape a value for .env: wrap in single quotes if needed so $ and newlines don't break parsing."""
+    if not value:
+        return value
+    if "\n" in value or "\r" in value or "=" in value or "$" in value or " " in value or "#" in value or "'" in value:
+        # Single-quoted: only ' must be escaped as '"'"' for shell-style .env
+        escaped = value.replace("'", "'\"'\"'")
+        return f"'{escaped}'"
+    return value
+
+
 def _persist_env_var(key, value):
-    """Write or update a key=value line in the host .env file."""
+    """Write or update a key=value line in the host .env file. Value is escaped for .env safety."""
     env_path = os.path.join(INSTALL_DIR, ".env")
+    safe_value = _env_value_escape(value)
     try:
         if os.path.exists(env_path):
             with open(env_path, "r") as f:
@@ -616,16 +628,16 @@ def _persist_env_var(key, value):
             found = False
             for i, line in enumerate(lines):
                 if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
-                    lines[i] = f"{key}={value}\n"
+                    lines[i] = f"{key}={safe_value}\n"
                     found = True
                     break
             if not found:
-                lines.append(f"{key}={value}\n")
+                lines.append(f"{key}={safe_value}\n")
             with open(env_path, "w") as f:
                 f.writelines(lines)
         else:
             with open(env_path, "w") as f:
-                f.write(f"{key}={value}\n")
+                f.write(f"{key}={safe_value}\n")
     except Exception as e:
         print(f"[api] Failed to persist {key} to .env: {e}")
 
@@ -656,8 +668,10 @@ def _read_env_value(key, default=""):
                     line = line.strip()
                     if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
                         val = line.split("=", 1)[1].strip()
-                        if len(val) >= 2 and ((val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'"))):
-                            val = val[1:-1]
+                        if len(val) >= 2 and val.startswith("'") and val.endswith("'"):
+                            val = val[1:-1].replace("'\"'\"'", "'")
+                        elif len(val) >= 2 and val.startswith('"') and val.endswith('"'):
+                            val = val[1:-1].replace('\\"', '"').replace("\\\\", "\\")
                         return val
     except Exception:
         pass
@@ -677,10 +691,19 @@ def get_adsbhub_settings():
     })
 
 
+def _restart_adsbhub_containers_background():
+    """Run container restarts in background so the HTTP request can return immediately."""
+    for name in ("taknet-adsbhub-feeder", "taknet-aircraft-merger"):
+        try:
+            restart_container(name)
+        except Exception as e:
+            print(f"[api] Background restart {name}: {e}")
+
+
 @bp.route("/settings/adsbhub", methods=["POST"])
 @admin_required
 def set_adsbhub_settings():
-    """Update ADSBHub flags and client key in .env and restart adsbhub-feeder and aircraft-merger."""
+    """Update ADSBHub flags and client key in .env; restart adsbhub-feeder and aircraft-merger in background."""
     data = request.get_json() or {}
     feed = data.get("feed_enabled", False)
     receive = data.get("receive_enabled", False)
@@ -688,12 +711,13 @@ def set_adsbhub_settings():
     _persist_env_var("ADSBHUB_FEED_ENABLED", "true" if feed else "false")
     _persist_env_var("ADSBHUB_RECEIVE_ENABLED", "true" if receive else "false")
     _persist_env_var("ADSBHUB_CLIENT_KEY", client_key)
-    # Restart containers so they pick up new env
-    for name in ("taknet-adsbhub-feeder", "taknet-aircraft-merger"):
-        ok, msg = restart_container(name)
-        if not ok and "No such container" not in msg:
-            return jsonify({"success": False, "error": f"Restart {name}: {msg}"}), 500
-    return jsonify({"success": True, "message": "ADSBHub settings saved and services restarted."})
+    # Restart containers in background so we don't timeout (restarts can take 30+ s each)
+    thread = threading.Thread(target=_restart_adsbhub_containers_background, daemon=True)
+    thread.start()
+    return jsonify({
+        "success": True,
+        "message": "ADSBHub settings saved. Services are restarting in the background (refresh containers in a moment).",
+    })
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
