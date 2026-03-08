@@ -84,7 +84,9 @@ function initMergedMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
     }).addTo(mergedMap);
-    mergedMap.on('click', function() {
+    mergedMap.on('click', function(ev) {
+        // Don't clear sidebar when user clicked on an aircraft (layer)
+        if (ev.originalEvent && ev.originalEvent.target && ev.originalEvent.target.closest && ev.originalEvent.target.closest('.leaflet-interactive')) return;
         selectedHex = null;
         showSidebar(null);
         Object.keys(mergedMarkers).forEach(h => {
@@ -150,6 +152,7 @@ function refreshMergedAircraft() {
                 const isSelected = selectedHex === hex;
                 if (mergedMarkers[hex]) {
                     mergedMarkers[hex].setLatLng([lat, lon]);
+                    if (mergedMarkers[hex].setRadius) mergedMarkers[hex].setRadius(8);
                     mergedMarkers[hex].setTooltipContent(flight + (a.alt_baro != null ? ' · ' + a.alt_baro + ' ft' : ''));
                     mergedMarkers[hex].setStyle({
                         fillColor: isSelected ? '#22c55e' : '#3b82f6',
@@ -159,7 +162,7 @@ function refreshMergedAircraft() {
                     mergedMarkers[hex]._ac = a;
                 } else {
                     const m = L.circleMarker([lat, lon], {
-                        radius: 5,
+                        radius: 8,
                         fillColor: isSelected ? '#22c55e' : '#3b82f6',
                         color: isSelected ? '#16a34a' : '#1e3a5f',
                         weight: isSelected ? 2 : 1,
@@ -171,8 +174,10 @@ function refreshMergedAircraft() {
                         direction: 'top'
                     });
                     m.on('click', function(ev) {
-                        if (ev.originalEvent) ev.originalEvent.stopPropagation();
-                        var ac = this._ac;
+                        L.DomEvent.stopPropagation(ev);
+                        if (ev.originalEvent) { ev.originalEvent.stopPropagation(); ev.originalEvent.preventDefault(); }
+                        var layer = ev.target || this;
+                        var ac = (layer && layer._ac) || this._ac;
                         if (!ac) return;
                         selectedHex = (ac.hex || '').toString().replace(/^~/, '').toUpperCase();
                         showSidebar(ac);
