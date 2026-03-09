@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.141",
+    "date": "2026-03-09",
+    "notes": [
+      "CoT push: PyTAK-compliant protocol documented (COT_PUSH_COMPLIANCE.md). cot_pipeline documents URL/XML/framing/TLS and COT_MESSAGE_DELIMITER for senders."
+    ]
+  },
+  {
     "version": "1.0.140",
     "date": "2026-03-09",
     "notes": [

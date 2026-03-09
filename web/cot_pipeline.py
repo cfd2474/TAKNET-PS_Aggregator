@@ -5,6 +5,13 @@ Outputs with output_type='cot' can send aircraft as CoT to a TAK Server or multi
 When use_cotproxy is True, transform rules (per ICAO hex) are applied from the cot_transforms
 table — same concept as COTProxy known_craft / COTProxyWeb.
 
+Push protocol (no call API): send CoT over TCP or TLS to cot_url. PyTAK-compliant format:
+  - URL: tcp://host:port or tls://host:port (see PyTAK protocol_factory).
+  - CoT: XML <event> with version, type, uid, how, time, start, stale, <point>, optional <detail>.
+  - Framing: each message on the wire must be CoT XML UTF-8 bytes followed by a single space (0x20).
+  - TLS: client cert + key (aggregator stores per-output; use for tls:// only).
+See COT_PUSH_COMPLIANCE.md in the project root for full details.
+
 References:
   - PyTAK: https://github.com/snstac/pytak — Python TAK clients, servers & gateways; CoT parse/serialize.
   - adsbcot: https://github.com/snstac/adsbcot (ADS-B → CoT)
@@ -17,6 +24,9 @@ This module provides helpers for a future or external CoT sender:
 
 import os
 import json
+
+# PyTAK/TAK Server wire format: each CoT message is XML UTF-8 bytes followed by this delimiter.
+COT_MESSAGE_DELIMITER = b" "
 
 
 def get_cot_push_outputs():
