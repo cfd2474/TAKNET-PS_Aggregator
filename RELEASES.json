@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.131",
+    "date": "2026-02-26",
+    "notes": [
+      "Outputs page: added sample API URL (adsb.tak-solutions.com) and curl example for REST API (v2)."
+    ]
+  },
+  {
     "version": "1.0.130",
     "date": "2026-02-26",
     "notes": [
