@@ -267,7 +267,8 @@ def main():
         _state["aircraft"] = local_aircraft
         _state["now"] = now_ts
         _state["messages"] = messages
-    receive_enabled = os.environ.get("ADSBHUB_RECEIVE_ENABLED", "").lower() in ("1", "true", "yes")
+    # Use enable file if present (dashboard is source of truth); else env at startup
+    receive_enabled = _is_receive_enabled()
     _write_receive_enabled_file(receive_enabled)
     if not receive_enabled:
         # Pass-through only: keep fetching local
