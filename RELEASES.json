@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.134",
+    "date": "2026-03-09",
+    "notes": [
+      "Outputs: relabel format options to JSON, Beast RAW, CoT."
+    ]
+  },
+  {
     "version": "1.0.133",
     "date": "2026-03-09",
     "notes": [
