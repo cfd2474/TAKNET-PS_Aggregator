@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block page_title %}COTProxy config — {{ output.name }}{% endblock %}
+
+{% block content %}
+<style>
+.collapse-hidden { display: none !important; }
+.ps-air-icon-grid img { width: 32px; height: 32px; object-fit: contain; cursor: pointer; border: 2px solid transparent; border-radius: 4px; }
+.ps-air-icon-grid img:hover { border-color: var(--accent); }
+.ps-air-icon-grid .icon-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; padding: 4px; border-radius: 6px; }
+.ps-air-icon-grid .icon-cell:hover { background: var(--bg-card-hover); }
+.ps-air-icon-grid .icon-cell span { font-size: 10px; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <div>
+        <a href="/outputs" style="font-size:13px;color:var(--text-muted);margin-bottom:4px;display:inline-block;">← Outputs</a>
+        <h2 style="font-size:18px;font-weight:600;margin:0;">COTProxy config: {{ output.name }}</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">Transform rules by ICAO hex (callsign, type, icon). Same concept as <a href="https://github.com/snstac/cotproxy" target="_blank" rel="noopener">COTProxy</a> known_craft. For TAK/CoT protocol handling see <a href="https://github.com/snstac/pytak" target="_blank" rel="noopener">PyTAK</a>.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+        <a href="/api/outputs/cot-transforms/template" class="btn" style="font-size:13px;">Download template CSV</a>
+        <label class="btn btn-primary" style="font-size:13px;margin:0;cursor:pointer;">
+            Import CSV <input type="file" id="csv-file" accept=".csv" style="display:none;">
+        </label>
+        <button class="btn btn-primary" onclick="openAddModal()" style="font-size:13px;">+ Add transform</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Transform rules</h3>
+        <span style="font-size:12px;color:var(--text-muted);" id="transform-count">0</span>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>HEX</th>
+                    <th>Callsign</th>
+                    <th>Type</th>
+                    <th>Domain</th>
+                    <th>Agency</th>
+                    <th>Reg</th>
+                    <th>Model</th>
+                    <th>COT</th>
+                    <th>Icon</th>
+                    <th style="width:100px;"></th>
+                </tr>
+            </thead>
+            <tbody id="transforms-tbody">
+                <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add / Edit transform modal -->
+<div class="modal-overlay" id="transform-modal">
+    <div class="modal" style="max-width:620px;">
+        <div class="modal-header">
+            <h3 id="transform-modal-title">Add transform</h3>
+            <button class="modal-close" onclick="closeTransformModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="transform-id" value="">
+            <div class="card-grid card-grid-2" style="gap:12px;">
+                <div class="form-group">
+                    <label>HEX (ICAO 24-bit) *</label>
+                    <input class="form-control" id="t-hex" placeholder="A1B2C3">
+                </div>
+                <div class="form-group">
+                    <label>Callsign</label>
+                    <input class="form-control" id="t-callsign" placeholder="N12345-AGENCY">
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <input class="form-control" id="t-type" placeholder="HELICOPTER, FIXED WING">
+                </div>
+                <div class="form-group">
+                    <label>COT type string</label>
+                    <input class="form-control" id="t-cot" placeholder="a-f-A-C-H, a-n-A-M-H-A">
+                </div>
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input class="form-control" id="t-domain" placeholder="CIV, FED, CAP">
+                </div>
+                <div class="form-group">
+                    <label>Agency</label>
+                    <input class="form-control" id="t-agency" placeholder="Agency name">
+                </div>
+                <div class="form-group">
+                    <label>Reg</label>
+                    <input class="form-control" id="t-reg" placeholder="N-number">
+                </div>
+                <div class="form-group">
+                    <label>Model</label>
+                    <input class="form-control" id="t-model" placeholder="BELL 407">
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label>Icon (TAK path, e.g. UID/Public Safety Air/name.png)</label>
+                    <input class="form-control" id="t-icon" placeholder="66f14976-.../Public Safety Air/CIV_FIXED_CAP.png">
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label style="margin-bottom:6px;">Choose from PS Air Icons</label>
+                    <div id="modal-icon-picker" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;padding:8px;background:var(--bg-secondary);border-radius:8px;"></div>
+                </div>
+            </div>
+            <div id="transform-modal-error" style="display:none;background:rgba(239,68,68,0.1);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-top:8px;"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="closeTransformModal()">Cancel</button>
+                <button class="btn btn-primary" id="transform-save-btn" onclick="saveTransform()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PS Air Icons reference (collapsible) -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="cursor:pointer;" onclick="document.getElementById('ps-air-ref-body').classList.toggle('collapse-hidden'); document.getElementById('ps-air-ref-toggle').textContent = document.getElementById('ps-air-ref-body').classList.contains('collapse-hidden') ? '▼ Show' : '▲ Hide';">
+        <h3 style="margin:0;font-size:14px;">PS Air Icons reference (Public Safety Air v8)</h3>
+        <span id="ps-air-ref-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
+    </div>
+    <div id="ps-air-ref-body" class="collapse-hidden" style="padding:12px 20px 20px;">
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). Path format: <code style="font-size:11px;">66f14976-4b62-4023-8edb-d8d2ebeaa336/Public Safety Air/name.png</code></p>
+        <div id="ps-air-ref-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+</div>
+
+<footer style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);">
+    CoT output uses <a href="https://github.com/snstac/pytak" target="_blank" rel="noopener">PyTAK</a> for TAK ecosystem compatibility. Icons: PS Air Icons v8 (Public Safety Air).
+</footer>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const outputId = {{ output.id }};
+let psAirIcons = [];
+
+function iconUrlForPath(iconPath) {
+    if (!iconPath) return null;
+    const s = String(iconPath).trim();
+    const icon = psAirIcons.find(i => s === i.path || s.endsWith(i.name) || s.includes('Public Safety Air/' + i.name));
+    return icon ? icon.url_path : null;
+}
+
+function pickIcon(path, cot) {
+    document.getElementById('t-icon').value = path || '';
+    const cotEl = document.getElementById('t-cot');
+    if (cotEl) cotEl.value = cot || '';
+}
+
+function renderIconCell(t) {
+    const url = iconUrlForPath(t.icon);
+    if (url) return '<img src="' + escapeHtml(url) + '" alt="" title="' + escapeHtml(t.icon || '') + '" style="width:24px;height:24px;object-fit:contain;vertical-align:middle;">';
+    return '<span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block;" title="' + escapeHtml(t.icon || '') + '">' + escapeHtml((t.icon || '').slice(0, 28)) + ((t.icon || '').length > 28 ? '…' : '') + '</span>';
+}
+
+async function loadPsAirIcons() {
+    try {
+        const r = await fetch('/api/ps-air-icons');
+        const d = await r.json();
+        psAirIcons = d.icons || [];
+        const grid = document.getElementById('ps-air-ref-grid');
+        const picker = document.getElementById('modal-icon-picker');
+        const uid = d.iconset_uid || '66f14976-4b62-4023-8edb-d8d2ebeaa336';
+        const folder = 'Public Safety Air';
+        psAirIcons.forEach(ico => {
+            const path = ico.path || (uid + '/' + folder + '/' + ico.name);
+            const cot = ico.cot || '';
+            function addCell(container) {
+                const cell = document.createElement('div');
+                cell.className = 'icon-cell';
+                cell.dataset.path = path;
+                cell.dataset.cot = cot;
+                cell.title = path;
+                cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(ico.name) + '</span>';
+                cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
+                container.appendChild(cell);
+            }
+            addCell(grid);
+            addCell(picker);
+        });
+        if (!psAirIcons.length) {
+            grid.innerHTML = '<span style="color:var(--text-muted);">No icons loaded.</span>';
+            picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No icons loaded.</span>';
+        }
+    } catch (e) {
+        document.getElementById('ps-air-ref-grid').innerHTML = '<span style="color:var(--text-muted);">Failed to load icons.</span>';
+        document.getElementById('modal-icon-picker').innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Failed to load icons.</span>';
+    }
+}
+
+document.getElementById('csv-file').addEventListener('change', async function(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const text = await f.text();
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: text }),
+    });
+    const d = await r.json();
+    e.target.value = '';
+    if (d.inserted !== undefined) {
+        loadTransforms();
+        if (d.errors && d.errors.length) alert('Imported ' + d.inserted + ' rows. Errors: ' + d.errors.join('; '));
+        else if (d.inserted) alert('Imported ' + d.inserted + ' row(s).');
+    } else alert(d.error || 'Import failed');
+});
+
+async function loadTransforms() {
+    const tbody = document.getElementById('transforms-tbody');
+    try {
+        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms');
+        const d = await r.json();
+        const items = d.transforms || [];
+        document.getElementById('transform-count').textContent = items.length + ' rule(s)';
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = items.map(t => `
+            <tr>
+                <td><code style="font-size:12px;">${escapeHtml(t.hex || '')}</code></td>
+                <td>${escapeHtml(t.callsign || '')}</td>
+                <td>${escapeHtml(t.type || '')}</td>
+                <td>${escapeHtml(t.domain || '')}</td>
+                <td>${escapeHtml(t.agency || '')}</td>
+                <td>${escapeHtml(t.reg || '')}</td>
+                <td>${escapeHtml(t.model || '')}</td>
+                <td><code style="font-size:11px;">${escapeHtml(t.cot || '')}</code></td>
+                <td style="max-width:140px;">${renderIconCell(t)}</td>
+                <td style="text-align:right;">
+                    <button class="btn" style="font-size:11px;padding:4px 8px;" onclick="openEditModal(${t.id})">Edit</button>
+                    <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteTransform(${t.id}, '${(t.hex || '').replace(/'/g, "\\'")}')">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="10" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
+    }
+}
+
+function escapeHtml(s) {
+    if (s == null) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function openAddModal() {
+    document.getElementById('transform-modal-title').textContent = 'Add transform';
+    document.getElementById('transform-id').value = '';
+    ['hex','callsign','type','cot','domain','agency','reg','model','icon'].forEach(f => {
+        const el = document.getElementById('t-' + f);
+        if (el) el.value = '';
+    });
+    document.getElementById('transform-modal-error').style.display = 'none';
+    document.getElementById('transform-modal').classList.add('show');
+}
+
+async function openEditModal(id) {
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms');
+    const d = await r.json();
+    const t = (d.transforms || []).find(x => x.id === id);
+    if (!t) return;
+    document.getElementById('transform-modal-title').textContent = 'Edit transform';
+    document.getElementById('transform-id').value = t.id;
+    document.getElementById('t-hex').value = t.hex || '';
+    document.getElementById('t-callsign').value = t.callsign || '';
+    document.getElementById('t-type').value = t.type || '';
+    document.getElementById('t-cot').value = t.cot || '';
+    document.getElementById('t-domain').value = t.domain || '';
+    document.getElementById('t-agency').value = t.agency || '';
+    document.getElementById('t-reg').value = t.reg || '';
+    document.getElementById('t-model').value = t.model || '';
+    document.getElementById('t-icon').value = t.icon || '';
+    document.getElementById('transform-modal-error').style.display = 'none';
+    document.getElementById('transform-modal').classList.add('show');
+}
+
+function closeTransformModal() {
+    document.getElementById('transform-modal').classList.remove('show');
+}
+
+async function saveTransform() {
+    const errEl = document.getElementById('transform-modal-error');
+    errEl.style.display = 'none';
+    const id = document.getElementById('transform-id').value;
+    const payload = {
+        hex: document.getElementById('t-hex').value.trim().toUpperCase(),
+        callsign: document.getElementById('t-callsign').value.trim(),
+        type: document.getElementById('t-type').value.trim(),
+        cot: document.getElementById('t-cot').value.trim(),
+        domain: document.getElementById('t-domain').value.trim(),
+        agency: document.getElementById('t-agency').value.trim(),
+        reg: document.getElementById('t-reg').value.trim(),
+        model: document.getElementById('t-model').value.trim(),
+        icon: document.getElementById('t-icon').value.trim(),
+    };
+    if (!payload.hex) { errEl.textContent = 'HEX is required.'; errEl.style.display = 'block'; return; }
+    const btn = document.getElementById('transform-save-btn');
+    btn.disabled = true;
+    try {
+        const url = id ? '/api/outputs/' + outputId + '/cot-transforms/' + id : '/api/outputs/' + outputId + '/cot-transforms';
+        const r = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (d.success || d.id) {
+            closeTransformModal();
+            loadTransforms();
+        } else {
+            errEl.textContent = d.error || 'Save failed';
+            errEl.style.display = 'block';
+        }
+    } catch (e) {
+        errEl.textContent = 'Request failed: ' + e;
+        errEl.style.display = 'block';
+    }
+    btn.disabled = false;
+}
+
+async function deleteTransform(id, hex) {
+    if (!confirm('Delete transform for ' + hex + '?')) return;
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + id, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.success) loadTransforms();
+    else alert(d.error || 'Delete failed');
+}
+
+loadPsAirIcons();
+loadTransforms();
+</script>
+{% endblock %}

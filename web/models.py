@@ -28,6 +28,30 @@ def get_db():
             conn.commit()
         except Exception:
             pass  # Column already exists
+        # Migration: output_format and use_cotproxy for CoT/COTProxy support
+        for col, defn in [
+            ("output_format", "TEXT NOT NULL DEFAULT 'as_is'"),
+            ("use_cotproxy", "BOOLEAN NOT NULL DEFAULT 0"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE outputs ADD COLUMN {col} {defn}")
+                conn.commit()
+            except Exception:
+                pass
+        # Migration: cot_transforms table for COTProxy-style transform rules
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cot_transforms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                output_id INTEGER NOT NULL,
+                domain TEXT, agency TEXT, reg TEXT, callsign TEXT, type TEXT, model TEXT,
+                hex TEXT NOT NULL, cot TEXT, icon TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cot_transforms_output ON cot_transforms(output_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cot_transforms_hex ON cot_transforms(output_id, hex)")
+        conn.commit()
         _initialized = True
 
     return conn
@@ -466,12 +490,14 @@ class OutputModel:
         return row is not None and row["created_by"] == user_id
 
     @staticmethod
-    def create(name, output_type, config, created_by, mode="api", notes=None):
+    def create(name, output_type, config, created_by, mode="api", notes=None,
+               output_format="as_is", use_cotproxy=False):
         conn = get_db()
         cursor = conn.execute(
-            """INSERT INTO outputs (name, output_type, mode, config, created_by, notes)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (name, output_type, mode, config, created_by, notes)
+            """INSERT INTO outputs (name, output_type, mode, config, created_by, notes, output_format, use_cotproxy)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, output_type, mode, config, created_by, notes,
+             output_format, 1 if use_cotproxy else 0)
         )
         output_id = cursor.lastrowid
         conn.commit()
@@ -480,7 +506,8 @@ class OutputModel:
 
     @staticmethod
     def update(output_id, data):
-        allowed = {"name", "output_type", "config", "is_public", "status", "notes"}
+        allowed = {"name", "output_type", "config", "is_public", "status", "notes",
+                   "output_format", "use_cotproxy"}
         fields = {k: v for k, v in data.items() if k in allowed}
         if not fields:
             return False
@@ -614,6 +641,145 @@ class OutputKeyModel:
         conn.execute("DELETE FROM output_api_keys WHERE output_id = ?", (output_id,))
         conn.commit()
         conn.close()
+
+
+class CotTransformModel:
+    """COTProxy-style transform rules per output (hex -> callsign, type, icon, etc.)."""
+
+    CSV_HEADERS = ("DOMAIN", "AGENCY", "REG", "CALLSIGN", "TYPE", "MODEL", "HEX", "COT", "ICON")
+
+    @staticmethod
+    def get_all(output_id: int):
+        conn = get_db()
+        rows = conn.execute(
+            """SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, created_at
+               FROM cot_transforms WHERE output_id = ? ORDER BY hex""",
+            (output_id,),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    @staticmethod
+    def get_by_id(transform_id: int, output_id: int):
+        conn = get_db()
+        row = conn.execute(
+            "SELECT * FROM cot_transforms WHERE id = ? AND output_id = ?",
+            (transform_id, output_id),
+        ).fetchone()
+        conn.close()
+        return dict_row(row)
+
+    @staticmethod
+    def create(output_id: int, data: dict) -> int:
+        hex_val = (data.get("hex") or "").strip().upper()
+        if not hex_val:
+            raise ValueError("hex is required")
+        conn = get_db()
+        cursor = conn.execute(
+            """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                output_id,
+                (data.get("domain") or "").strip() or None,
+                (data.get("agency") or "").strip() or None,
+                (data.get("reg") or "").strip() or None,
+                (data.get("callsign") or "").strip() or None,
+                (data.get("type") or "").strip() or None,
+                (data.get("model") or "").strip() or None,
+                hex_val,
+                (data.get("cot") or "").strip() or None,
+                (data.get("icon") or "").strip() or None,
+            ),
+        )
+        tid = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return tid
+
+    @staticmethod
+    def update(transform_id: int, output_id: int, data: dict) -> bool:
+        allowed = {"domain", "agency", "reg", "callsign", "type", "model", "hex", "cot", "icon"}
+        fields = {k: v for k, v in data.items() if k in allowed}
+        if not fields:
+            return False
+        conn = get_db()
+        conn.execute(
+            """UPDATE cot_transforms SET
+               domain=?, agency=?, reg=?, callsign=?, type=?, model=?, hex=?, cot=?, icon=?
+               WHERE id = ? AND output_id = ?""",
+            (
+                (data.get("domain") or "").strip() or None,
+                (data.get("agency") or "").strip() or None,
+                (data.get("reg") or "").strip() or None,
+                (data.get("callsign") or "").strip() or None,
+                (data.get("type") or "").strip() or None,
+                (data.get("model") or "").strip() or None,
+                (data.get("hex") or "").strip().upper() or None,
+                (data.get("cot") or "").strip() or None,
+                (data.get("icon") or "").strip() or None,
+                transform_id,
+                output_id,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+    @staticmethod
+    def delete(transform_id: int, output_id: int):
+        conn = get_db()
+        conn.execute("DELETE FROM cot_transforms WHERE id = ? AND output_id = ?", (transform_id, output_id))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def import_from_csv(output_id: int, csv_text: str) -> tuple:
+        """Parse CSV (header: DOMAIN,AGENCY,REG,CALLSIGN,TYPE,MODEL,HEX,COT,ICON) and insert rows.
+        Returns (inserted_count, error_messages)."""
+        import csv
+        import io
+        inserted = 0
+        errors = []
+        try:
+            reader = csv.DictReader(io.StringIO(csv_text))
+            # Normalize header to uppercase for comparison
+            if reader.fieldnames:
+                reader.fieldnames = [f.strip().upper() for f in reader.fieldnames]
+            for i, row in enumerate(reader):
+                row_num = i + 2  # 1-based + header
+                hex_val = (row.get("HEX") or "").strip().upper()
+                if not hex_val:
+                    errors.append(f"Row {row_num}: HEX is required")
+                    continue
+                try:
+                    CotTransformModel.create(output_id, {
+                        "domain": row.get("DOMAIN"),
+                        "agency": row.get("AGENCY"),
+                        "reg": row.get("REG"),
+                        "callsign": row.get("CALLSIGN"),
+                        "type": row.get("TYPE"),
+                        "model": row.get("MODEL"),
+                        "hex": hex_val,
+                        "cot": row.get("COT"),
+                        "icon": row.get("ICON"),
+                    })
+                    inserted += 1
+                except Exception as e:
+                    errors.append(f"Row {row_num}: {e}")
+        except Exception as e:
+            errors.append(f"CSV parse error: {e}")
+        return inserted, errors
+
+    @staticmethod
+    def get_by_hex(output_id: int, hex_code: str) -> dict:
+        """Return first transform matching output_id and hex (for CoT pipeline)."""
+        conn = get_db()
+        row = conn.execute(
+            "SELECT * FROM cot_transforms WHERE output_id = ? AND UPPER(TRIM(hex)) = ?",
+            (output_id, (hex_code or "").strip().upper()),
+        ).fetchone()
+        conn.close()
+        return dict_row(row)
 
 
 def signal_drop_output(output_id: int):

@@ -10,7 +10,7 @@ import psutil
 import requests as http_requests
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 
-from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel
+from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
@@ -994,12 +994,16 @@ def output_create():
     key_type    = data.get("key_type", "single_use")
     if not name or not output_type:
         return jsonify({"error": "name and output_type are required"}), 400
-    if output_type not in ("json", "beast_raw"):
-        return jsonify({"error": "output_type must be 'json' or 'beast_raw'"}), 400
+    if output_type not in ("json", "beast_raw", "cot"):
+        return jsonify({"error": "output_type must be 'json', 'beast_raw', or 'cot'"}), 400
     if mode not in ("api", "push"):
         return jsonify({"error": "mode must be 'api' or 'push'"}), 400
     if key_type not in ("single_use", "durable"):
         return jsonify({"error": "key_type must be 'single_use' or 'durable'"}), 400
+    output_format = (data.get("output_format") or ("cot" if output_type == "cot" else "as_is")).strip()
+    if output_format not in ("as_is", "cot"):
+        output_format = "cot" if output_type == "cot" else "as_is"
+    use_cotproxy = bool(data.get("use_cotproxy")) if output_type == "cot" else False
     import json as _json
     config = _json.dumps(data.get("config") or {})
     output_id = OutputModel.create(
@@ -1009,6 +1013,8 @@ def output_create():
         config=config,
         created_by=current_user.id,
         notes=data.get("notes"),
+        output_format=output_format,
+        use_cotproxy=use_cotproxy,
     )
     raw_key = None
     if mode == "api":
@@ -1023,6 +1029,8 @@ def output_update(output_id):
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
     data = request.get_json(silent=True) or {}
+    if "use_cotproxy" in data:
+        data["use_cotproxy"] = 1 if data["use_cotproxy"] else 0
     OutputModel.update(output_id, data)
     return jsonify({"success": True})
 
@@ -1058,6 +1066,105 @@ def output_regenerate_key(output_id):
     key_type = (existing_key or {}).get("key_type", "single_use")
     raw_key = OutputKeyModel.generate(output_id, key_type=key_type)
     return jsonify({"success": True, "api_key": raw_key})
+
+
+# ── COTProxy-style transforms (per output) ───────────────────────────────────
+
+@bp.route("/ps-air-icons")
+@network_admin_required
+def ps_air_icons_list():
+    """Return list of PS Air Icons (Public Safety Air v8) for COTProxy icon picker/reference."""
+    try:
+        from ps_air_icons import get_ps_air_icons_list
+        icons = get_ps_air_icons_list()
+        return jsonify({"icons": icons, "iconset_uid": "66f14976-4b62-4023-8edb-d8d2ebeaa336"})
+    except Exception as e:
+        return jsonify({"icons": [], "error": str(e)})
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms")
+@network_admin_required
+def cot_transforms_list(output_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    items = CotTransformModel.get_all(output_id)
+    return jsonify({"transforms": items})
+
+
+@bp.route("/outputs/cot-transforms/template")
+@network_admin_required
+def cot_transforms_template():
+    """Download blank CSV template for bulk import (DOMAIN,AGENCY,REG,CALLSIGN,TYPE,MODEL,HEX,COT,ICON)."""
+    import io
+    from flask import send_file
+    buf = io.BytesIO()
+    buf.write(b"\xef\xbb\xbf")  # UTF-8 BOM for Excel
+    buf.write(",".join(CotTransformModel.CSV_HEADERS).encode("utf-8") + b"\n")
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name="cot_transforms_template.csv",
+    )
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms", methods=["POST"])
+@network_admin_required
+def cot_transform_create(output_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        tid = CotTransformModel.create(output_id, data)
+        return jsonify({"success": True, "id": tid}), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/<int:transform_id>", methods=["PUT"])
+@network_admin_required
+def cot_transform_update(output_id, transform_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    if CotTransformModel.get_by_id(transform_id, output_id) is None:
+        return jsonify({"error": "Not found"}), 404
+    ok = CotTransformModel.update(transform_id, output_id, data)
+    return jsonify({"success": ok})
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/<int:transform_id>", methods=["DELETE"])
+@network_admin_required
+def cot_transform_delete(output_id, transform_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    CotTransformModel.delete(transform_id, output_id)
+    return jsonify({"success": True})
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/import", methods=["POST"])
+@network_admin_required
+def cot_transforms_import(output_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    csv_text = None
+    if request.content_type and "multipart/form-data" in request.content_type and "file" in request.files:
+        f = request.files.get("file")
+        if f and f.filename:
+            csv_text = f.read().decode("utf-8", errors="replace")
+    if csv_text is None:
+        data = request.get_json(silent=True) or {}
+        csv_text = data.get("csv") or request.get_data(as_text=True)
+    if not csv_text or not csv_text.strip():
+        return jsonify({"error": "No CSV data (send file or JSON { csv: \"...\" } or raw body)"}), 400
+    inserted, errors = CotTransformModel.import_from_csv(output_id, csv_text)
+    return jsonify({"success": True, "inserted": inserted, "errors": errors})
 
 
 @bp.route("/outputs/stream/<string:raw_key>")

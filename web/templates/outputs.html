@@ -85,11 +85,18 @@
                     <input class="form-control" id="modal-name" placeholder="e.g. TAK Server Feed">
                 </div>
                 <div class="form-group">
-                    <label>Type</label>
+                    <label>Output format</label>
                     <select class="form-control" id="modal-type" onchange="onTypeChange()">
-                        <option value="json">JSON</option>
-                        <option value="beast_raw">Beast Raw</option>
+                        <option value="json">As-is — JSON (API or push)</option>
+                        <option value="beast_raw">As-is — Beast Raw (API or push)</option>
+                        <option value="cot">Cursor on Target (CoT)</option>
                     </select>
+                </div>
+                <div class="form-group" id="cot-options" style="display:none;">
+                    <label style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="modal-use-cotproxy"> Use COTProxy (transform callsign, icon, type per aircraft)
+                    </label>
+                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">When enabled, configure transforms on the COTProxy config page (per-hex overrides).</p>
                 </div>
                 <div class="form-group">
                     <label>Mode</label>
@@ -110,12 +117,20 @@
             <!-- Push config (shown when mode=push) -->
             <div id="push-config" style="display:none;margin-top:4px;">
                 <div class="form-group" id="push-url-group">
-                    <label id="push-url-label">Push URL</label>
-                    <input class="form-control" id="modal-push-url" placeholder="http://your-server/endpoint">
+                    <label id="push-url-label">Push URL / CoT destination</label>
+                    <input class="form-control" id="modal-push-url" placeholder="tcp://host:8087 or udp://239.2.3.1:6969 or http://...">
                 </div>
                 <div class="form-group" id="push-interval-group">
                     <label>Push Interval (seconds)</label>
                     <input class="form-control" id="modal-push-interval" type="number" min="1" value="5">
+                </div>
+            </div>
+
+            <!-- CoT config (when type=cot): destination URL for API mode -->
+            <div id="cot-dest-config" style="display:none;margin-top:4px;">
+                <div class="form-group">
+                    <label>CoT destination (for push)</label>
+                    <input class="form-control" id="modal-cot-url" placeholder="tcp://takserver:8087 or udp://239.2.3.1:6969">
                 </div>
             </div>
 
@@ -131,6 +146,9 @@
                     <code style="color:var(--green);font-size:12px;">TCP port 30005</code><br>
                     Send key as first line (<code>key\n</code>), then receive beast stream.
                     Multiple simultaneous connections supported.
+                </div>
+                <div id="api-info-cot" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    <strong style="color:var(--text-primary);">CoT output</strong> — Aircraft are sent as Cursor on Target. Use push mode to send to a TAK Server or multicast. When COTProxy is enabled, configure transforms per aircraft (hex) on the COTProxy config page.
                 </div>
             </div>
 
@@ -177,20 +195,26 @@ const userRole = '{{ current_user.role }}';
 
 function onTypeChange() {
     const type = document.getElementById('modal-type').value;
+    const isCot = type === 'cot';
     document.getElementById('api-info-json').style.display  = (type === 'json')      ? 'block' : 'none';
     document.getElementById('api-info-beast').style.display = (type === 'beast_raw') ? 'block' : 'none';
-    // beast push uses host:port, JSON push uses URL
+    document.getElementById('api-info-cot').style.display    = isCot ? 'block' : 'none';
+    document.getElementById('cot-options').style.display     = isCot ? 'block' : 'none';
+    const mode = document.getElementById('modal-mode').value;
+    document.getElementById('cot-dest-config').style.display = (isCot && mode === 'push') ? 'block' : 'none';
     document.getElementById('push-url-label').textContent =
-        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : 'Push URL';
+        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : (isCot ? 'CoT destination (tcp/udp URL)' : 'Push URL');
     document.getElementById('push-interval-group').style.display =
-        type === 'beast_raw' ? 'none' : 'block';
+        (type === 'beast_raw' || type === 'cot') ? 'none' : 'block';
 }
 
 function onModeChange() {
     const mode = document.getElementById('modal-mode').value;
+    const type = document.getElementById('modal-type').value;
     document.getElementById('push-config').style.display    = (mode === 'push') ? 'block' : 'none';
     document.getElementById('api-config').style.display     = (mode === 'api')  ? 'block' : 'none';
     document.getElementById('key-type-group').style.display = (mode === 'api')  ? 'block' : 'none';
+    document.getElementById('cot-dest-config').style.display = (type === 'cot' && mode === 'push') ? 'block' : 'none';
 }
 
 async function loadOutputs() {
@@ -205,8 +229,10 @@ async function loadOutputs() {
         }
         let html = '';
         items.forEach(o => {
-            const typeBadge = o.output_type === 'beast_raw'
+            let typeBadge = o.output_type === 'beast_raw'
                 ? '<span class="badge badge-netbird" style="font-size:11px;">beast raw</span>'
+                : o.output_type === 'cot'
+                ? '<span class="badge" style="font-size:11px;background:rgba(34,197,94,0.15);color:var(--green);">CoT</span>'
                 : '<span class="badge badge-vpn" style="font-size:11px;">json</span>';
             const modeBadge = o.mode === 'api'
                 ? '<span class="badge" style="font-size:11px;background:rgba(168,85,247,0.12);color:var(--purple);">api</span>'
@@ -243,6 +269,9 @@ async function loadOutputs() {
             html += `<td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${createdDisplay}</td>`;
             if (userRole === 'admin') html += `<td style="color:var(--text-muted);font-size:12px;">${o.creator_name}</td>`;
             html += `<td style="text-align:right;white-space:nowrap;">`;
+            if (o.output_type === 'cot') {
+                html += `<a href="/outputs/${o.id}/cotproxy" class="btn" style="font-size:11px;padding:4px 8px;margin-right:4px;text-decoration:none;">COTProxy config</a>`;
+            }
             if (o.mode === 'api') {
                 const keyType = (o.key_meta || {}).key_type || 'single_use';
                 html += `<button class="btn" style="font-size:11px;padding:4px 8px;margin-right:4px;" onclick="regenKey(${o.id}, '${o.output_type}', '${keyType}')">↺ Regen Key</button>`;
@@ -264,7 +293,9 @@ function openCreateModal() {
     document.getElementById('modal-type').value = 'json';
     document.getElementById('modal-mode').value = 'api';
     document.getElementById('modal-key-type').value = 'single_use';
+    document.getElementById('modal-use-cotproxy').checked = false;
     document.getElementById('modal-push-url').value = '';
+    document.getElementById('modal-cot-url').value = '';
     document.getElementById('modal-push-interval').value = '5';
     document.getElementById('modal-notes').value = '';
     document.getElementById('modal-error').style.display = 'none';
@@ -285,7 +316,9 @@ async function openEditModal(id) {
     document.getElementById('modal-name').value = o.name;
     document.getElementById('modal-type').value = o.output_type;
     document.getElementById('modal-mode').value = o.mode;
+    document.getElementById('modal-use-cotproxy').checked = !!o.use_cotproxy;
     document.getElementById('modal-push-url').value = cfg.push_url || '';
+    document.getElementById('modal-cot-url').value = cfg.cot_url || '';
     document.getElementById('modal-push-interval').value = cfg.push_interval || 5;
     document.getElementById('modal-notes').value = o.notes || '';
 
@@ -331,15 +364,18 @@ async function saveOutput() {
         const mode = document.getElementById('modal-mode').value;
         const config = {};
         if (mode === 'push') {
-            config.push_url = document.getElementById('modal-push-url').value.trim();
-            if (type !== 'beast_raw') config.push_interval = parseInt(document.getElementById('modal-push-interval').value) || 5;
+            if (type === 'cot') config.cot_url = document.getElementById('modal-cot-url').value.trim();
+            else config.push_url = document.getElementById('modal-push-url').value.trim();
+            if (type !== 'beast_raw' && type !== 'cot') config.push_interval = parseInt(document.getElementById('modal-push-interval').value) || 5;
         }
         payload = {
-            name:        document.getElementById('modal-name').value.trim(),
-            output_type: type,
-            mode:        mode,
-            config:      config,
-            notes:       document.getElementById('modal-notes').value.trim(),
+            name:           document.getElementById('modal-name').value.trim(),
+            output_type:    type,
+            output_format:  type === 'cot' ? 'cot' : 'as_is',
+            use_cotproxy:   type === 'cot' && document.getElementById('modal-use-cotproxy').checked,
+            mode:           mode,
+            config:         config,
+            notes:          document.getElementById('modal-notes').value.trim(),
         };
         if (!payload.name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
     }

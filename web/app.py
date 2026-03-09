@@ -42,7 +42,8 @@ class AuthUser(UserMixin):
 
 
 def create_app():
-    app = Flask(__name__)
+    root = os.path.dirname(os.path.abspath(__file__))
+    app = Flask(__name__, static_folder=os.path.join(root, "static"))
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "taknet-ps-dev-key-change-me")
 
     login_manager = LoginManager()

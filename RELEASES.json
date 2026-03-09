@@ -1,5 +1,25 @@
 [
   {
+    "version": "1.0.133",
+    "date": "2026-03-09",
+    "notes": [
+      "COTProxy config: PS Air Icons (Public Safety Air v8) included as reference; icon picker in Add/Edit transform and collapsible reference section.",
+      "Transform table shows actual icon thumbnail when a PS Air icon path is selected.",
+      "PyTAK (https://github.com/snstac/pytak) referenced for TAK/CoT protocol handling in UI and cot_pipeline."
+    ]
+  },
+  {
+    "version": "1.0.132",
+    "date": "2026-03-09",
+    "notes": [
+      "Output format: network admins can choose As-is (JSON/Beast Raw) or Cursor on Target (CoT).",
+      "CoT outputs support optional COTProxy-style transforms (callsign, type, icon per ICAO hex).",
+      "COTProxy config page per CoT output: manual transform table, CSV bulk import, downloadable template (DOMAIN,AGENCY,REG,CALLSIGN,TYPE,MODEL,HEX,COT,ICON).",
+      "API: /api/outputs/<id>/cot-transforms (CRUD), /api/outputs/<id>/cot-transforms/import, /api/outputs/cot-transforms/template.",
+      "cot_pipeline module for future adsbcot/COTProxy integration (get_cot_push_outputs, get_transform_for_aircraft)."
+    ]
+  },
+  {
     "version": "1.0.131",
     "date": "2026-02-26",
     "notes": [

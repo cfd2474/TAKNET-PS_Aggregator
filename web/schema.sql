@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.54
+-- TAKNET-PS Aggregator Database Schema v1.0.55
 
 -- Users (authentication)
 CREATE TABLE IF NOT EXISTS users (
@@ -87,9 +87,11 @@ CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC
 CREATE TABLE IF NOT EXISTS outputs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    output_type TEXT NOT NULL,               -- 'json', 'beast_raw'
+    output_type TEXT NOT NULL,               -- 'json', 'beast_raw', 'cot'
+    output_format TEXT NOT NULL DEFAULT 'as_is',  -- 'as_is' (JSON/API as-is) or 'cot' (Cursor on Target)
+    use_cotproxy BOOLEAN NOT NULL DEFAULT 0,     -- when output_format='cot': apply transforms (COTProxy-style)
     mode TEXT NOT NULL DEFAULT 'api',        -- 'api' (key-authenticated inbound) or 'push' (outbound)
-    config TEXT NOT NULL DEFAULT '{}',       -- JSON: push_url, push_interval, etc.
+    config TEXT NOT NULL DEFAULT '{}',       -- JSON: push_url, push_interval, cot_url, etc.
     created_by INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     notes TEXT,
@@ -123,3 +125,23 @@ CREATE TABLE IF NOT EXISTS output_drop_signals (
     signaled_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_output_keys_type ON output_api_keys(key_type);
+
+-- COTProxy-style transforms per output (when output_format='cot' and use_cotproxy=1)
+-- Maps ICAO hex to callsign, type, icon, etc. for CoT display (same concept as known_craft.csv)
+CREATE TABLE IF NOT EXISTS cot_transforms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    output_id INTEGER NOT NULL,
+    domain TEXT,
+    agency TEXT,
+    reg TEXT,
+    callsign TEXT,
+    type TEXT,
+    model TEXT,
+    hex TEXT NOT NULL,       -- ICAO 24-bit hex (match key)
+    cot TEXT,                -- CoT type string (e.g. a-f-A-C-H, a-n-A-M-H-A)
+    icon TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_cot_transforms_output ON cot_transforms(output_id);
+CREATE INDEX IF NOT EXISTS idx_cot_transforms_hex ON cot_transforms(output_id, hex);
