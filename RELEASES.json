@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.140",
+    "date": "2026-03-09",
+    "notes": [
+      "COTProxy bulk delete: modal during removal (blocks navigation); on success auto-dismisses after 1.5s; on error user dismisses."
+    ]
+  },
+  {
     "version": "1.0.139",
     "date": "2026-03-09",
     "notes": [

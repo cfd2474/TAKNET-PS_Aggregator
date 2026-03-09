@@ -71,6 +71,28 @@
     </div>
 </div>
 
+<!-- Bulk delete status modal (processing / success / failure) -->
+<div class="modal-overlay" id="bulk-delete-modal" style="pointer-events:auto;">
+    <div class="modal" style="max-width:420px;">
+        <div class="modal-header">
+            <h3 id="bulk-delete-modal-title">Removing transforms</h3>
+        </div>
+        <div class="modal-body">
+            <div id="bulk-delete-processing" style="text-align:center;padding:20px;">
+                <p style="margin:0;color:var(--text-secondary);">Removing selected entries… Please wait.</p>
+            </div>
+            <div id="bulk-delete-success" style="display:none;text-align:center;padding:20px;">
+                <p style="margin:0 0 16px;color:var(--green);" id="bulk-delete-success-msg"></p>
+                <button type="button" class="btn btn-primary" id="bulk-delete-dismiss-btn" onclick="dismissBulkDeleteModal()">Dismiss</button>
+            </div>
+            <div id="bulk-delete-failure" style="display:none;padding:20px;">
+                <p style="margin:0 0 12px;color:var(--red);" id="bulk-delete-failure-msg"></p>
+                <button type="button" class="btn btn-primary" onclick="dismissBulkDeleteModal()">Dismiss</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- CSV import status modal (processing / success / failure) -->
 <div class="modal-overlay" id="csv-import-modal" style="pointer-events:auto;">
     <div class="modal" style="max-width:420px;">
@@ -306,10 +328,26 @@ function wireSelectAll() {
     });
 }
 
+function showBulkDeleteModal(state, message) {
+    var modal = document.getElementById('bulk-delete-modal');
+    document.getElementById('bulk-delete-processing').style.display = state === 'processing' ? 'block' : 'none';
+    document.getElementById('bulk-delete-success').style.display = state === 'success' ? 'block' : 'none';
+    document.getElementById('bulk-delete-failure').style.display = state === 'failure' ? 'block' : 'none';
+    document.getElementById('bulk-delete-modal-title').textContent = state === 'processing' ? 'Removing transforms' : (state === 'success' ? 'Delete complete' : 'Delete failed');
+    document.getElementById('bulk-delete-success-msg').textContent = message || '';
+    document.getElementById('bulk-delete-failure-msg').textContent = message || '';
+    modal.classList.add('show');
+}
+
+function dismissBulkDeleteModal() {
+    document.getElementById('bulk-delete-modal').classList.remove('show');
+}
+
 async function bulkDeleteTransforms() {
     const ids = Array.from(document.querySelectorAll('.transform-cb:checked')).map(cb => parseInt(cb.value, 10)).filter(Boolean);
     if (!ids.length) return;
     if (!confirm('Delete ' + ids.length + ' selected transform(s)?')) return;
+    showBulkDeleteModal('processing');
     try {
         const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/bulk-delete', {
             method: 'POST',
@@ -317,10 +355,15 @@ async function bulkDeleteTransforms() {
             body: JSON.stringify({ ids: ids }),
         });
         const d = await r.json();
-        if (d.success) loadTransforms();
-        else alert(d.error || 'Delete failed');
+        if (r.ok && d.success) {
+            showBulkDeleteModal('success', 'Removed ' + (d.deleted || ids.length) + ' transform(s).');
+            loadTransforms();
+            setTimeout(function() { dismissBulkDeleteModal(); }, 1500);
+        } else {
+            showBulkDeleteModal('failure', d.error || 'Delete failed');
+        }
     } catch (e) {
-        alert('Request failed: ' + e.message);
+        showBulkDeleteModal('failure', 'Request failed: ' + e.message);
     }
 }
 
