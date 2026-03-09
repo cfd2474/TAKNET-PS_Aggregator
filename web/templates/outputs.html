@@ -239,9 +239,9 @@ function onTypeChange() {
         if (outputId) loadCotCertStatus(outputId);
         else {
             document.getElementById('cot-certs-status').style.display = 'block';
-            document.getElementById('cot-certs-status-text').textContent = 'Save the output first, then edit it to add TLS certificates.';
+            document.getElementById('cot-certs-status-text').textContent = 'Save the output first, then upload certificates below.';
             document.getElementById('cot-certs-replace-btn').style.display = 'none';
-            document.getElementById('cot-certs-upload').style.display = 'none';
+            document.getElementById('cot-certs-upload').style.display = 'block';
         }
     }
 }
@@ -260,9 +260,9 @@ function onModeChange() {
         if (outputId) loadCotCertStatus(outputId);
         else {
             document.getElementById('cot-certs-status').style.display = 'block';
-            document.getElementById('cot-certs-status-text').textContent = 'Save the output first, then edit it to add TLS certificates.';
+            document.getElementById('cot-certs-status-text').textContent = 'Save the output first, then upload certificates below.';
             document.getElementById('cot-certs-replace-btn').style.display = 'none';
-            document.getElementById('cot-certs-upload').style.display = 'none';
+            document.getElementById('cot-certs-upload').style.display = 'block';
         }
     }
 }
@@ -349,6 +349,9 @@ function openCreateModal() {
     document.getElementById('modal-push-interval').value = '5';
     document.getElementById('modal-notes').value = '';
     document.getElementById('modal-error').style.display = 'none';
+    var saveBtn = document.getElementById('modal-save-btn');
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = saveOutput;
     onTypeChange(); onModeChange();
     document.getElementById('output-modal').classList.add('show');
 }
@@ -394,7 +397,9 @@ async function openEditModal(id) {
         notice.style.display = 'none';
     }
 
-    document.getElementById('modal-save-btn').textContent = locked ? 'Save Notes' : 'Save';
+    var saveBtn = document.getElementById('modal-save-btn');
+    saveBtn.textContent = locked ? 'Save Notes' : 'Save';
+    saveBtn.onclick = saveOutput;
     document.getElementById('modal-error').style.display = 'none';
     onTypeChange(); onModeChange();
     if (o.output_type === 'cot' && o.mode === 'push') loadCotCertStatus(o.id);
@@ -443,11 +448,15 @@ document.getElementById('cot-certs-replace-btn').onclick = function() {
 
 document.getElementById('cot-certs-upload-btn').onclick = async function() {
     const outputId = document.getElementById('modal-output-id').value;
-    if (!outputId) return;
+    const msgEl = document.getElementById('cot-certs-upload-msg');
+    if (!outputId) {
+        msgEl.textContent = 'Save the output first, then upload certificates.';
+        msgEl.style.color = 'var(--yellow)';
+        return;
+    }
     const certFile = document.getElementById('cot-cert-file').files[0];
     const keyFile = document.getElementById('cot-key-file').files[0];
     const caFile = document.getElementById('cot-ca-file').files[0];
-    const msgEl = document.getElementById('cot-certs-upload-msg');
     msgEl.textContent = '';
     if (!certFile || !keyFile) {
         msgEl.textContent = 'Select both certificate and key files.';
@@ -519,9 +528,23 @@ async function saveOutput() {
         });
         const d = await r.json();
         if (d.success || d.id) {
-            closeOutputModal();
-            loadOutputs();
-            if (d.api_key) showKeyModal(d.api_key, document.getElementById('modal-type').value);
+            const type = document.getElementById('modal-type').value;
+            const mode = document.getElementById('modal-mode').value;
+            const isNewCotPush = !id && type === 'cot' && mode === 'push' && d.id;
+            if (isNewCotPush) {
+                document.getElementById('modal-output-id').value = d.id;
+                loadOutputs();
+                document.getElementById('cot-certs-status').style.display = 'block';
+                document.getElementById('cot-certs-status-text').textContent = 'Output saved. Upload certificates below (optional) or close.';
+                document.getElementById('cot-certs-replace-btn').style.display = 'none';
+                document.getElementById('cot-certs-upload').style.display = 'block';
+                document.getElementById('modal-save-btn').textContent = 'Close';
+                document.getElementById('modal-save-btn').onclick = function() { closeOutputModal(); loadOutputs(); this.onclick = saveOutput; this.textContent = 'Save'; };
+            } else {
+                closeOutputModal();
+                loadOutputs();
+                if (d.api_key) showKeyModal(d.api_key, type);
+            }
         } else {
             errEl.textContent = d.error || 'Save failed';
             errEl.style.display = 'block';
