@@ -130,7 +130,33 @@
             <div id="cot-dest-config" style="display:none;margin-top:4px;">
                 <div class="form-group">
                     <label>CoT destination (for push)</label>
-                    <input class="form-control" id="modal-cot-url" placeholder="tcp://takserver:8087 or udp://239.2.3.1:6969">
+                    <input class="form-control" id="modal-cot-url" placeholder="tcp://takserver:8087 or tls://takserver:8089">
+                </div>
+            </div>
+
+            <!-- CoT push TLS certificates (owner-only; shown when type=cot and mode=push) -->
+            <div id="cot-certs-section" style="display:none;margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
+                <h4 style="font-size:13px;margin:0 0 8px;">TLS client certificates (TAK Server)</h4>
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Upload client certificate and private key for <code>tls://</code> connections. Stored encrypted; only you can add or replace. No one can view the cert after upload.</p>
+                <div id="cot-certs-status" style="display:none;margin-bottom:10px;">
+                    <span id="cot-certs-status-text" style="font-size:13px;"></span>
+                    <button type="button" class="btn" id="cot-certs-replace-btn" style="font-size:12px;margin-left:8px;display:none;">Replace certificate</button>
+                </div>
+                <div id="cot-certs-upload">
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:12px;">Client certificate (.pem)</label>
+                        <input type="file" id="cot-cert-file" accept=".pem,.crt" class="form-control" style="padding:4px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:12px;">Private key (.pem)</label>
+                        <input type="file" id="cot-key-file" accept=".pem,.key" class="form-control" style="padding:4px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:12px;">CA bundle (optional)</label>
+                        <input type="file" id="cot-ca-file" accept=".pem,.crt" class="form-control" style="padding:4px;">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="cot-certs-upload-btn" style="font-size:12px;">Upload certificates</button>
+                    <span id="cot-certs-upload-msg" style="font-size:12px;margin-left:8px;"></span>
                 </div>
             </div>
 
@@ -202,10 +228,22 @@ function onTypeChange() {
     document.getElementById('cot-options').style.display     = isCot ? 'block' : 'none';
     const mode = document.getElementById('modal-mode').value;
     document.getElementById('cot-dest-config').style.display = (isCot && mode === 'push') ? 'block' : 'none';
+    const certSection = document.getElementById('cot-certs-section');
+    certSection.style.display = (isCot && mode === 'push') ? 'block' : 'none';
     document.getElementById('push-url-label').textContent =
-        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : (isCot ? 'CoT destination (tcp/udp URL)' : 'Push URL');
+        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : (isCot ? 'CoT destination (tcp/udp/tls URL)' : 'Push URL');
     document.getElementById('push-interval-group').style.display =
         (type === 'beast_raw' || type === 'cot') ? 'none' : 'block';
+    const outputId = document.getElementById('modal-output-id').value;
+    if (isCot && mode === 'push') {
+        if (outputId) loadCotCertStatus(outputId);
+        else {
+            document.getElementById('cot-certs-status').style.display = 'block';
+            document.getElementById('cot-certs-status-text').textContent = 'Save the output first, then edit it to add TLS certificates.';
+            document.getElementById('cot-certs-replace-btn').style.display = 'none';
+            document.getElementById('cot-certs-upload').style.display = 'none';
+        }
+    }
 }
 
 function onModeChange() {
@@ -215,6 +253,18 @@ function onModeChange() {
     document.getElementById('api-config').style.display     = (mode === 'api')  ? 'block' : 'none';
     document.getElementById('key-type-group').style.display = (mode === 'api')  ? 'block' : 'none';
     document.getElementById('cot-dest-config').style.display = (type === 'cot' && mode === 'push') ? 'block' : 'none';
+    const certSection = document.getElementById('cot-certs-section');
+    certSection.style.display = (type === 'cot' && mode === 'push') ? 'block' : 'none';
+    const outputId = document.getElementById('modal-output-id').value;
+    if (type === 'cot' && mode === 'push') {
+        if (outputId) loadCotCertStatus(outputId);
+        else {
+            document.getElementById('cot-certs-status').style.display = 'block';
+            document.getElementById('cot-certs-status-text').textContent = 'Save the output first, then edit it to add TLS certificates.';
+            document.getElementById('cot-certs-replace-btn').style.display = 'none';
+            document.getElementById('cot-certs-upload').style.display = 'none';
+        }
+    }
 }
 
 async function loadOutputs() {
@@ -347,8 +397,88 @@ async function openEditModal(id) {
     document.getElementById('modal-save-btn').textContent = locked ? 'Save Notes' : 'Save';
     document.getElementById('modal-error').style.display = 'none';
     onTypeChange(); onModeChange();
+    if (o.output_type === 'cot' && o.mode === 'push') loadCotCertStatus(o.id);
     document.getElementById('output-modal').classList.add('show');
 }
+
+async function loadCotCertStatus(outputId) {
+    const statusEl = document.getElementById('cot-certs-status');
+    const statusText = document.getElementById('cot-certs-status-text');
+    const replaceBtn = document.getElementById('cot-certs-replace-btn');
+    const uploadDiv = document.getElementById('cot-certs-upload');
+    const uploadMsg = document.getElementById('cot-certs-upload-msg');
+    statusEl.style.display = 'block';
+    uploadMsg.textContent = '';
+    try {
+        const r = await fetch('/api/outputs/' + outputId + '/cot-certs/status');
+        const d = await r.json();
+        if (r.status === 403) {
+            statusText.textContent = 'Only the output owner can manage certificates.';
+            replaceBtn.style.display = 'none';
+            uploadDiv.style.display = 'none';
+            return;
+        }
+        if (d.has_cert) {
+            statusText.textContent = 'Certificate installed.';
+            replaceBtn.style.display = 'inline-block';
+            replaceBtn.onclick = function() { uploadDiv.style.display = 'block'; replaceBtn.style.display = 'none'; statusText.textContent = ''; };
+            uploadDiv.style.display = 'none';
+        } else {
+            statusText.textContent = '';
+            replaceBtn.style.display = 'none';
+            uploadDiv.style.display = 'block';
+        }
+    } catch (e) {
+        statusText.textContent = 'Could not load certificate status.';
+        replaceBtn.style.display = 'none';
+        uploadDiv.style.display = 'block';
+    }
+}
+
+document.getElementById('cot-certs-replace-btn').onclick = function() {
+    document.getElementById('cot-certs-upload').style.display = 'block';
+    this.style.display = 'none';
+    document.getElementById('cot-certs-status-text').textContent = '';
+};
+
+document.getElementById('cot-certs-upload-btn').onclick = async function() {
+    const outputId = document.getElementById('modal-output-id').value;
+    if (!outputId) return;
+    const certFile = document.getElementById('cot-cert-file').files[0];
+    const keyFile = document.getElementById('cot-key-file').files[0];
+    const caFile = document.getElementById('cot-ca-file').files[0];
+    const msgEl = document.getElementById('cot-certs-upload-msg');
+    msgEl.textContent = '';
+    if (!certFile || !keyFile) {
+        msgEl.textContent = 'Select both certificate and key files.';
+        msgEl.style.color = 'var(--red)';
+        return;
+    }
+    const fd = new FormData();
+    fd.append('cert', certFile);
+    fd.append('key', keyFile);
+    if (caFile) fd.append('ca', caFile);
+    this.disabled = true;
+    try {
+        const r = await fetch('/api/outputs/' + outputId + '/cot-certs', { method: 'POST', body: fd });
+        const d = await r.json();
+        if (r.ok && d.success) {
+            msgEl.textContent = 'Certificates saved.';
+            msgEl.style.color = 'var(--green)';
+            document.getElementById('cot-cert-file').value = '';
+            document.getElementById('cot-key-file').value = '';
+            document.getElementById('cot-ca-file').value = '';
+            loadCotCertStatus(outputId);
+        } else {
+            msgEl.textContent = d.error || 'Upload failed';
+            msgEl.style.color = 'var(--red)';
+        }
+    } catch (e) {
+        msgEl.textContent = 'Request failed.';
+        msgEl.style.color = 'var(--red)';
+    }
+    this.disabled = false;
+};
 
 async function saveOutput() {
     const errEl = document.getElementById('modal-error');

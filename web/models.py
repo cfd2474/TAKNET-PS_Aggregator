@@ -52,6 +52,18 @@ def get_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cot_transforms_output ON cot_transforms(output_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cot_transforms_hex ON cot_transforms(output_id, hex)")
         conn.commit()
+        # Migration: CoT push TLS certs (encrypted at rest)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS output_cot_certs (
+                output_id INTEGER PRIMARY KEY,
+                cert_encrypted TEXT NOT NULL,
+                key_encrypted TEXT NOT NULL,
+                ca_encrypted TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
+            )
+        """)
+        conn.commit()
         _initialized = True
 
     return conn
@@ -780,6 +792,63 @@ class CotTransformModel:
         ).fetchone()
         conn.close()
         return dict_row(row)
+
+
+class OutputCotCertModel:
+    """CoT push TLS client certificates. Encrypted at rest; never returned to API/UI. Owner-only upload/replace."""
+
+    @staticmethod
+    def has_cert(output_id: int) -> bool:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT 1 FROM output_cot_certs WHERE output_id = ?", (output_id,)
+        ).fetchone()
+        conn.close()
+        return row is not None
+
+    @staticmethod
+    def set(output_id: int, cert_pem: str, key_pem: str, ca_pem: str = None) -> None:
+        from cert_crypto import encrypt_cert
+        cert_enc = encrypt_cert((cert_pem or "").strip())
+        key_enc = encrypt_cert((key_pem or "").strip())
+        ca_enc = encrypt_cert((ca_pem or "").strip()) if (ca_pem and (ca_pem or "").strip()) else None
+        conn = get_db()
+        conn.execute(
+            """INSERT OR REPLACE INTO output_cot_certs
+               (output_id, cert_encrypted, key_encrypted, ca_encrypted, updated_at)
+               VALUES (?, ?, ?, ?, datetime('now'))""",
+            (output_id, cert_enc, key_enc, ca_enc),
+        )
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def delete(output_id: int) -> None:
+        conn = get_db()
+        conn.execute("DELETE FROM output_cot_certs WHERE output_id = ?", (output_id,))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def get_decrypted(output_id: int):
+        """Return plaintext cert/key/ca for backend CoT sender only. Never expose via API."""
+        conn = get_db()
+        row = conn.execute(
+            "SELECT cert_encrypted, key_encrypted, ca_encrypted FROM output_cot_certs WHERE output_id = ?",
+            (output_id,),
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None
+        try:
+            from cert_crypto import decrypt_cert
+            return {
+                "cert_pem": decrypt_cert(row["cert_encrypted"]),
+                "key_pem": decrypt_cert(row["key_encrypted"]),
+                "ca_pem": decrypt_cert(row["ca_encrypted"]) if row["ca_encrypted"] else None,
+            }
+        except Exception:
+            return None
 
 
 def signal_drop_output(output_id: int):

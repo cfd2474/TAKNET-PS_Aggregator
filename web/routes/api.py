@@ -10,7 +10,7 @@ import psutil
 import requests as http_requests
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 
-from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel
+from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel, OutputCotCertModel
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
@@ -1145,6 +1145,62 @@ def cot_transform_delete(output_id, transform_id):
         return jsonify({"error": "Access denied"}), 403
     CotTransformModel.delete(transform_id, output_id)
     return jsonify({"success": True})
+
+
+# ── CoT push TLS certificates (owner-only; never return cert content) ─────────
+
+def _cot_cert_owner_only(output_id):
+    """Ensure current user is the output creator. Certs are never visible to admins or other users."""
+    from flask_login import current_user
+    output = OutputModel.get_by_id(output_id, int(current_user.id), current_user.role)
+    if not output:
+        return None, 404
+    if output.get("output_type") != "cot":
+        return None, 404
+    if int(output["created_by"]) != int(current_user.id):
+        return None, 403
+    return output, None
+
+
+@bp.route("/outputs/<int:output_id>/cot-certs/status")
+@network_admin_required
+def cot_certs_status(output_id):
+    """Return only { has_cert: bool }. Only the output creator can call this."""
+    from flask_login import current_user
+    output, err = _cot_cert_owner_only(output_id)
+    if err:
+        return jsonify({"error": "Not found or access denied"}), err
+    return jsonify({"has_cert": OutputCotCertModel.has_cert(output_id)})
+
+
+@bp.route("/outputs/<int:output_id>/cot-certs", methods=["POST"])
+@network_admin_required
+def cot_certs_upload(output_id):
+    """Upload client cert + key (and optional CA) for CoT push TLS. Owner only. Stored encrypted; never returned."""
+    from flask_login import current_user
+    output, err = _cot_cert_owner_only(output_id)
+    if err:
+        return jsonify({"error": "Not found or access denied"}), err
+    cert_pem = key_pem = ca_pem = None
+    if request.content_type and "multipart/form-data" in request.content_type:
+        cert_file = request.files.get("cert")
+        key_file = request.files.get("key")
+        ca_file = request.files.get("ca")
+        if cert_file and cert_file.filename:
+            cert_pem = cert_file.read().decode("utf-8", errors="replace")
+        if key_file and key_file.filename:
+            key_pem = key_file.read().decode("utf-8", errors="replace")
+        if ca_file and ca_file.filename:
+            ca_pem = ca_file.read().decode("utf-8", errors="replace")
+    if not cert_pem or not cert_pem.strip():
+        return jsonify({"error": "Client certificate (cert) file is required"}), 400
+    if not key_pem or not key_pem.strip():
+        return jsonify({"error": "Private key (key) file is required"}), 400
+    try:
+        OutputCotCertModel.set(output_id, cert_pem.strip(), key_pem.strip(), (ca_pem or "").strip() or None)
+        return jsonify({"success": True})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @bp.route("/outputs/<int:output_id>/cot-transforms/import", methods=["POST"])

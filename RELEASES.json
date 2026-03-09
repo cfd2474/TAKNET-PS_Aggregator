@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.135",
+    "date": "2026-03-09",
+    "notes": [
+      "CoT push: TLS client certificate upload in output modal (same window). Certs stored encrypted; only the output owner can upload or replace; cert content never returned to UI or admins. Owner sees only 'Certificate installed' or upload form; can replace without viewing."
+    ]
+  },
+  {
     "version": "1.0.134",
     "date": "2026-03-09",
     "notes": [

@@ -145,3 +145,13 @@ CREATE TABLE IF NOT EXISTS cot_transforms (
 );
 CREATE INDEX IF NOT EXISTS idx_cot_transforms_output ON cot_transforms(output_id);
 CREATE INDEX IF NOT EXISTS idx_cot_transforms_hex ON cot_transforms(output_id, hex);
+
+-- CoT push TLS client certificates (encrypted at rest; only output owner can upload/replace; never returned to UI or admins)
+CREATE TABLE IF NOT EXISTS output_cot_certs (
+    output_id INTEGER PRIMARY KEY,
+    cert_encrypted TEXT NOT NULL,
+    key_encrypted TEXT NOT NULL,
+    ca_encrypted TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
+);
