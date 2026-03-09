@@ -1026,11 +1026,14 @@ def output_create():
 @network_admin_required
 def output_update(output_id):
     from flask_login import current_user
+    import json as _json
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
     data = request.get_json(silent=True) or {}
     if "use_cotproxy" in data:
         data["use_cotproxy"] = 1 if data["use_cotproxy"] else 0
+    if "config" in data and isinstance(data["config"], dict):
+        data["config"] = _json.dumps(data["config"])
     OutputModel.update(output_id, data)
     return jsonify({"success": True})
 

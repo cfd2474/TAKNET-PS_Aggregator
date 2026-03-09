@@ -32,7 +32,9 @@ COT_MESSAGE_DELIMITER = b" "
 def get_cot_push_outputs():
     """
     Return list of active outputs that are CoT push (output_type=cot, mode=push, status=active)
-    with a cot_url in config. Each item: { output_id, cot_url, use_cotproxy, name }.
+    with a cot_url in config. Each item: { output_id, cot_url, use_cotproxy, name, pass_all }.
+    pass_all: when False, only send aircraft that have a transform; when True, send all traffic
+    (transforms still apply to those that have rules).
     """
     from models import get_db
     conn = get_db()
@@ -53,6 +55,7 @@ def get_cot_push_outputs():
             "name": row["name"],
             "cot_url": cot_url,
             "use_cotproxy": bool(row["use_cotproxy"]),
+            "pass_all": bool(cfg.get("pass_all")),
         })
     return result
 

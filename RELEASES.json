@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.142",
+    "date": "2026-03-09",
+    "notes": [
+      "COTProxy: Pass all traffic toggle (default off). Off = only transformed aircraft sent; on = all traffic with transforms applied where defined."
+    ]
+  },
+  {
     "version": "1.0.141",
     "date": "2026-03-09",
     "notes": [
