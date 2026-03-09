@@ -747,6 +747,7 @@ class CotTransformModel:
     @staticmethod
     def import_from_csv(output_id: int, csv_text: str) -> tuple:
         """Parse CSV (header: DOMAIN,AGENCY,REG,CALLSIGN,TYPE,MODEL,HEX,COT,ICON) and insert rows.
+        Uses a single connection and transaction to avoid timeouts on large imports.
         Returns (inserted_count, error_messages)."""
         import csv
         import io
@@ -754,30 +755,39 @@ class CotTransformModel:
         errors = []
         try:
             reader = csv.DictReader(io.StringIO(csv_text))
-            # Normalize header to uppercase for comparison
             if reader.fieldnames:
                 reader.fieldnames = [f.strip().upper() for f in reader.fieldnames]
-            for i, row in enumerate(reader):
-                row_num = i + 2  # 1-based + header
-                hex_val = (row.get("HEX") or "").strip().upper()
-                if not hex_val:
-                    errors.append(f"Row {row_num}: HEX is required")
-                    continue
-                try:
-                    CotTransformModel.create(output_id, {
-                        "domain": row.get("DOMAIN"),
-                        "agency": row.get("AGENCY"),
-                        "reg": row.get("REG"),
-                        "callsign": row.get("CALLSIGN"),
-                        "type": row.get("TYPE"),
-                        "model": row.get("MODEL"),
-                        "hex": hex_val,
-                        "cot": row.get("COT"),
-                        "icon": row.get("ICON"),
-                    })
-                    inserted += 1
-                except Exception as e:
-                    errors.append(f"Row {row_num}: {e}")
+            conn = get_db()
+            try:
+                for i, row in enumerate(reader):
+                    row_num = i + 2
+                    hex_val = (row.get("HEX") or "").strip().upper()
+                    if not hex_val:
+                        errors.append(f"Row {row_num}: HEX is required")
+                        continue
+                    try:
+                        conn.execute(
+                            """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (
+                                output_id,
+                                (row.get("DOMAIN") or "").strip() or None,
+                                (row.get("AGENCY") or "").strip() or None,
+                                (row.get("REG") or "").strip() or None,
+                                (row.get("CALLSIGN") or "").strip() or None,
+                                (row.get("TYPE") or "").strip() or None,
+                                (row.get("MODEL") or "").strip() or None,
+                                hex_val,
+                                (row.get("COT") or "").strip() or None,
+                                (row.get("ICON") or "").strip() or None,
+                            ),
+                        )
+                        inserted += 1
+                    except Exception as e:
+                        errors.append(f"Row {row_num}: {e}")
+                conn.commit()
+            finally:
+                conn.close()
         except Exception as e:
             errors.append(f"CSV parse error: {e}")
         return inserted, errors

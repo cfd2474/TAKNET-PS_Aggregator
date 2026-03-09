@@ -1237,6 +1237,7 @@ def cot_transforms_import(output_id):
         csv_text = data.get("csv") or request.get_data(as_text=True)
     if not csv_text or not csv_text.strip():
         return jsonify({"error": "No CSV data (send file or JSON { csv: \"...\" } or raw body)"}), 400
+    # Single transaction in import_from_csv to avoid 504 on large CSVs; if behind nginx, consider proxy_read_timeout.
     inserted, errors = CotTransformModel.import_from_csv(output_id, csv_text)
     return jsonify({"success": True, "inserted": inserted, "errors": errors})
 

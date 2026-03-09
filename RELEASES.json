@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.139",
+    "date": "2026-03-09",
+    "notes": [
+      "COTProxy CSV import: use single DB transaction for bulk insert to avoid 504 Gateway Time-out on large uploads."
+    ]
+  },
+  {
     "version": "1.0.138",
     "date": "2026-03-09",
     "notes": [
