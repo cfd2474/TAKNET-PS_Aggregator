@@ -27,14 +27,21 @@
 </div>
 
 <div class="card">
-    <div class="card-header">
+    <div class="card-header" style="flex-wrap:wrap;gap:8px;">
         <h3>Transform rules</h3>
         <span style="font-size:12px;color:var(--text-muted);" id="transform-count">0</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                <input type="checkbox" id="select-all-top" title="Select all"> Select all
+            </label>
+            <button type="button" class="btn btn-danger" id="bulk-delete-btn-top" style="font-size:12px;display:none;" onclick="bulkDeleteTransforms()">Delete selected</button>
+        </div>
     </div>
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
+                    <th style="width:36px;"><input type="checkbox" id="select-all-header" title="Select all"></th>
                     <th>HEX</th>
                     <th>Callsign</th>
                     <th>Type</th>
@@ -48,9 +55,41 @@
                 </tr>
             </thead>
             <tbody id="transforms-tbody">
-                <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
+                <tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
             </tbody>
+            <tfoot id="transforms-tfoot" style="display:none;">
+                <tr>
+                    <td colspan="11" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
+                        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-right:12px;">
+                            <input type="checkbox" id="select-all-bottom" title="Select all"> Select all
+                        </label>
+                        <button type="button" class="btn btn-danger" id="bulk-delete-btn-bottom" style="font-size:12px;" onclick="bulkDeleteTransforms()">Delete selected</button>
+                    </td>
+                </tr>
+            </tfoot>
         </table>
+    </div>
+</div>
+
+<!-- CSV import status modal (processing / success / failure) -->
+<div class="modal-overlay" id="csv-import-modal" style="pointer-events:auto;">
+    <div class="modal" style="max-width:420px;">
+        <div class="modal-header">
+            <h3 id="csv-import-modal-title">Importing CSV</h3>
+        </div>
+        <div class="modal-body">
+            <div id="csv-import-processing" style="text-align:center;padding:20px;">
+                <p style="margin:0;color:var(--text-secondary);">Processing… Please wait.</p>
+            </div>
+            <div id="csv-import-success" style="display:none;text-align:center;padding:20px;">
+                <p style="margin:0 0 16px;color:var(--green);" id="csv-import-success-msg"></p>
+                <button type="button" class="btn btn-primary" onclick="dismissCsvImportModal()">Dismiss</button>
+            </div>
+            <div id="csv-import-failure" style="display:none;padding:20px;">
+                <p style="margin:0 0 12px;color:var(--red);" id="csv-import-failure-msg"></p>
+                <button type="button" class="btn btn-primary" onclick="dismissCsvImportModal()">Dismiss</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -191,37 +230,117 @@ async function loadPsAirIcons() {
     }
 }
 
+function showCsvImportModal(state, message) {
+    const modal = document.getElementById('csv-import-modal');
+    document.getElementById('csv-import-processing').style.display = state === 'processing' ? 'block' : 'none';
+    document.getElementById('csv-import-success').style.display = state === 'success' ? 'block' : 'none';
+    document.getElementById('csv-import-failure').style.display = state === 'failure' ? 'block' : 'none';
+    document.getElementById('csv-import-modal-title').textContent = state === 'processing' ? 'Importing CSV' : (state === 'success' ? 'Import complete' : 'Import failed');
+    document.getElementById('csv-import-success-msg').textContent = message || '';
+    document.getElementById('csv-import-failure-msg').textContent = message || '';
+    modal.classList.add('show');
+}
+
+function dismissCsvImportModal() {
+    document.getElementById('csv-import-modal').classList.remove('show');
+    document.getElementById('csv-file').value = '';
+}
+
 document.getElementById('csv-file').addEventListener('change', async function(e) {
     const f = e.target.files[0];
     if (!f) return;
-    const text = await f.text();
-    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv: text }),
-    });
-    const d = await r.json();
-    e.target.value = '';
-    if (d.inserted !== undefined) {
-        loadTransforms();
-        if (d.errors && d.errors.length) alert('Imported ' + d.inserted + ' rows. Errors: ' + d.errors.join('; '));
-        else if (d.inserted) alert('Imported ' + d.inserted + ' row(s).');
-    } else alert(d.error || 'Import failed');
+    showCsvImportModal('processing');
+    let text;
+    try {
+        text = await f.text();
+    } catch (err) {
+        showCsvImportModal('failure', 'Could not read file: ' + err.message);
+        e.target.value = '';
+        return;
+    }
+    try {
+        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ csv: text }),
+        });
+        const d = await r.json();
+        e.target.value = '';
+        if (d.inserted !== undefined) {
+            loadTransforms();
+            let msg = 'Imported ' + d.inserted + ' row(s).';
+            if (d.errors && d.errors.length) msg += ' Some rows had errors: ' + d.errors.slice(0, 3).join('; ') + (d.errors.length > 3 ? '…' : '');
+            showCsvImportModal('success', msg);
+        } else {
+            showCsvImportModal('failure', d.error || 'Import failed');
+        }
+    } catch (err) {
+        e.target.value = '';
+        showCsvImportModal('failure', 'Request failed: ' + err.message);
+    }
 });
+
+function updateBulkDeleteVisibility() {
+    const allCb = document.querySelectorAll('.transform-cb');
+    const checked = document.querySelectorAll('.transform-cb:checked');
+    const n = checked.length;
+    const allCount = allCb.length;
+    const allSelected = allCount > 0 && n === allCount;
+    document.getElementById('bulk-delete-btn-top').style.display = n ? 'inline-block' : 'none';
+    document.getElementById('bulk-delete-btn-bottom').style.display = n ? 'inline-block' : 'none';
+    document.getElementById('select-all-top').checked = allSelected;
+    document.getElementById('select-all-header').checked = allSelected;
+    document.getElementById('select-all-bottom').checked = allSelected;
+}
+
+function wireSelectAll() {
+    function setAll(checked) {
+        document.querySelectorAll('.transform-cb').forEach(cb => { cb.checked = checked; });
+        updateBulkDeleteVisibility();
+    }
+    document.getElementById('select-all-top').onclick = function() { setAll(this.checked); };
+    document.getElementById('select-all-header').onclick = function() { setAll(this.checked); };
+    document.getElementById('select-all-bottom').onclick = function() { setAll(this.checked); };
+    document.querySelectorAll('.transform-cb').forEach(cb => {
+        cb.onclick = updateBulkDeleteVisibility;
+    });
+}
+
+async function bulkDeleteTransforms() {
+    const ids = Array.from(document.querySelectorAll('.transform-cb:checked')).map(cb => parseInt(cb.value, 10)).filter(Boolean);
+    if (!ids.length) return;
+    if (!confirm('Delete ' + ids.length + ' selected transform(s)?')) return;
+    try {
+        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: ids }),
+        });
+        const d = await r.json();
+        if (d.success) loadTransforms();
+        else alert(d.error || 'Delete failed');
+    } catch (e) {
+        alert('Request failed: ' + e.message);
+    }
+}
 
 async function loadTransforms() {
     const tbody = document.getElementById('transforms-tbody');
+    const tfoot = document.getElementById('transforms-tfoot');
     try {
         const r = await fetch('/api/outputs/' + outputId + '/cot-transforms');
         const d = await r.json();
         const items = d.transforms || [];
         document.getElementById('transform-count').textContent = items.length + ' rule(s)';
+        tfoot.style.display = items.length ? 'table-footer-group' : 'none';
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
+            document.getElementById('bulk-delete-btn-top').style.display = 'none';
             return;
         }
         tbody.innerHTML = items.map(t => `
             <tr>
+                <td style="vertical-align:middle;"><input type="checkbox" class="transform-cb" value="${t.id}" title="Select"></td>
                 <td><code style="font-size:12px;">${escapeHtml(t.hex || '')}</code></td>
                 <td>${escapeHtml(t.callsign || '')}</td>
                 <td>${escapeHtml(t.type || '')}</td>
@@ -237,8 +356,11 @@ async function loadTransforms() {
                 </td>
             </tr>
         `).join('');
+        wireSelectAll();
+        updateBulkDeleteVisibility();
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="10" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
+        tfoot.style.display = 'none';
     }
 }
 

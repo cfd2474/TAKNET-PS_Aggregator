@@ -1147,6 +1147,24 @@ def cot_transform_delete(output_id, transform_id):
     return jsonify({"success": True})
 
 
+@bp.route("/outputs/<int:output_id>/cot-transforms/bulk-delete", methods=["POST"])
+@network_admin_required
+def cot_transforms_bulk_delete(output_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids")
+    if not ids or not isinstance(ids, list):
+        return jsonify({"error": "ids array required"}), 400
+    for tid in ids:
+        try:
+            CotTransformModel.delete(int(tid), output_id)
+        except (TypeError, ValueError):
+            pass
+    return jsonify({"success": True, "deleted": len(ids)})
+
+
 # ── CoT push TLS certificates (owner-only; never return cert content) ─────────
 
 def _cot_cert_owner_only(output_id):

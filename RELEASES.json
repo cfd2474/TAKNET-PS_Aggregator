@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.136",
+    "date": "2026-03-09",
+    "notes": [
+      "COTProxy config: CSV import shows processing modal (blocks navigation), then success or failure with Dismiss. Bulk delete: checkboxes in first column, Select all (top/header/bottom), Delete selected at top and bottom; API bulk-delete."
+    ]
+  },
+  {
     "version": "1.0.135",
     "date": "2026-03-09",
     "notes": [
