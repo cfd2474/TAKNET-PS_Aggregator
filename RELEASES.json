@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.130",
+    "date": "2026-02-26",
+    "notes": [
+      "Outputs page: added REST API (v2) reference card with endpoints table and link to airplanes.live API guide."
+    ]
+  },
+  {
     "version": "1.0.129",
     "date": "2026-02-26",
     "notes": [
