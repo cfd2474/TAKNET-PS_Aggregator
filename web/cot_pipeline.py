@@ -292,7 +292,7 @@ def run_cot_sender_cycle():
         sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(15)
+            sock.settimeout(10)
             sock.connect((host, port))
             if is_tls and cert_key:
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:
@@ -304,6 +304,9 @@ def run_cot_sender_cycle():
                 try:
                     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
                     context.load_cert_chain(cert_path, key_path)
+                    # TAK Server often uses self-signed server certs; skip server verification so connection succeeds.
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
                     sock = context.wrap_socket(sock, server_hostname=host)
                 finally:
                     try:
