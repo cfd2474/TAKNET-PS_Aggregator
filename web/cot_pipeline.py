@@ -292,7 +292,7 @@ def run_cot_sender_cycle():
         sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(10)
+            sock.settimeout(5)
             sock.connect((host, port))
             if is_tls and cert_key:
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:

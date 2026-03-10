@@ -135,7 +135,8 @@ def create_app():
                 run_cot_sender_cycle()
             except Exception:
                 pass
-    scheduler.add_job(_run_cot_sender, "interval", seconds=3, id="cot_sender")
+    # Interval 10s so each run can finish (fetch + connect/send) before the next; avoids "max instances" skips.
+    scheduler.add_job(_run_cot_sender, "interval", seconds=10, id="cot_sender")
 
     scheduler.start()
 

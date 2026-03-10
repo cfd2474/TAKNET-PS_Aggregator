@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.154",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT sender: interval 3s → 10s, socket timeout 10s → 5s to prevent job overlap and 'maximum instances reached' skips."
+    ]
+  },
+  {
     "version": "1.0.153",
     "date": "2026-03-10",
     "notes": [
