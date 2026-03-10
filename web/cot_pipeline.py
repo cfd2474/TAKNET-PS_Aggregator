@@ -23,10 +23,15 @@ import os
 import socket
 import ssl
 import tempfile
+import threading
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+
+# Only one cycle at a time (avoid overlapping fetch/connect from scheduler).
+_cot_sender_lock = threading.Lock()
 
 # PyTAK/TAK Server wire format: each CoT message is XML UTF-8 bytes followed by this delimiter.
 COT_MESSAGE_DELIMITER = b" "
@@ -231,16 +236,29 @@ def run_cot_sender_cycle():
     Uses AIRCRAFT_JSON_URL for aircraft data. TLS outputs use stored client cert from OutputCotCertModel.
     """
     import requests
+    if not _cot_sender_lock.acquire(blocking=False):
+        log.debug("CoT sender: skip (previous run still active)")
+        return
+    try:
+        _run_cot_sender_cycle_impl(requests)
+    finally:
+        _cot_sender_lock.release()
+
+
+def _run_cot_sender_cycle_impl(requests):
+    """Inner implementation; hold _cot_sender_lock before calling."""
+    log.info("CoT sender: cycle start")
     output_list = get_cot_push_outputs()
+    log.info("CoT sender: got %d push output(s)", len(output_list))
     if not output_list:
-        log.debug("CoT sender: no active CoT push outputs")
         return
     aircraft_url = os.environ.get("AIRCRAFT_JSON_URL", "http://aircraft-merger:8090/data/aircraft.json")
     try:
-        # (connect_timeout, read_timeout) so we don't hang on DNS or slow response
-        r = requests.get(aircraft_url, timeout=(3, 5))
+        log.info("CoT sender: fetching aircraft from %s", aircraft_url)
+        r = requests.get(aircraft_url, timeout=(2, 3))
         r.raise_for_status()
         data = r.json()
+        log.info("CoT sender: aircraft fetch OK (%d aircraft)", len(data.get("aircraft", [])))
     except Exception as e:
         log.warning("CoT sender: failed to fetch aircraft from %s: %s", aircraft_url, e)
         return
@@ -274,6 +292,7 @@ def run_cot_sender_cycle():
                 name, pass_all, use_cotproxy, len(aircraft),
             )
             continue
+        log.info("CoT sender: %s — connecting to %s (TLS=%s), %d message(s) to send", name, cot_url, cot_url.lower().startswith("tls://"), len(to_send))
         is_tls = cot_url.lower().startswith("tls://")
         rest = cot_url.split("://", 1)[-1].strip()
         if "/" in rest:
@@ -294,8 +313,10 @@ def run_cot_sender_cycle():
         sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(3)
+            log.info("CoT sender: %s — TCP connect to %s:%s", name, host, port)
             sock.connect((host, port))
+            log.info("CoT sender: %s — TCP connected", name)
             if is_tls and cert_key:
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:
                     cf.write(cert_key["cert_pem"])
@@ -309,7 +330,9 @@ def run_cot_sender_cycle():
                     # TAK Server often uses self-signed server certs; skip server verification so connection succeeds.
                     context.check_hostname = False
                     context.verify_mode = ssl.CERT_NONE
+                    log.info("CoT sender: %s — TLS handshake...", name)
                     sock = context.wrap_socket(sock, server_hostname=host)
+                    log.info("CoT sender: %s — TLS OK", name)
                 finally:
                     try:
                         os.unlink(cert_path)
@@ -319,6 +342,7 @@ def run_cot_sender_cycle():
                         os.unlink(key_path)
                     except Exception:
                         pass
+            log.info("CoT sender: %s — sending %d CoT message(s)", name, len(to_send))
             for xml_str in to_send:
                 msg = (xml_str + " ").encode("utf-8")
                 sock.sendall(msg)
@@ -331,3 +355,4 @@ def run_cot_sender_cycle():
                     sock.close()
                 except Exception:
                     pass
+    log.info("CoT sender: cycle done")
