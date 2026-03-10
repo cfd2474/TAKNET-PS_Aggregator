@@ -126,36 +126,48 @@
                 </div>
             </div>
 
-            <!-- CoT config (when type=cot): destination URL for API mode -->
+            <!-- CoT push config: protocol, server address, port; certs only for TLS -->
             <div id="cot-dest-config" style="display:none;margin-top:4px;">
                 <div class="form-group">
-                    <label>CoT destination (for push)</label>
-                    <input class="form-control" id="modal-cot-url" placeholder="tcp://takserver:8087 or tls://takserver:8089">
+                    <label>Connection</label>
+                    <select class="form-control" id="modal-cot-protocol">
+                        <option value="tcp">TCP (unencrypted)</option>
+                        <option value="tls">TLS (encrypted; requires client certificate)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Server address</label>
+                    <input type="text" class="form-control" id="modal-cot-host" placeholder="takserver.example.com or 10.0.0.5">
+                </div>
+                <div class="form-group">
+                    <label>Port</label>
+                    <input type="number" class="form-control" id="modal-cot-port" placeholder="8087" min="1" max="65535" step="1" style="max-width:120px;">
                 </div>
             </div>
 
-            <!-- CoT push TLS certificates (owner-only; shown when type=cot and mode=push) -->
+            <!-- CoT push TLS certificates — shown only when protocol is TLS -->
             <div id="cot-certs-section" style="display:none;margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
-                <h4 style="font-size:13px;margin:0 0 8px;">TLS client certificates (TAK Server)</h4>
-                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Upload client certificate and private key for <code>tls://</code> connections. Stored encrypted; only you can add or replace. No one can view the cert after upload.</p>
+                <h4 style="font-size:13px;margin:0 0 8px;">Client certificate and private key</h4>
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Get these from your TAK Server. When you are assigned to a group or channel, the server provides a client certificate (and often a .p12 package). You need two files:</p>
+                <ul style="font-size:12px;color:var(--text-muted);margin:0 0 10px;padding-left:18px;">
+                    <li><strong>Certificate</strong> — the public client cert. Usually a <code>.pem</code> or <code>.crt</code> file; inside it says <code>BEGIN CERTIFICATE</code>. This identifies your connection to the server (e.g. which group/channel).</li>
+                    <li><strong>Private key</strong> — the secret key that pairs with the certificate. Usually a <code>.pem</code> or <code>.key</code> file; inside it says <code>BEGIN PRIVATE KEY</code> or <code>BEGIN RSA PRIVATE KEY</code>. Never share this file.</li>
+                </ul>
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Stored encrypted; only you can add or replace. No one can view the files after upload.</p>
                 <div id="cot-certs-status" style="display:none;margin-bottom:10px;">
                     <span id="cot-certs-status-text" style="font-size:13px;"></span>
                     <button type="button" class="btn" id="cot-certs-replace-btn" style="font-size:12px;margin-left:8px;display:none;">Replace certificate</button>
                 </div>
                 <div id="cot-certs-upload" style="transition:opacity 0.2s;">
                     <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">Client certificate (.pem)</label>
+                        <label style="font-size:12px;">Certificate (.pem or .crt)</label>
                         <input type="file" id="cot-cert-file" accept=".pem,.crt" class="form-control" style="padding:4px;">
                     </div>
                     <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">Private key (.pem)</label>
+                        <label style="font-size:12px;">Private key (.pem or .key)</label>
                         <input type="file" id="cot-key-file" accept=".pem,.key" class="form-control" style="padding:4px;">
                     </div>
-                    <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">CA bundle (optional)</label>
-                        <input type="file" id="cot-ca-file" accept=".pem,.crt" class="form-control" style="padding:4px;">
-                    </div>
-                    <button type="button" class="btn btn-primary" id="cot-certs-upload-btn" style="font-size:12px;">Upload certificates</button>
+                    <button type="button" class="btn btn-primary" id="cot-certs-upload-btn" style="font-size:12px;">Upload certificate and key</button>
                     <span id="cot-certs-upload-msg" style="font-size:12px;margin-left:8px;"></span>
                 </div>
             </div>
@@ -406,23 +418,18 @@ function syncElevationMaxFromInput() {
     document.getElementById('filter-elevation-max-slider').value = v;
 }
 
-function onTypeChange() {
-    const type = document.getElementById('modal-type').value;
-    const isCot = type === 'cot';
-    document.getElementById('api-info-json').style.display  = (type === 'json')      ? 'block' : 'none';
-    document.getElementById('api-info-beast').style.display = (type === 'beast_raw') ? 'block' : 'none';
-    document.getElementById('api-info-cot').style.display    = isCot ? 'block' : 'none';
-    document.getElementById('cot-options').style.display     = isCot ? 'block' : 'none';
-    const mode = document.getElementById('modal-mode').value;
-    document.getElementById('cot-dest-config').style.display = (isCot && mode === 'push') ? 'block' : 'none';
+function cotProtocolChange() {
+    const protocol = document.getElementById('modal-cot-protocol').value;
+    const portEl = document.getElementById('modal-cot-port');
+    const defaultPort = protocol === 'tls' ? '8089' : '8087';
+    portEl.placeholder = defaultPort;
+    if (!portEl.value || portEl.value === '8087' || portEl.value === '8089') portEl.value = defaultPort;
     const certSection = document.getElementById('cot-certs-section');
-    certSection.style.display = (isCot && mode === 'push') ? 'block' : 'none';
-    document.getElementById('push-url-label').textContent =
-        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : (isCot ? 'CoT destination (tcp/udp/tls URL)' : 'Push URL');
-    document.getElementById('push-interval-group').style.display =
-        (type === 'beast_raw' || type === 'cot') ? 'none' : 'block';
-    const outputId = document.getElementById('modal-output-id').value;
-    if (isCot && mode === 'push') {
+    const showCerts = document.getElementById('modal-type').value === 'cot' &&
+        document.getElementById('modal-mode').value === 'push' && protocol === 'tls';
+    certSection.style.display = showCerts ? 'block' : 'none';
+    if (showCerts) {
+        const outputId = document.getElementById('modal-output-id').value;
         if (outputId) loadCotCertStatus(outputId);
         else {
             document.getElementById('cot-certs-status').style.display = 'block';
@@ -434,6 +441,23 @@ function onTypeChange() {
     }
 }
 
+function onTypeChange() {
+    const type = document.getElementById('modal-type').value;
+    const isCot = type === 'cot';
+    document.getElementById('api-info-json').style.display  = (type === 'json')      ? 'block' : 'none';
+    document.getElementById('api-info-beast').style.display = (type === 'beast_raw') ? 'block' : 'none';
+    document.getElementById('api-info-cot').style.display    = isCot ? 'block' : 'none';
+    document.getElementById('cot-options').style.display     = isCot ? 'block' : 'none';
+    const mode = document.getElementById('modal-mode').value;
+    document.getElementById('cot-dest-config').style.display = (isCot && mode === 'push') ? 'block' : 'none';
+    document.getElementById('push-url-label').textContent =
+        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : (isCot ? 'CoT destination' : 'Push URL');
+    document.getElementById('push-interval-group').style.display =
+        (type === 'beast_raw' || type === 'cot') ? 'none' : 'block';
+    if (isCot && mode === 'push') cotProtocolChange();
+    else document.getElementById('cot-certs-section').style.display = 'none';
+}
+
 function onModeChange() {
     const mode = document.getElementById('modal-mode').value;
     const type = document.getElementById('modal-type').value;
@@ -441,19 +465,8 @@ function onModeChange() {
     document.getElementById('api-config').style.display     = (mode === 'api')  ? 'block' : 'none';
     document.getElementById('key-type-group').style.display = (mode === 'api')  ? 'block' : 'none';
     document.getElementById('cot-dest-config').style.display = (type === 'cot' && mode === 'push') ? 'block' : 'none';
-    const certSection = document.getElementById('cot-certs-section');
-    certSection.style.display = (type === 'cot' && mode === 'push') ? 'block' : 'none';
-    const outputId = document.getElementById('modal-output-id').value;
-    if (type === 'cot' && mode === 'push') {
-        if (outputId) loadCotCertStatus(outputId);
-        else {
-            document.getElementById('cot-certs-status').style.display = 'block';
-            document.getElementById('cot-certs-status-text').textContent = 'Save the output first, then upload certificates below.';
-            document.getElementById('cot-certs-replace-btn').style.display = 'none';
-            document.getElementById('cot-certs-upload').style.display = 'block';
-            setCotCertsSectionEnabled(false);
-        }
-    }
+    if (type === 'cot' && mode === 'push') cotProtocolChange();
+    else document.getElementById('cot-certs-section').style.display = 'none';
 }
 
 async function loadOutputs() {
@@ -534,7 +547,10 @@ function openCreateModal() {
     document.getElementById('modal-key-type').value = 'single_use';
     document.getElementById('modal-use-cotproxy').checked = false;
     document.getElementById('modal-push-url').value = '';
-    document.getElementById('modal-cot-url').value = '';
+    document.getElementById('modal-cot-protocol').value = 'tcp';
+    document.getElementById('modal-cot-host').value = '';
+    document.getElementById('modal-cot-port').value = '8087';
+    document.getElementById('modal-cot-port').placeholder = '8087';
     document.getElementById('modal-push-interval').value = '5';
     document.getElementById('modal-notes').value = '';
     document.getElementById('modal-error').style.display = 'none';
@@ -575,7 +591,20 @@ async function openEditModal(id) {
     document.getElementById('modal-mode').value = o.mode;
     document.getElementById('modal-use-cotproxy').checked = !!o.use_cotproxy;
     document.getElementById('modal-push-url').value = cfg.push_url || '';
-    document.getElementById('modal-cot-url').value = cfg.cot_url || '';
+    (function() {
+        const url = (cfg.cot_url || '').trim();
+        let protocol = 'tcp', host = '', port = '8087';
+        const m = url.match(/^(tcp|tls):\/\/([^:\/]+):(\d+)$/);
+        if (m) {
+            protocol = m[1];
+            host = m[2];
+            port = String(m[3]);
+        }
+        document.getElementById('modal-cot-protocol').value = protocol;
+        document.getElementById('modal-cot-host').value = host;
+        document.getElementById('modal-cot-port').value = port;
+        document.getElementById('modal-cot-port').placeholder = protocol === 'tls' ? '8089' : '8087';
+    })();
     document.getElementById('modal-push-interval').value = cfg.push_interval || 5;
     document.getElementById('modal-notes').value = o.notes || '';
     document.getElementById('filter-include-network-adsb').checked = cfg.include_network_adsb !== false;
@@ -594,7 +623,7 @@ async function openEditModal(id) {
     filterElevationEnableChange();
 
     // Lock fields if key exists — name/type/mode are frozen
-    const lockFields = ['modal-name', 'modal-type', 'modal-mode', 'modal-push-url', 'modal-push-interval'];
+    const lockFields = ['modal-name', 'modal-type', 'modal-mode', 'modal-push-url', 'modal-push-interval', 'modal-cot-protocol', 'modal-cot-host', 'modal-cot-port'];
     lockFields.forEach(fid => {
         const el = document.getElementById(fid);
         if (el) el.disabled = locked;
@@ -620,7 +649,6 @@ async function openEditModal(id) {
     saveBtn.onclick = saveOutput;
     document.getElementById('modal-error').style.display = 'none';
     onTypeChange(); onModeChange();
-    if (o.output_type === 'cot' && o.mode === 'push') loadCotCertStatus(o.id);
     document.getElementById('output-modal').classList.add('show');
 }
 
@@ -631,11 +659,9 @@ function setCotCertsSectionEnabled(enable) {
     uploadDiv.style.opacity = enable ? '1' : '0.6';
     var certFile = document.getElementById('cot-cert-file');
     var keyFile = document.getElementById('cot-key-file');
-    var caFile = document.getElementById('cot-ca-file');
     var uploadBtn = document.getElementById('cot-certs-upload-btn');
     if (certFile) certFile.disabled = !enable;
     if (keyFile) keyFile.disabled = !enable;
-    if (caFile) caFile.disabled = !enable;
     if (uploadBtn) uploadBtn.disabled = !enable;
 }
 
@@ -690,7 +716,6 @@ document.getElementById('cot-certs-upload-btn').onclick = async function() {
     }
     const certFile = document.getElementById('cot-cert-file').files[0];
     const keyFile = document.getElementById('cot-key-file').files[0];
-    const caFile = document.getElementById('cot-ca-file').files[0];
     msgEl.textContent = '';
     if (!certFile || !keyFile) {
         msgEl.textContent = 'Select both certificate and key files.';
@@ -700,17 +725,15 @@ document.getElementById('cot-certs-upload-btn').onclick = async function() {
     const fd = new FormData();
     fd.append('cert', certFile);
     fd.append('key', keyFile);
-    if (caFile) fd.append('ca', caFile);
     this.disabled = true;
     try {
         const r = await fetch('/api/outputs/' + outputId + '/cot-certs', { method: 'POST', body: fd });
         const d = await r.json();
         if (r.ok && d.success) {
-            msgEl.textContent = 'Certificates saved.';
+            msgEl.textContent = 'Certificate and key saved.';
             msgEl.style.color = 'var(--green)';
             document.getElementById('cot-cert-file').value = '';
             document.getElementById('cot-key-file').value = '';
-            document.getElementById('cot-ca-file').value = '';
             loadCotCertStatus(outputId);
         } else {
             msgEl.textContent = d.error || 'Upload failed';
@@ -728,10 +751,23 @@ async function saveOutput() {
     errEl.style.display = 'none';
     const id = document.getElementById('modal-output-id').value;
     const locked = document.getElementById('modal-name').disabled;
+    function buildCotUrl() {
+        const protocol = document.getElementById('modal-cot-protocol').value;
+        const host = document.getElementById('modal-cot-host').value.trim();
+        const port = parseInt(document.getElementById('modal-cot-port').value, 10);
+        if (!host) return null;
+        if (isNaN(port) || port < 1 || port > 65535) return null;
+        return protocol + '://' + host + ':' + port;
+    }
+
     let payload;
     if (locked) {
         const cfg = window._outputModalCfg || {};
         if (!applyFilterConfigToPayload(cfg, errEl)) return;
+        if (document.getElementById('cot-dest-config').style.display !== 'none') {
+            const cotUrl = buildCotUrl();
+            if (cotUrl) cfg.cot_url = cotUrl;
+        }
         payload = {
             notes: document.getElementById('modal-notes').value.trim(),
             config: cfg
@@ -741,8 +777,15 @@ async function saveOutput() {
         const mode = document.getElementById('modal-mode').value;
         const config = {};
         if (mode === 'push') {
-            if (type === 'cot') config.cot_url = document.getElementById('modal-cot-url').value.trim();
-            else config.push_url = document.getElementById('modal-push-url').value.trim();
+            if (type === 'cot') {
+                const cotUrl = buildCotUrl();
+                if (!cotUrl) {
+                    errEl.textContent = 'CoT push: enter server address and a valid port (1–65535).';
+                    errEl.style.display = 'block';
+                    return;
+                }
+                config.cot_url = cotUrl;
+            } else config.push_url = document.getElementById('modal-push-url').value.trim();
             if (type !== 'beast_raw' && type !== 'cot') config.push_interval = parseInt(document.getElementById('modal-push-interval').value) || 5;
         }
         if (!applyFilterConfigToPayload(config, errEl)) return;
@@ -856,6 +899,7 @@ function closeOutputModal() {
     document.getElementById('output-modal').classList.remove('show');
 }
 
+document.getElementById('modal-cot-protocol').addEventListener('change', cotProtocolChange);
 document.getElementById('filter-range-enable').addEventListener('change', filterRangeEnableChange);
 document.getElementById('filter-elevation-enable').addEventListener('change', filterElevationEnableChange);
 document.getElementById('filter-elevation-no-min').addEventListener('change', filterElevationNoMinMaxChange);

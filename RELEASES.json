@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.147",
+    "date": "2026-03-09",
+    "notes": [
+      "CoT push: Connection dropdown (TCP/TLS), server address and port fields with defaults 8087/8089. Certs section only for TLS; clearer cert/key copy and optional CA removed."
+    ]
+  },
+  {
     "version": "1.0.146",
     "date": "2026-03-09",
     "notes": [
