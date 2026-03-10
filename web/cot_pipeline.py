@@ -17,6 +17,7 @@ COTProxy transforms and pass_all filtering, builds CoT XML, and pushes to each c
 """
 
 import json
+import logging
 import math
 import os
 import socket
@@ -24,6 +25,8 @@ import ssl
 import tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+
+log = logging.getLogger(__name__)
 
 # PyTAK/TAK Server wire format: each CoT message is XML UTF-8 bytes followed by this delimiter.
 COT_MESSAGE_DELIMITER = b" "
@@ -230,18 +233,22 @@ def run_cot_sender_cycle():
     import urllib.request
     output_list = get_cot_push_outputs()
     if not output_list:
+        log.debug("CoT sender: no active CoT push outputs")
         return
     aircraft_url = os.environ.get("AIRCRAFT_JSON_URL", "http://aircraft-merger:8090/data/aircraft.json")
     try:
         with urllib.request.urlopen(aircraft_url, timeout=5) as r:
             data = json.loads(r.read().decode())
-    except Exception:
+    except Exception as e:
+        log.warning("CoT sender: failed to fetch aircraft from %s: %s", aircraft_url, e)
         return
     aircraft_raw = data.get("aircraft", [])
-    # Only aircraft with position
     with_pos = [a for a in aircraft_raw if _parse_float(a.get("lat")) is not None and _parse_float(a.get("lon")) is not None]
+    if not with_pos:
+        log.debug("CoT sender: no aircraft with position (total %d)", len(aircraft_raw))
     for out in output_list:
         output_id = out["output_id"]
+        name = out.get("name") or ("output-%s" % output_id)
         cot_url = out["cot_url"]
         use_cotproxy = out["use_cotproxy"]
         pass_all = out["pass_all"]
@@ -259,8 +266,12 @@ def run_cot_sender_cycle():
             if xml_str:
                 to_send.append(xml_str)
         if not to_send:
+            log.warning(
+                "CoT sender: %s — no CoT to send (pass_all=%s, use_cotproxy=%s, aircraft_after_filter=%d). "
+                "If pass_all is False, add transforms for ICAO hexes that are currently in the sky.",
+                name, pass_all, use_cotproxy, len(aircraft),
+            )
             continue
-        # Parse cot_url: tcp://host:port or tls://host:port
         is_tls = cot_url.lower().startswith("tls://")
         rest = cot_url.split("://", 1)[-1].strip()
         if "/" in rest:
@@ -269,12 +280,14 @@ def run_cot_sender_cycle():
         host = host_port[0] if host_port else ""
         port = int(host_port[1]) if len(host_port) > 1 and str(host_port[1]).isdigit() else (8089 if is_tls else 8087)
         if not host:
+            log.warning("CoT sender: %s — invalid cot_url (no host): %s", name, cot_url)
             continue
         cert_key = None
         if is_tls:
             from models import OutputCotCertModel
             cert_key = OutputCotCertModel.get_decrypted(output_id)
             if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
+                log.warning("CoT sender: %s — TLS required but no client cert/key for output_id %s", name, output_id)
                 continue
         sock = None
         try:
@@ -304,8 +317,9 @@ def run_cot_sender_cycle():
             for xml_str in to_send:
                 msg = (xml_str + " ").encode("utf-8")
                 sock.sendall(msg)
-        except Exception:
-            pass
+            log.info("CoT sender: %s — sent %d CoT message(s) to %s:%s", name, len(to_send), host, port)
+        except Exception as e:
+            log.warning("CoT sender: %s — connect/send failed to %s:%s: %s", name, host, port, e)
         finally:
             if sock:
                 try:
