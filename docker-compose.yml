@@ -151,7 +151,7 @@ services:
       - NETBIRD_API_TOKEN=${NETBIRD_API_TOKEN:-}
       - GITHUB_REPO=${GITHUB_REPO:-cfd2474/TAKNET-PS_Aggregator}
       - INSTALL_DIR=/opt/taknet-aggregator
-      - AIRCRAFT_JSON_URL=http://aircraft-merger:8090/data/aircraft.json
+      - AIRCRAFT_JSON_URL=${AIRCRAFT_JSON_URL:-http://aircraft-merger:8090/data/aircraft.json}
       - ADSBHUB_STATUS_PATH=/app/adsbhub-status
     volumes:
       - db-data:/data
