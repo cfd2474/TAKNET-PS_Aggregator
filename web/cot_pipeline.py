@@ -347,6 +347,9 @@ def _run_cot_sender_cycle_impl(requests):
                     except Exception:
                         pass
             log.info("CoT sender: %s — sending %d CoT message(s)", name, len(to_send))
+            # Log first message for inspection (full CoT XML)
+            if to_send:
+                log.info("CoT sender: %s — sample CoT (first of %d): %s", name, len(to_send), to_send[0])
             for xml_str in to_send:
                 msg = (xml_str + " ").encode("utf-8")
                 sock.sendall(msg)
