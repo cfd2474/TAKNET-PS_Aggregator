@@ -22,12 +22,13 @@
                     <th>Key</th>
                     <th>Key Status</th>
                     <th>Created</th>
+                    <th style="text-align:center;">Enabled</th>
                     {% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}
                     <th></th>
                 </tr>
             </thead>
             <tbody id="outputs-tbody">
-                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:30px;">Loading…</td></tr>
+                <tr><td colspan="{% if current_user.role == 'admin' %}9{% else %}8{% endif %}" style="text-align:center;color:var(--text-muted);padding:30px;">Loading…</td></tr>
             </tbody>
         </table>
     </div>
@@ -79,6 +80,13 @@
         </div>
         <div class="modal-body">
             <input type="hidden" id="modal-output-id" value="">
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" id="modal-enabled" checked>
+                    <span>Enable this output</span>
+                </label>
+                <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0 26px;">When disabled, the output is paused — no data is sent and API keys will not authenticate.</p>
+            </div>
             <div class="card-grid card-grid-2" style="gap:12px;">
                 <div class="form-group">
                     <label>Name</label>
@@ -496,8 +504,9 @@ async function loadOutputs() {
         const r = await fetch('/api/outputs');
         const d = await r.json();
         const items = d.outputs || [];
+        const colSpan = userRole === 'admin' ? 9 : 8;
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:30px;">No outputs yet. Click <strong>+ Add Output</strong> to create one.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="' + colSpan + '" style="text-align:center;color:var(--text-muted);padding:30px;">No outputs yet. Click <strong>+ Add Output</strong> to create one.</td></tr>';
             return;
         }
         let html = '';
@@ -533,6 +542,11 @@ async function loadOutputs() {
                 ? (new Date(o.created_at)).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
                 : '—';
 
+            const isActive = (o.status || 'active') === 'active';
+            const enableBtn = isActive
+                ? `<button type="button" class="btn" style="font-size:11px;padding:4px 10px;background:rgba(34,197,94,0.15);color:var(--green);" onclick="toggleOutputEnabled(${o.id}, false)" title="Disable output">On</button>`
+                : `<button type="button" class="btn" style="font-size:11px;padding:4px 10px;background:var(--bg-secondary);color:var(--text-muted);" onclick="toggleOutputEnabled(${o.id}, true)" title="Enable output">Off</button>`;
+
             html += '<tr>';
             html += `<td style="font-weight:500;">${o.name}</td>`;
             html += `<td>${typeBadge}</td>`;
@@ -540,6 +554,7 @@ async function loadOutputs() {
             html += `<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;">${keyCell}</td>`;
             html += `<td>${keyStatusCell}</td>`;
             html += `<td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${createdDisplay}</td>`;
+            html += `<td style="text-align:center;">${enableBtn}</td>`;
             if (userRole === 'admin') html += `<td style="color:var(--text-muted);font-size:12px;">${o.creator_name}</td>`;
             html += `<td style="text-align:right;white-space:nowrap;">`;
             if (o.output_type === 'cot') {
@@ -555,7 +570,24 @@ async function loadOutputs() {
         });
         tbody.innerHTML = html;
     } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--red);text-align:center;padding:20px;">Failed to load outputs</td></tr>';
+        const colSpan = userRole === 'admin' ? 9 : 8;
+        tbody.innerHTML = '<tr><td colspan="' + colSpan + '" style="color:var(--red);text-align:center;padding:20px;">Failed to load outputs</td></tr>';
+    }
+}
+
+async function toggleOutputEnabled(outputId, enable) {
+    const status = enable ? 'active' : 'inactive';
+    try {
+        const r = await fetch('/api/outputs/' + outputId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status }),
+        });
+        const d = await r.json();
+        if (d.success) loadOutputs();
+        else alert(d.error || 'Failed to update');
+    } catch (e) {
+        alert('Request failed: ' + e);
     }
 }
 
@@ -574,6 +606,7 @@ function openCreateModal() {
     document.getElementById('modal-cot-port').placeholder = '8087';
     document.getElementById('modal-push-interval').value = '5';
     document.getElementById('modal-notes').value = '';
+    document.getElementById('modal-enabled').checked = true;
     document.getElementById('modal-error').style.display = 'none';
     document.getElementById('filter-include-network-adsb').checked = true;
     document.getElementById('filter-range-enable').checked = false;
@@ -628,6 +661,7 @@ async function openEditModal(id) {
     })();
     document.getElementById('modal-push-interval').value = cfg.push_interval || 5;
     document.getElementById('modal-notes').value = o.notes || '';
+    document.getElementById('modal-enabled').checked = (o.status || 'active') === 'active';
     document.getElementById('filter-include-network-adsb').checked = cfg.include_network_adsb !== false;
     document.getElementById('filter-range-enable').checked = !!cfg.range_limit_enabled;
     document.getElementById('filter-range-lat').value = cfg.range_limit_lat != null ? String(cfg.range_limit_lat) : '';
@@ -827,7 +861,8 @@ async function saveOutput() {
         }
         payload = {
             notes: document.getElementById('modal-notes').value.trim(),
-            config: cfg
+            config: cfg,
+            status: document.getElementById('modal-enabled').checked ? 'active' : 'inactive'
         };
     } else {
         const type = document.getElementById('modal-type').value;
@@ -854,6 +889,7 @@ async function saveOutput() {
             mode:           mode,
             config:         config,
             notes:          document.getElementById('modal-notes').value.trim(),
+            status:         document.getElementById('modal-enabled').checked ? 'active' : 'inactive',
         };
         if (!payload.name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
     }
