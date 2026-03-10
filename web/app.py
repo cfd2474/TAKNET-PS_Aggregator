@@ -129,13 +129,25 @@ def create_app():
     scheduler.add_job(UserModel.seed_default, "interval", minutes=1, id="seed_user")
 
     def _run_cot_sender():
-        with app.app_context():
-            try:
-                from cot_pipeline import run_cot_sender_cycle
-                run_cot_sender_cycle()
-            except Exception:
-                pass
-    # Interval 10s so each run can finish (fetch + connect/send) before the next; avoids "max instances" skips.
+        import threading
+        result = {"done": False}
+
+        def run():
+            with app.app_context():
+                try:
+                    from cot_pipeline import run_cot_sender_cycle
+                    run_cot_sender_cycle()
+                    result["done"] = True
+                except Exception:
+                    pass
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(timeout=12)
+        if not result["done"] and thread.is_alive():
+            import logging
+            logging.getLogger("cot_pipeline").warning("CoT sender: run did not finish within 12s (possible hang on fetch or connect)")
+    # Interval 10s; each run is capped at 12s so the scheduler never blocks.
     scheduler.add_job(_run_cot_sender, "interval", seconds=10, id="cot_sender")
 
     scheduler.start()

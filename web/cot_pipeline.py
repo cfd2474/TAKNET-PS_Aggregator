@@ -230,15 +230,17 @@ def run_cot_sender_cycle():
     Fetch aircraft, for each CoT push output filter and build CoT, then push to cot_url.
     Uses AIRCRAFT_JSON_URL for aircraft data. TLS outputs use stored client cert from OutputCotCertModel.
     """
-    import urllib.request
+    import requests
     output_list = get_cot_push_outputs()
     if not output_list:
         log.debug("CoT sender: no active CoT push outputs")
         return
     aircraft_url = os.environ.get("AIRCRAFT_JSON_URL", "http://aircraft-merger:8090/data/aircraft.json")
     try:
-        with urllib.request.urlopen(aircraft_url, timeout=5) as r:
-            data = json.loads(r.read().decode())
+        # (connect_timeout, read_timeout) so we don't hang on DNS or slow response
+        r = requests.get(aircraft_url, timeout=(3, 5))
+        r.raise_for_status()
+        data = r.json()
     except Exception as e:
         log.warning("CoT sender: failed to fetch aircraft from %s: %s", aircraft_url, e)
         return
