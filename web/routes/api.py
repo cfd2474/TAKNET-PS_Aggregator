@@ -1255,13 +1255,28 @@ def output_json_stream(raw_key):
     if output.get("output_type") != "json":
         return jsonify({"error": "This key is for a beast_raw output, not JSON"}), 400
 
-    # Fetch aircraft (merged when aircraft-merger is used)
+    # Output config: include_network_adsb False => only direct feeder traffic (exclude source=adsbhub)
+    config = {}
+    try:
+        config = json.loads(output.get("config") or "{}")
+    except (TypeError, ValueError):
+        pass
+    include_network = config.get("include_network_adsb", True)
+
     try:
         resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
-        if resp.status_code == 200:
+        if resp.status_code != 200:
+            return jsonify({"error": "Upstream data unavailable"}), 503
+        if include_network:
             return Response(resp.content, content_type="application/json",
                             headers={"Access-Control-Allow-Origin": "*"})
-        return jsonify({"error": "Upstream data unavailable"}), 503
+        data = resp.json()
+        aircraft = data.get("aircraft", [])
+        direct_only = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+        out = {"aircraft": direct_only, "now": data.get("now"), "messages": data.get("messages", 0)}
+        body = json.dumps(out).encode()
+        return Response(body, content_type="application/json",
+                        headers={"Access-Control-Allow-Origin": "*"})
     except Exception as e:
         return jsonify({"error": str(e)}), 503
 
