@@ -50,8 +50,16 @@ def load_pkcs12_to_pem(p12_bytes: bytes, password: str = None) -> tuple:
         raise ValueError("P12 file is empty or too short")
     try:
         from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
-        pw = (password or "").encode("utf-8")
-        private_key, certificate, _ = pkcs12.load_key_and_certificates(p12_bytes, pw)
+    except ImportError as e:
+        raise ValueError(f"P12 support unavailable: {e}") from e
+
+    # None or empty string => no password. Try None first; some p12s need b"" instead.
+    pw = None
+    if password is not None and str(password).strip():
+        pw = str(password).strip().encode("utf-8")
+
+    def load(p12_data, pwd):
+        private_key, certificate, _ = pkcs12.load_key_and_certificates(p12_data, pwd)
         if private_key is None or certificate is None:
             raise ValueError("P12 does not contain a private key and certificate")
         key_pem = private_key.private_bytes(
@@ -61,10 +69,19 @@ def load_pkcs12_to_pem(p12_bytes: bytes, password: str = None) -> tuple:
         ).decode("utf-8")
         cert_pem = certificate.public_bytes(Encoding.PEM).decode("utf-8")
         return (cert_pem.strip(), key_pem.strip())
+
+    try:
+        return load(p12_bytes, pw)
     except ValueError:
         raise
     except Exception as e:
         msg = str(e).lower()
-        if "password" in msg or "mac" in msg or "decrypt" in msg or "invalid" in msg:
-            raise ValueError("Wrong or invalid P12 password") from e
+        # If we used None for "no password" and got a decrypt/MAC error, retry with empty bytes
+        if pw is None and ("mac" in msg or "decrypt" in msg or "password" in msg or "invalid" in msg):
+            try:
+                return load(p12_bytes, b"")
+            except Exception:
+                pass
+        if "password" in msg or "mac" in msg or "decrypt" in msg:
+            raise ValueError("Wrong or invalid P12 password. If the file has no password, leave the password field blank.") from e
         raise ValueError(f"Failed to read P12 file: {e}") from e

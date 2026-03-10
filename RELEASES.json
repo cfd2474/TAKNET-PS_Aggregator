@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.149",
+    "date": "2026-03-09",
+    "notes": [
+      "P12 upload: support password-less .p12 files; use None for no password and fallback to empty bytes if needed; clearer error when password is wrong."
+    ]
+  },
+  {
     "version": "1.0.148",
     "date": "2026-03-09",
     "notes": [

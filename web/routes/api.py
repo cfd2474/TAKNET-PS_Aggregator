@@ -1217,7 +1217,8 @@ def cot_certs_upload(output_id):
             return jsonify({"error": "Use one option only: upload either cert + key (two files) or a single .p12 file, not both"}), 400
         if has_p12:
             try:
-                cert_pem, key_pem = load_pkcs12_to_pem(p12_file.read(), p12_password)
+                pwd = (p12_password or "").strip() or None  # None = no password
+                cert_pem, key_pem = load_pkcs12_to_pem(p12_file.read(), pwd)
             except ValueError as e:
                 return jsonify({"error": str(e)}), 400
         else:
