@@ -8,6 +8,7 @@ Auth: pass your API key via:
   - Header:     Authorization: Bearer tak-xxxx
 """
 
+import json
 import os
 import math
 import time
@@ -36,7 +37,7 @@ def _get_conn():
 
 
 def _validate_key(raw_key: str):
-    """Validate API key. Returns output dict or None.
+    """Validate API key. Returns output dict (incl. config) or None.
     Works for both single_use (status ignored for REST) and durable keys."""
     if not raw_key:
         return None
@@ -45,7 +46,7 @@ def _validate_key(raw_key: str):
         conn = _get_conn()
         row = conn.execute(
             """SELECT o.id, o.name, o.output_type, o.status as output_status,
-                      k.key_type, k.status as key_status
+                      o.config, k.key_type, k.status as key_status
                FROM output_api_keys k
                JOIN outputs o ON k.output_id = o.id
                WHERE k.key_hash = ? AND o.status = 'active' AND o.output_type = 'json'""",
@@ -53,8 +54,6 @@ def _validate_key(raw_key: str):
         ).fetchone()
         if not row:
             return None
-        # single_use keys are still valid for REST calls even after first beast use
-        # The REST endpoint is stateless; there is no "connection" to consume
         return dict(row)
     except Exception:
         return None
@@ -87,11 +86,30 @@ def _require_auth():
 # ── Aircraft data ──────────────────────────────────────────────────────────────
 
 def _fetch_aircraft():
-    """Fetch aircraft list from tar1090. Returns (aircraft_list, now_ts)."""
+    """Fetch aircraft list from tar1090/merger. Returns (aircraft_list, now_ts)."""
     resp = http_requests.get(TAR1090_URL, timeout=5)
     resp.raise_for_status()
     data = resp.json()
     return data.get("aircraft", []), data.get("now", time.time())
+
+
+def _filter_aircraft_by_output(aircraft, output):
+    """When output has include_network_adsb False, return only direct feeder (exclude source=adsbhub)."""
+    if not output:
+        return aircraft
+    raw = output.get("config")
+    if isinstance(raw, str):
+        try:
+            config = json.loads(raw or "{}")
+        except Exception:
+            return aircraft
+    elif isinstance(raw, dict):
+        config = raw
+    else:
+        return aircraft
+    if config.get("include_network_adsb", True):
+        return aircraft
+    return [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
 
 
 def _envelope(aircraft, now_ts, t0):
@@ -134,7 +152,7 @@ def _haversine_nm(lat1, lon1, lat2, lon2):
 @app.route("/v2/all")
 def v2_all():
     """Return all currently tracked aircraft."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -142,13 +160,14 @@ def v2_all():
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     return jsonify(_envelope(aircraft, now_ts, t0))
 
 
 @app.route("/v2/hex/<path:hex_ids>")
 def v2_hex(hex_ids):
     """Return aircraft matching one or more comma-separated ICAO hex IDs."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -157,6 +176,7 @@ def v2_hex(hex_ids):
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("hex") or "").lower() in ids]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -164,7 +184,7 @@ def v2_hex(hex_ids):
 @app.route("/v2/callsign/<path:callsigns>")
 def v2_callsign(callsigns):
     """Return aircraft matching one or more comma-separated callsigns (flight field)."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -173,6 +193,7 @@ def v2_callsign(callsigns):
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("flight") or "").strip().upper() in targets]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -180,7 +201,7 @@ def v2_callsign(callsigns):
 @app.route("/v2/reg/<path:regs>")
 def v2_reg(regs):
     """Return aircraft matching one or more comma-separated registrations."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -189,6 +210,7 @@ def v2_reg(regs):
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("r") or "").strip().upper() in targets]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -196,7 +218,7 @@ def v2_reg(regs):
 @app.route("/v2/type/<path:types>")
 def v2_type(types):
     """Return aircraft matching one or more comma-separated ICAO type codes (B738, A321, etc.)."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -205,6 +227,7 @@ def v2_type(types):
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("t") or "").strip().upper() in targets]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -212,7 +235,7 @@ def v2_type(types):
 @app.route("/v2/squawk/<path:squawks>")
 def v2_squawk(squawks):
     """Return aircraft squawking the specified code(s), comma-separated."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -221,6 +244,7 @@ def v2_squawk(squawks):
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("squawk") or "") in targets]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -228,7 +252,7 @@ def v2_squawk(squawks):
 @app.route("/v2/mil")
 def v2_mil():
     """Return all aircraft tagged as military (dbFlags & 1)."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -236,6 +260,7 @@ def v2_mil():
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("dbFlags") or 0) & 1]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -243,7 +268,7 @@ def v2_mil():
 @app.route("/v2/ladd")
 def v2_ladd():
     """Return all aircraft tagged as LADD (dbFlags & 8)."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -251,6 +276,7 @@ def v2_ladd():
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("dbFlags") or 0) & 8]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -258,7 +284,7 @@ def v2_ladd():
 @app.route("/v2/pia")
 def v2_pia():
     """Return all aircraft tagged as PIA (dbFlags & 4)."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     t0 = time.time()
@@ -266,6 +292,7 @@ def v2_pia():
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = [a for a in aircraft if (a.get("dbFlags") or 0) & 4]
     return jsonify(_envelope(matched, now_ts, t0))
 
@@ -273,7 +300,7 @@ def v2_pia():
 @app.route("/v2/point/<float:lat>/<float:lon>/<float:radius>")
 def v2_point(lat, lon, radius):
     """Return all aircraft within <radius> nautical miles of <lat>,<lon>. Max 250 nm."""
-    _, err = _require_auth()
+    output, err = _require_auth()
     if err:
         return err
     radius = min(radius, 250.0)
@@ -282,6 +309,7 @@ def v2_point(lat, lon, radius):
         aircraft, now_ts = _fetch_aircraft()
     except Exception as e:
         return _error_envelope(f"Upstream error: {e}")
+    aircraft = _filter_aircraft_by_output(aircraft, output)
     matched = []
     for a in aircraft:
         a_lat = a.get("lat")

@@ -1271,11 +1271,14 @@ def output_json_stream(raw_key):
         return jsonify({"error": "This key is for a beast_raw output, not JSON"}), 400
 
     # Output config: include_network_adsb False => only direct feeder traffic (exclude source=adsbhub)
-    config = {}
-    try:
-        config = json.loads(output.get("config") or "{}")
-    except (TypeError, ValueError):
-        pass
+    raw_config = output.get("config")
+    if isinstance(raw_config, dict):
+        config = raw_config
+    else:
+        try:
+            config = json.loads(raw_config or "{}")
+        except (TypeError, ValueError):
+            config = {}
     include_network = config.get("include_network_adsb", True)
 
     try:

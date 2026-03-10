@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.157",
+    "date": "2026-03-10",
+    "notes": [
+      "JSON output 'Include Network ADSB' unchecked: dashboard stream and v2 API now both filter to direct feeder only (exclude source=adsbhub). Dashboard stream config parsing fixed for dict/string; api-server loads output config and applies filter for key-authenticated v2 requests."
+    ]
+  },
+  {
     "version": "1.0.156",
     "date": "2026-03-10",
     "notes": [
