@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.150",
+    "date": "2026-03-09",
+    "notes": [
+      "P12 upload: handle cryptography ValueError('Invalid password or PKCS12 data') — retry with empty bytes when no password given and show friendly error message."
+    ]
+  },
+  {
     "version": "1.0.149",
     "date": "2026-03-09",
     "notes": [

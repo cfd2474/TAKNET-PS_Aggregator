@@ -72,16 +72,24 @@ def load_pkcs12_to_pem(p12_bytes: bytes, password: str = None) -> tuple:
 
     try:
         return load(p12_bytes, pw)
-    except ValueError:
-        raise
-    except Exception as e:
+    except ValueError as e:
+        # Cryptography raises ValueError for bad password; don't re-raise blindly — retry and/or friendly message
         msg = str(e).lower()
-        # If we used None for "no password" and got a decrypt/MAC error, retry with empty bytes
-        if pw is None and ("mac" in msg or "decrypt" in msg or "password" in msg or "invalid" in msg):
+        if pw is None and ("mac" in msg or "decrypt" in msg or "password" in msg or "invalid" in msg or "pkcs12" in msg):
             try:
                 return load(p12_bytes, b"")
             except Exception:
                 pass
-        if "password" in msg or "mac" in msg or "decrypt" in msg:
+        if "password" in msg or "mac" in msg or "decrypt" in msg or "invalid" in msg or "pkcs12" in msg:
+            raise ValueError("Wrong or invalid P12 password. If the file has no password, leave the password field blank.") from e
+        raise
+    except Exception as e:
+        msg = str(e).lower()
+        if pw is None and ("mac" in msg or "decrypt" in msg or "password" in msg or "invalid" in msg or "pkcs12" in msg):
+            try:
+                return load(p12_bytes, b"")
+            except Exception:
+                pass
+        if "password" in msg or "mac" in msg or "decrypt" in msg or "invalid" in msg or "pkcs12" in msg:
             raise ValueError("Wrong or invalid P12 password. If the file has no password, leave the password field blank.") from e
         raise ValueError(f"Failed to read P12 file: {e}") from e
