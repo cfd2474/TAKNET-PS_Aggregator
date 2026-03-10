@@ -154,6 +154,7 @@
                     <li><strong>Private key</strong> — the secret key that pairs with the certificate. Usually a <code>.pem</code> or <code>.key</code> file; inside it says <code>BEGIN PRIVATE KEY</code> or <code>BEGIN RSA PRIVATE KEY</code>. Never share this file.</li>
                 </ul>
                 <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Stored encrypted; only you can add or replace. No one can view the files after upload.</p>
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;"><strong>TAK Server admin:</strong> The certificate must be assigned to the correct group (UserManager <code>certmod -g</code>) and that group must be in the data feed’s <code>&lt;filtergroup&gt;</code> in CoreConfig.xml — otherwise messages can be dropped. See project <code>COT_PUSH_COMPLIANCE.md</code>.</p>
                 <div id="cot-certs-status" style="display:none;margin-bottom:10px;">
                     <span id="cot-certs-status-text" style="font-size:13px;"></span>
                     <button type="button" class="btn" id="cot-certs-replace-btn" style="font-size:12px;margin-left:8px;display:none;">Replace certificate</button>

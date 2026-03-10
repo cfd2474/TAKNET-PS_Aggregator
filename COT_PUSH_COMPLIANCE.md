@@ -53,6 +53,30 @@ For `tls://` URLs:
 
 The aggregator stores client cert and key **encrypted** per CoT push output; only the backend that performs the push should decrypt and use them (never expose to API or UI).
 
+## TAK Server setup (admin requirements)
+
+For the feed to work, the **TAK Server administrator** must complete these steps. Without them, the connection may succeed but messages can be **silently dropped** or the cert may show as `__ANON__`.
+
+1. **Assign the feed certificate to the correct group**  
+   The client certificate you upload must be assigned to the TAK Server group/channel that this feed should write to. This is done with `UserManager.jar`:
+   ```bash
+   sudo java -jar /path/to/UserManager.jar certmod -g "<ChannelName>" /path/to/certs/<feed-username>.pem
+   ```
+   Use the **base channel name** (e.g. `Aircraft Memphis`), not a `_READ`/`_WRITE` suffixed name. The same name must be used in CoreConfig and for client subscriptions.
+
+2. **Add the group to the data feed filtergroup**  
+   In TAK Server’s `CoreConfig.xml`, the `<datafeed>` element has a `<filtergroup>` list. The feed’s group **must** be listed there. If it is missing, TAK Server accepts the TLS connection but **drops all CoT messages** with no error.
+   ```xml
+   <datafeed ...>
+     <filtergroup>Existing Channel</filtergroup>
+     <filtergroup>Your Feed Channel Name</filtergroup>
+   </datafeed>
+   ```
+   Restart TAK Server after editing CoreConfig.
+
+3. **Group name consistency**  
+   The same base channel name must be used for: (a) UserManager cert assignment, (b) CoreConfig `<filtergroup>`, and (c) the group ATAK clients subscribe to (e.g. via identity provider).
+
 ## Aggregator integration
 
 - **Config:** CoT push outputs are configured in the dashboard (Outputs, type CoT, mode Push). Each has a `cot_url` (tcp or tls), optional COTProxy transforms, and optional TLS client cert upload.
