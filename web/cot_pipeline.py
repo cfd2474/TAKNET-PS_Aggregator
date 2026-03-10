@@ -27,7 +27,11 @@ import threading
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-log = logging.getLogger(__name__)
+# Use gunicorn's error logger so CoT sender messages appear in `taknet-agg logs dashboard`
+_logger = logging.getLogger("gunicorn.error")
+if not _logger.handlers:
+    _logger = logging.getLogger(__name__)
+log = _logger
 log.setLevel(logging.INFO)
 
 # Only one cycle at a time (avoid overlapping fetch/connect from scheduler).
