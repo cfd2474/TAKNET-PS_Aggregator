@@ -114,10 +114,10 @@
                 </div>
             </div>
 
-            <!-- Push config (shown when mode=push) -->
+            <!-- Push config (shown when mode=push; for CoT we show cot-dest-config instead) -->
             <div id="push-config" style="display:none;margin-top:4px;">
                 <div class="form-group" id="push-url-group">
-                    <label id="push-url-label">Push URL / CoT destination</label>
+                    <label id="push-url-label">Push URL</label>
                     <input class="form-control" id="modal-push-url" placeholder="tcp://host:8087 or udp://239.2.3.1:6969 or http://...">
                 </div>
                 <div class="form-group" id="push-interval-group">
@@ -148,7 +148,7 @@
             <!-- CoT push TLS certificates — shown only when protocol is TLS -->
             <div id="cot-certs-section" style="display:none;margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
                 <h4 style="font-size:13px;margin:0 0 8px;">Client certificate and private key</h4>
-                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Get these from your TAK Server. When you are assigned to a group or channel, the server provides a client certificate (and often a .p12 package). You need two files:</p>
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Get these from your TAK Server. When you are assigned to a group or channel, the server may give you a <code>.p12</code> (or <code>.pfx</code>) file — that single file contains both the certificate and the private key. You must extract them into two separate <code>.pem</code> files to upload here (e.g. with OpenSSL). If you already have two files:</p>
                 <ul style="font-size:12px;color:var(--text-muted);margin:0 0 10px;padding-left:18px;">
                     <li><strong>Certificate</strong> — the public client cert. Usually a <code>.pem</code> or <code>.crt</code> file; inside it says <code>BEGIN CERTIFICATE</code>. This identifies your connection to the server (e.g. which group/channel).</li>
                     <li><strong>Private key</strong> — the secret key that pairs with the certificate. Usually a <code>.pem</code> or <code>.key</code> file; inside it says <code>BEGIN PRIVATE KEY</code> or <code>BEGIN RSA PRIVATE KEY</code>. Never share this file.</li>
@@ -451,7 +451,8 @@ function onTypeChange() {
     const mode = document.getElementById('modal-mode').value;
     document.getElementById('cot-dest-config').style.display = (isCot && mode === 'push') ? 'block' : 'none';
     document.getElementById('push-url-label').textContent =
-        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : (isCot ? 'CoT destination' : 'Push URL');
+        type === 'beast_raw' ? 'Destination host:port (e.g. 10.0.0.1:30104)' : 'Push URL';
+    document.getElementById('push-url-group').style.display = isCot ? 'none' : 'block';
     document.getElementById('push-interval-group').style.display =
         (type === 'beast_raw' || type === 'cot') ? 'none' : 'block';
     if (isCot && mode === 'push') cotProtocolChange();
@@ -462,6 +463,7 @@ function onModeChange() {
     const mode = document.getElementById('modal-mode').value;
     const type = document.getElementById('modal-type').value;
     document.getElementById('push-config').style.display    = (mode === 'push') ? 'block' : 'none';
+    document.getElementById('push-url-group').style.display = (type === 'cot') ? 'none' : 'block';
     document.getElementById('api-config').style.display     = (mode === 'api')  ? 'block' : 'none';
     document.getElementById('key-type-group').style.display = (mode === 'api')  ? 'block' : 'none';
     document.getElementById('cot-dest-config').style.display = (type === 'cot' && mode === 'push') ? 'block' : 'none';
