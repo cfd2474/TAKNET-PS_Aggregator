@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.148",
+    "date": "2026-03-09",
+    "notes": [
+      "CoT push TLS: upload .p12/.pfx file; backend extracts certificate and key. Optional password field for protected P12."
+    ]
+  },
+  {
     "version": "1.0.147",
     "date": "2026-03-09",
     "notes": [

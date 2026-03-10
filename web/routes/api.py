@@ -1197,26 +1197,40 @@ def cot_certs_status(output_id):
 @bp.route("/outputs/<int:output_id>/cot-certs", methods=["POST"])
 @network_admin_required
 def cot_certs_upload(output_id):
-    """Upload client cert + key (and optional CA) for CoT push TLS. Owner only. Stored encrypted; never returned."""
+    """Upload client cert + key (and optional CA) for CoT push TLS, or a single .p12/.pfx file. Owner only. Stored encrypted; never returned."""
     from flask_login import current_user
+    from cert_crypto import load_pkcs12_to_pem
     output, err = _cot_cert_owner_only(output_id)
     if err:
         return jsonify({"error": "Not found or access denied"}), err
     cert_pem = key_pem = ca_pem = None
     if request.content_type and "multipart/form-data" in request.content_type:
+        p12_file = request.files.get("p12")
+        p12_password = request.form.get("p12_password") or ""
         cert_file = request.files.get("cert")
         key_file = request.files.get("key")
         ca_file = request.files.get("ca")
-        if cert_file and cert_file.filename:
-            cert_pem = cert_file.read().decode("utf-8", errors="replace")
-        if key_file and key_file.filename:
-            key_pem = key_file.read().decode("utf-8", errors="replace")
-        if ca_file and ca_file.filename:
-            ca_pem = ca_file.read().decode("utf-8", errors="replace")
+        has_p12 = p12_file and p12_file.filename and (p12_file.filename.lower().endswith(".p12") or p12_file.filename.lower().endswith(".pfx"))
+        has_cert = cert_file and cert_file.filename
+        has_key = key_file and key_file.filename
+        if has_p12 and (has_cert or has_key):
+            return jsonify({"error": "Use one option only: upload either cert + key (two files) or a single .p12 file, not both"}), 400
+        if has_p12:
+            try:
+                cert_pem, key_pem = load_pkcs12_to_pem(p12_file.read(), p12_password)
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+        else:
+            if has_cert:
+                cert_pem = cert_file.read().decode("utf-8", errors="replace")
+            if has_key:
+                key_pem = key_file.read().decode("utf-8", errors="replace")
+            if ca_file and ca_file.filename:
+                ca_pem = ca_file.read().decode("utf-8", errors="replace")
     if not cert_pem or not cert_pem.strip():
-        return jsonify({"error": "Client certificate (cert) file is required"}), 400
+        return jsonify({"error": "Use one option only: upload certificate and key (two files) or a single .p12/.pfx file"}), 400
     if not key_pem or not key_pem.strip():
-        return jsonify({"error": "Private key (key) file is required"}), 400
+        return jsonify({"error": "Use one option only: upload certificate and key (two files) or a single .p12/.pfx file"}), 400
     try:
         OutputCotCertModel.set(output_id, cert_pem.strip(), key_pem.strip(), (ca_pem or "").strip() or None)
         return jsonify({"success": True})

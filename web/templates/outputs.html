@@ -148,7 +148,7 @@
             <!-- CoT push TLS certificates — shown only when protocol is TLS -->
             <div id="cot-certs-section" style="display:none;margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
                 <h4 style="font-size:13px;margin:0 0 8px;">Client certificate and private key</h4>
-                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Get these from your TAK Server. When you are assigned to a group or channel, the server may give you a <code>.p12</code> (or <code>.pfx</code>) file — that single file contains both the certificate and the private key. You must extract them into two separate <code>.pem</code> files to upload here (e.g. with OpenSSL). If you already have two files:</p>
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Get these from your TAK Server. When you are assigned to a group or channel, the server may give you a <code>.p12</code> (or <code>.pfx</code>) file — that file contains both the certificate and the private key. You can upload the .p12 here (we extract cert and key), or upload two separate .pem files:</p>
                 <ul style="font-size:12px;color:var(--text-muted);margin:0 0 10px;padding-left:18px;">
                     <li><strong>Certificate</strong> — the public client cert. Usually a <code>.pem</code> or <code>.crt</code> file; inside it says <code>BEGIN CERTIFICATE</code>. This identifies your connection to the server (e.g. which group/channel).</li>
                     <li><strong>Private key</strong> — the secret key that pairs with the certificate. Usually a <code>.pem</code> or <code>.key</code> file; inside it says <code>BEGIN PRIVATE KEY</code> or <code>BEGIN RSA PRIVATE KEY</code>. Never share this file.</li>
@@ -159,14 +159,32 @@
                     <button type="button" class="btn" id="cot-certs-replace-btn" style="font-size:12px;margin-left:8px;display:none;">Replace certificate</button>
                 </div>
                 <div id="cot-certs-upload" style="transition:opacity 0.2s;">
-                    <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">Certificate (.pem or .crt)</label>
-                        <input type="file" id="cot-cert-file" accept=".pem,.crt" class="form-control" style="padding:4px;">
+                    <p style="font-size:12px;font-weight:600;color:var(--text-primary);margin:0 0 10px;">Use <strong>one option only</strong> — either cert + key (two files) or a single .p12 file.</p>
+
+                    <div style="margin-bottom:14px;padding:10px 12px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-secondary);">Option 1: Certificate and key (two files)</div>
+                        <div class="form-group" style="margin-bottom:6px;">
+                            <label style="font-size:12px;">Certificate (.pem or .crt)</label>
+                            <input type="file" id="cot-cert-file" accept=".pem,.crt" class="form-control" style="padding:4px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:12px;">Private key (.pem or .key)</label>
+                            <input type="file" id="cot-key-file" accept=".pem,.key" class="form-control" style="padding:4px;">
+                        </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">Private key (.pem or .key)</label>
-                        <input type="file" id="cot-key-file" accept=".pem,.key" class="form-control" style="padding:4px;">
+
+                    <div style="margin-bottom:14px;padding:10px 12px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-secondary);">Option 2: Single .p12/.pfx file</div>
+                        <div class="form-group" style="margin-bottom:6px;">
+                            <label style="font-size:12px;">.p12 or .pfx file (we extract cert and key)</label>
+                            <input type="file" id="cot-p12-file" accept=".p12,.pfx" class="form-control" style="padding:4px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:12px;">P12 password (leave blank if none)</label>
+                            <input type="password" id="cot-p12-password" class="form-control" placeholder="Password for the .p12 file" autocomplete="off" style="max-width:240px;">
+                        </div>
                     </div>
+
                     <button type="button" class="btn btn-primary" id="cot-certs-upload-btn" style="font-size:12px;">Upload certificate and key</button>
                     <span id="cot-certs-upload-msg" style="font-size:12px;margin-left:8px;"></span>
                 </div>
@@ -661,9 +679,13 @@ function setCotCertsSectionEnabled(enable) {
     uploadDiv.style.opacity = enable ? '1' : '0.6';
     var certFile = document.getElementById('cot-cert-file');
     var keyFile = document.getElementById('cot-key-file');
+    var p12File = document.getElementById('cot-p12-file');
+    var p12Password = document.getElementById('cot-p12-password');
     var uploadBtn = document.getElementById('cot-certs-upload-btn');
     if (certFile) certFile.disabled = !enable;
     if (keyFile) keyFile.disabled = !enable;
+    if (p12File) p12File.disabled = !enable;
+    if (p12Password) p12Password.disabled = !enable;
     if (uploadBtn) uploadBtn.disabled = !enable;
 }
 
@@ -708,6 +730,24 @@ document.getElementById('cot-certs-replace-btn').onclick = function() {
     document.getElementById('cot-certs-status-text').textContent = '';
 };
 
+function cotCertP12Chosen() {
+    document.getElementById('cot-cert-file').value = '';
+    document.getElementById('cot-key-file').value = '';
+}
+function cotCertKeyChosen() {
+    document.getElementById('cot-p12-file').value = '';
+    document.getElementById('cot-p12-password').value = '';
+}
+document.getElementById('cot-p12-file').addEventListener('change', function() {
+    if (this.files && this.files.length) cotCertP12Chosen();
+});
+document.getElementById('cot-cert-file').addEventListener('change', function() {
+    if (this.files && this.files.length) cotCertKeyChosen();
+});
+document.getElementById('cot-key-file').addEventListener('change', function() {
+    if (this.files && this.files.length) cotCertKeyChosen();
+});
+
 document.getElementById('cot-certs-upload-btn').onclick = async function() {
     const outputId = document.getElementById('modal-output-id').value;
     const msgEl = document.getElementById('cot-certs-upload-msg');
@@ -718,15 +758,27 @@ document.getElementById('cot-certs-upload-btn').onclick = async function() {
     }
     const certFile = document.getElementById('cot-cert-file').files[0];
     const keyFile = document.getElementById('cot-key-file').files[0];
+    const p12File = document.getElementById('cot-p12-file').files[0];
     msgEl.textContent = '';
-    if (!certFile || !keyFile) {
-        msgEl.textContent = 'Select both certificate and key files.';
+    const hasP12 = p12File && p12File.name && (p12File.name.toLowerCase().endsWith('.p12') || p12File.name.toLowerCase().endsWith('.pfx'));
+    const hasCertKey = certFile && keyFile;
+    if (hasP12 && hasCertKey) {
+        msgEl.textContent = 'Use one option only. Clear either the cert/key files or the .p12 file.';
         msgEl.style.color = 'var(--red)';
         return;
     }
     const fd = new FormData();
-    fd.append('cert', certFile);
-    fd.append('key', keyFile);
+    if (hasP12) {
+        fd.append('p12', p12File);
+        fd.append('p12_password', document.getElementById('cot-p12-password').value);
+    } else if (hasCertKey) {
+        fd.append('cert', certFile);
+        fd.append('key', keyFile);
+    } else {
+        msgEl.textContent = 'Use one option only: either select both certificate and key (Option 1) or a .p12 file (Option 2).';
+        msgEl.style.color = 'var(--red)';
+        return;
+    }
     this.disabled = true;
     try {
         const r = await fetch('/api/outputs/' + outputId + '/cot-certs', { method: 'POST', body: fd });
@@ -736,6 +788,8 @@ document.getElementById('cot-certs-upload-btn').onclick = async function() {
             msgEl.style.color = 'var(--green)';
             document.getElementById('cot-cert-file').value = '';
             document.getElementById('cot-key-file').value = '';
+            document.getElementById('cot-p12-file').value = '';
+            document.getElementById('cot-p12-password').value = '';
             loadCotCertStatus(outputId);
         } else {
             msgEl.textContent = d.error || 'Upload failed';
