@@ -93,6 +93,16 @@ def _fetch_aircraft():
     return data.get("aircraft", []), data.get("now", time.time())
 
 
+def _include_network_adsb(config):
+    """True = include all; False = exclude source=adsbhub. Normalize bool/string from DB."""
+    v = config.get("include_network_adsb", True)
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.lower() not in ("false", "0", "no", "")
+    return bool(v)
+
+
 def _filter_aircraft_by_output(aircraft, output):
     """When output has include_network_adsb False, return only direct feeder (exclude source=adsbhub)."""
     if not output:
@@ -107,7 +117,7 @@ def _filter_aircraft_by_output(aircraft, output):
         config = raw
     else:
         return aircraft
-    if config.get("include_network_adsb", True):
+    if _include_network_adsb(config):
         return aircraft
     return [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
 

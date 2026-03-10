@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.159",
+    "date": "2026-03-10",
+    "notes": [
+      "JSON output: fix 'Include Network ADSB' unchecked still showing all traffic. Normalize include_network_adsb to bool in dashboard stream and taknet-api (handle string/config from DB); parse config as string when needed."
+    ]
+  },
+  {
     "version": "1.0.158",
     "date": "2026-03-10",
     "notes": [

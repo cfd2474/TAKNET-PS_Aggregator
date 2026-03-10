@@ -1276,10 +1276,12 @@ def output_json_stream(raw_key):
         config = raw_config
     else:
         try:
-            config = json.loads(raw_config or "{}")
+            config = json.loads(str(raw_config or "{}"))
         except (TypeError, ValueError):
             config = {}
-    include_network = config.get("include_network_adsb", True)
+    # Normalize to bool: checkbox unchecked => False; default True for backward compat
+    v = config.get("include_network_adsb", True)
+    include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
 
     try:
         resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
