@@ -127,6 +127,16 @@ def create_app():
     scheduler.add_job(lambda: ActivityModel.cleanup(7), "interval", minutes=5, id="cleanup")
     scheduler.add_job(collect_health_snapshot, "interval", seconds=30, id="health_snapshot")
     scheduler.add_job(UserModel.seed_default, "interval", minutes=1, id="seed_user")
+
+    def _run_cot_sender():
+        with app.app_context():
+            try:
+                from cot_pipeline import run_cot_sender_cycle
+                run_cot_sender_cycle()
+            except Exception:
+                pass
+    scheduler.add_job(_run_cot_sender, "interval", seconds=3, id="cot_sender")
+
     scheduler.start()
 
     return app

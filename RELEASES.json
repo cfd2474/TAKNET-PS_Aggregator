@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.151",
+    "date": "2026-03-09",
+    "notes": [
+      "CoT push: in-app sender runs every 3s — fetches aircraft, applies COTProxy transforms and pass_all filter, builds CoT XML, pushes over TCP/TLS to TAK Server. No external adsbcot required."
+    ]
+  },
+  {
     "version": "1.0.150",
     "date": "2026-03-09",
     "notes": [
