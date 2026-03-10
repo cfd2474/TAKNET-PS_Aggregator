@@ -81,7 +81,8 @@ def load_pkcs12_to_pem(p12_bytes: bytes, password: str = None) -> tuple:
             except Exception:
                 pass
         if "password" in msg or "mac" in msg or "decrypt" in msg or "invalid" in msg or "pkcs12" in msg:
-            raise ValueError("Wrong or invalid P12 password. If the file has no password, leave the password field blank.") from e
+            hint = " This file is password-protected (we tried no password and empty). Use the export password from your TAK Server, or re-export the .p12 without a password." if pw is None else " If the file has no password, leave the field blank."
+            raise ValueError("Wrong or invalid P12 password." + hint) from e
         raise
     except Exception as e:
         msg = str(e).lower()
@@ -91,5 +92,6 @@ def load_pkcs12_to_pem(p12_bytes: bytes, password: str = None) -> tuple:
             except Exception:
                 pass
         if "password" in msg or "mac" in msg or "decrypt" in msg or "invalid" in msg or "pkcs12" in msg:
-            raise ValueError("Wrong or invalid P12 password. If the file has no password, leave the password field blank.") from e
+            hint = " This file is password-protected (we tried no password and empty). Use the export password from your TAK Server, or re-export the .p12 without a password." if pw is None else " If the file has no password, leave the field blank."
+            raise ValueError("Wrong or invalid P12 password." + hint) from e
         raise ValueError(f"Failed to read P12 file: {e}") from e
