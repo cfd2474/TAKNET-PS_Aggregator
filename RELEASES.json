@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.143",
+    "date": "2026-03-09",
+    "notes": [
+      "Output data filters: Range Limits (lat/lon/radius nm, max 250 nm) and Elevation Filter (min/max ft MSL, 0–40,000) in output setup modal. Apply to JSON, Beast Raw, and CoT. Both off by default; enable checkboxes show/hide sections. Elevation has No Minimum/No Maximum and paired sliders (100 ft steps 0–5000, 1000 ft above)."
+    ]
+  },
+  {
     "version": "1.0.142",
     "date": "2026-03-09",
     "notes": [

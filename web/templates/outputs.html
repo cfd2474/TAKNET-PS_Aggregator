@@ -178,6 +178,67 @@
                 </div>
             </div>
 
+            <!-- Data filters: apply to JSON, Beast Raw, and CoT -->
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+                <h4 style="font-size:13px;margin:0 0 12px;color:var(--text-secondary);">Data filters</h4>
+
+                <!-- Range limits (location: lat, lon, radius nm — max 250 nm) -->
+                <div class="form-group" style="margin-bottom:14px;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="filter-range-enable">
+                        <span>Enable Range Limits</span>
+                    </label>
+                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Only include aircraft within radius (nm) of a point. Same concept as REST <code>/v2/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;</code>. Max 250 nm.</p>
+                    <div id="filter-range-fields" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end;">
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size:11px;">Latitude</label>
+                            <input type="text" class="form-control" id="filter-range-lat" placeholder="33.8753">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size:11px;">Longitude</label>
+                            <input type="text" class="form-control" id="filter-range-lon" placeholder="-117.5664">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size:11px;">Radius (nm, max 250)</label>
+                            <input type="number" class="form-control" id="filter-range-nm" placeholder="50" min="0" max="250" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Elevation filter (MSL ft, 0–40,000) -->
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="filter-elevation-enable">
+                        <span>Enable Elevation Filter</span>
+                    </label>
+                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Only include aircraft within min/max altitude (feet MSL). Range 0–40,000 ft.</p>
+                    <div id="filter-elevation-fields" style="display:none;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                            <div>
+                                <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;cursor:pointer;">
+                                    <input type="checkbox" id="filter-elevation-no-min">
+                                    <span>No Minimum</span>
+                                </label>
+                                <div class="form-group" style="margin-bottom:6px;">
+                                    <input type="number" class="form-control" id="filter-elevation-min" placeholder="0" min="0" max="40000" step="100" style="max-width:120px;">
+                                </div>
+                                <input type="range" id="filter-elevation-min-slider" min="0" max="40000" value="0" step="100" style="width:100%;max-width:200px;">
+                            </div>
+                            <div>
+                                <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;cursor:pointer;">
+                                    <input type="checkbox" id="filter-elevation-no-max">
+                                    <span>No Maximum</span>
+                                </label>
+                                <div class="form-group" style="margin-bottom:6px;">
+                                    <input type="number" class="form-control" id="filter-elevation-max" placeholder="40000" min="0" max="40000" step="100" style="max-width:120px;">
+                                </div>
+                                <input type="range" id="filter-elevation-max-slider" min="0" max="40000" value="40000" step="100" style="width:100%;max-width:200px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label>Notes</label>
                 <textarea class="form-control" id="modal-notes" rows="2" placeholder="Optional"></textarea>
@@ -218,6 +279,123 @@
 {% block extra_scripts %}
 <script>
 const userRole = '{{ current_user.role }}';
+
+function applyFilterConfigToPayload(config, errEl) {
+    const rangeOn = document.getElementById('filter-range-enable').checked;
+    config.range_limit_enabled = !!rangeOn;
+    if (rangeOn) {
+        const lat = document.getElementById('filter-range-lat').value.trim();
+        const lon = document.getElementById('filter-range-lon').value.trim();
+        const nm = parseFloat(document.getElementById('filter-range-nm').value, 10);
+        if (lat === '' || lon === '') {
+            errEl.textContent = 'Range limits: enter latitude and longitude.';
+            errEl.style.display = 'block';
+            return false;
+        }
+        if (isNaN(nm) || nm < 0 || nm > 250) {
+            errEl.textContent = 'Range limits: radius must be 0–250 nm.';
+            errEl.style.display = 'block';
+            return false;
+        }
+        const latNum = parseFloat(lat, 10);
+        const lonNum = parseFloat(lon, 10);
+        if (isNaN(latNum) || isNaN(lonNum)) {
+            errEl.textContent = 'Range limits: enter valid latitude and longitude.';
+            errEl.style.display = 'block';
+            return false;
+        }
+        config.range_limit_lat = latNum;
+        config.range_limit_lon = lonNum;
+        config.range_limit_nm = nm;
+    }
+    const elevOn = document.getElementById('filter-elevation-enable').checked;
+    config.elevation_filter_enabled = !!elevOn;
+    config.elevation_no_min = !!document.getElementById('filter-elevation-no-min').checked;
+    config.elevation_no_max = !!document.getElementById('filter-elevation-no-max').checked;
+    if (elevOn) {
+        const noMin = config.elevation_no_min;
+        const noMax = config.elevation_no_max;
+        const minVal = noMin ? null : parseInt(document.getElementById('filter-elevation-min').value, 10);
+        const maxVal = noMax ? null : parseInt(document.getElementById('filter-elevation-max').value, 10);
+        if (!noMin && (isNaN(minVal) || minVal < 0 || minVal > 40000)) {
+            errEl.textContent = 'Elevation filter: minimum must be 0–40,000 ft.';
+            errEl.style.display = 'block';
+            return false;
+        }
+        if (!noMax && (isNaN(maxVal) || maxVal < 0 || maxVal > 40000)) {
+            errEl.textContent = 'Elevation filter: maximum must be 0–40,000 ft.';
+            errEl.style.display = 'block';
+            return false;
+        }
+        if (!noMin && !noMax && minVal > maxVal) {
+            errEl.textContent = 'Elevation filter: minimum must not exceed maximum.';
+            errEl.style.display = 'block';
+            return false;
+        }
+        config.elevation_min_ft = noMin ? null : minVal;
+        config.elevation_max_ft = noMax ? null : maxVal;
+    }
+    return true;
+}
+
+function filterRangeEnableChange() {
+    const on = document.getElementById('filter-range-enable').checked;
+    document.getElementById('filter-range-fields').style.display = on ? 'grid' : 'none';
+}
+function filterElevationEnableChange() {
+    const on = document.getElementById('filter-elevation-enable').checked;
+    document.getElementById('filter-elevation-fields').style.display = on ? 'block' : 'none';
+    filterElevationNoMinMaxChange();
+}
+function filterElevationNoMinMaxChange() {
+    const noMin = document.getElementById('filter-elevation-no-min').checked;
+    const noMax = document.getElementById('filter-elevation-no-max').checked;
+    const minInput = document.getElementById('filter-elevation-min');
+    const minSlider = document.getElementById('filter-elevation-min-slider');
+    const maxInput = document.getElementById('filter-elevation-max');
+    const maxSlider = document.getElementById('filter-elevation-max-slider');
+    const grey = '0.5';
+    const normal = '1';
+    minInput.disabled = noMin; minSlider.disabled = noMin;
+    minInput.style.opacity = noMin ? grey : normal; minSlider.style.opacity = noMin ? grey : normal;
+    maxInput.disabled = noMax; maxSlider.disabled = noMax;
+    maxInput.style.opacity = noMax ? grey : normal; maxSlider.style.opacity = noMax ? grey : normal;
+}
+function elevationSliderStep(val) {
+    const n = parseInt(val, 10);
+    if (n > 5000) return Math.round(n / 1000) * 1000;
+    return Math.round(n / 100) * 100;
+}
+function syncElevationMinFromSlider() {
+    const s = document.getElementById('filter-elevation-min-slider');
+    const v = elevationSliderStep(s.value);
+    s.value = v;
+    document.getElementById('filter-elevation-min').value = v;
+}
+function syncElevationMinFromInput() {
+    const i = document.getElementById('filter-elevation-min');
+    let v = parseInt(i.value, 10);
+    if (isNaN(v)) return;
+    v = Math.max(0, Math.min(40000, v));
+    v = elevationSliderStep(v);
+    i.value = v;
+    document.getElementById('filter-elevation-min-slider').value = v;
+}
+function syncElevationMaxFromSlider() {
+    const s = document.getElementById('filter-elevation-max-slider');
+    const v = elevationSliderStep(s.value);
+    s.value = v;
+    document.getElementById('filter-elevation-max').value = v;
+}
+function syncElevationMaxFromInput() {
+    const i = document.getElementById('filter-elevation-max');
+    let v = parseInt(i.value, 10);
+    if (isNaN(v)) return;
+    v = Math.max(0, Math.min(40000, v));
+    v = elevationSliderStep(v);
+    i.value = v;
+    document.getElementById('filter-elevation-max-slider').value = v;
+}
 
 function onTypeChange() {
     const type = document.getElementById('modal-type').value;
@@ -351,6 +529,19 @@ function openCreateModal() {
     document.getElementById('modal-push-interval').value = '5';
     document.getElementById('modal-notes').value = '';
     document.getElementById('modal-error').style.display = 'none';
+    document.getElementById('filter-range-enable').checked = false;
+    document.getElementById('filter-range-lat').value = '';
+    document.getElementById('filter-range-lon').value = '';
+    document.getElementById('filter-range-nm').value = '';
+    filterRangeEnableChange();
+    document.getElementById('filter-elevation-enable').checked = false;
+    document.getElementById('filter-elevation-no-min').checked = false;
+    document.getElementById('filter-elevation-no-max').checked = false;
+    document.getElementById('filter-elevation-min').value = '0';
+    document.getElementById('filter-elevation-max').value = '40000';
+    document.getElementById('filter-elevation-min-slider').value = 0;
+    document.getElementById('filter-elevation-max-slider').value = 40000;
+    filterElevationEnableChange();
     var saveBtn = document.getElementById('modal-save-btn');
     saveBtn.textContent = 'Save';
     saveBtn.onclick = saveOutput;
@@ -364,6 +555,7 @@ async function openEditModal(id) {
     if (!d.output) return;
     const o = d.output;
     const cfg = JSON.parse(o.config || '{}');
+    window._outputModalCfg = Object.assign({}, cfg);
     const locked = (o.mode === 'api' && d.output.key_meta);
 
     document.getElementById('modal-title').textContent = locked ? 'Output Details' : 'Edit Output';
@@ -376,6 +568,19 @@ async function openEditModal(id) {
     document.getElementById('modal-cot-url').value = cfg.cot_url || '';
     document.getElementById('modal-push-interval').value = cfg.push_interval || 5;
     document.getElementById('modal-notes').value = o.notes || '';
+    document.getElementById('filter-range-enable').checked = !!cfg.range_limit_enabled;
+    document.getElementById('filter-range-lat').value = cfg.range_limit_lat != null ? String(cfg.range_limit_lat) : '';
+    document.getElementById('filter-range-lon').value = cfg.range_limit_lon != null ? String(cfg.range_limit_lon) : '';
+    document.getElementById('filter-range-nm').value = cfg.range_limit_nm != null ? String(cfg.range_limit_nm) : '';
+    filterRangeEnableChange();
+    document.getElementById('filter-elevation-enable').checked = !!cfg.elevation_filter_enabled;
+    document.getElementById('filter-elevation-no-min').checked = !!cfg.elevation_no_min;
+    document.getElementById('filter-elevation-no-max').checked = !!cfg.elevation_no_max;
+    document.getElementById('filter-elevation-min').value = cfg.elevation_min_ft != null ? String(cfg.elevation_min_ft) : '0';
+    document.getElementById('filter-elevation-max').value = cfg.elevation_max_ft != null ? String(cfg.elevation_max_ft) : '40000';
+    document.getElementById('filter-elevation-min-slider').value = cfg.elevation_min_ft != null ? Number(cfg.elevation_min_ft) : 0;
+    document.getElementById('filter-elevation-max-slider').value = cfg.elevation_max_ft != null ? Number(cfg.elevation_max_ft) : 40000;
+    filterElevationEnableChange();
 
     // Lock fields if key exists — name/type/mode are frozen
     const lockFields = ['modal-name', 'modal-type', 'modal-mode', 'modal-push-url', 'modal-push-interval'];
@@ -514,8 +719,12 @@ async function saveOutput() {
     const locked = document.getElementById('modal-name').disabled;
     let payload;
     if (locked) {
-        // Key exists — only notes is editable
-        payload = { notes: document.getElementById('modal-notes').value.trim() };
+        const cfg = window._outputModalCfg || {};
+        if (!applyFilterConfigToPayload(cfg, errEl)) return;
+        payload = {
+            notes: document.getElementById('modal-notes').value.trim(),
+            config: cfg
+        };
     } else {
         const type = document.getElementById('modal-type').value;
         const mode = document.getElementById('modal-mode').value;
@@ -525,6 +734,7 @@ async function saveOutput() {
             else config.push_url = document.getElementById('modal-push-url').value.trim();
             if (type !== 'beast_raw' && type !== 'cot') config.push_interval = parseInt(document.getElementById('modal-push-interval').value) || 5;
         }
+        if (!applyFilterConfigToPayload(config, errEl)) return;
         payload = {
             name:           document.getElementById('modal-name').value.trim(),
             output_type:    type,
@@ -634,6 +844,15 @@ async function deleteOutput(id, name) {
 function closeOutputModal() {
     document.getElementById('output-modal').classList.remove('show');
 }
+
+document.getElementById('filter-range-enable').addEventListener('change', filterRangeEnableChange);
+document.getElementById('filter-elevation-enable').addEventListener('change', filterElevationEnableChange);
+document.getElementById('filter-elevation-no-min').addEventListener('change', filterElevationNoMinMaxChange);
+document.getElementById('filter-elevation-no-max').addEventListener('change', filterElevationNoMinMaxChange);
+document.getElementById('filter-elevation-min-slider').addEventListener('input', syncElevationMinFromSlider);
+document.getElementById('filter-elevation-min').addEventListener('change', syncElevationMinFromInput);
+document.getElementById('filter-elevation-max-slider').addEventListener('input', syncElevationMaxFromSlider);
+document.getElementById('filter-elevation-max').addEventListener('change', syncElevationMaxFromInput);
 
 loadOutputs();
 </script>
