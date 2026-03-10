@@ -209,8 +209,9 @@ def build_cot_xml(aircraft, transform=None):
 
     alt_ft = _parse_float(aircraft.get("alt_baro") or aircraft.get("altitude"))
     hae_m = (alt_ft * 0.3048) if alt_ft is not None else 0.0
-    le = str(hae_m)
     hae = str(hae_m)
+    # le = linear error (vertical accuracy in meters); ce = circular error (horizontal). Use 50m when we have alt, 9999999 for unknown (PyTAK/node-cot/TAK).
+    le = "50" if alt_ft is not None else "9999999.0"
     ce = "10"
 
     root = ET.Element("event", attrib={

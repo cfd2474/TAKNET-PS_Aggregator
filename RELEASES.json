@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.158",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT format: use vertical accuracy for point 'le' (50m or 9999999 unknown) per PyTAK/adsbcot/node-cot; was incorrectly set to altitude. Compliance doc updated."
+    ]
+  },
+  {
     "version": "1.0.157",
     "date": "2026-03-10",
     "notes": [
