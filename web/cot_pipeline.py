@@ -297,6 +297,13 @@ def get_transform_for_aircraft(output_id, hex_code):
     t = CotTransformModel.get_by_hex(output_id, hex_code)
     if not t:
         return None
+    return _transform_row_to_dict(t)
+
+
+def _transform_row_to_dict(t):
+    """Normalize a DB row to the transform dict used by build_cot_xml."""
+    if not t:
+        return None
     return {
         "callsign": t.get("callsign"),
         "type": t.get("type"),
@@ -311,6 +318,21 @@ def get_transform_for_aircraft(output_id, hex_code):
     }
 
 
+def get_transforms_by_hex(output_id):
+    """
+    Return dict of hex (uppercase) -> transform dict for all transforms of this output.
+    Used to avoid N per-aircraft DB lookups when pushing large numbers of markers.
+    """
+    from models import CotTransformModel
+    rows = CotTransformModel.get_all(output_id)
+    out = {}
+    for r in rows:
+        hex_val = (r.get("hex") or "").strip().upper()
+        if hex_val:
+            out[hex_val] = _transform_row_to_dict(r)
+    return out
+
+
 def _cot_time():
     """W3C dateTime in UTC for CoT time/start/stale."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
@@ -323,12 +345,13 @@ def _xml_escape(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
+def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True, now=None, stale=None):
     """
     Build a single CoT <event> XML string for one aircraft.
     aircraft: dict with hex, lat, lon, optional alt_baro/altitude, optional flight (callsign).
     transform: optional dict from get_transform_for_aircraft (callsign, type, cot, etc.).
     include_icon_in_cot: when False, do not add <usericon> (avoids ATAK label sitting too high above icon).
+    now, stale: optional precomputed time strings (W3C dateTime UTC); if None, computed per call (slower for bulk).
     """
     hex_code = (aircraft.get("hex") or "").strip().upper()
     if not hex_code:
@@ -346,10 +369,11 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
         if transform.get("callsign"):
             callsign = (transform["callsign"] or "").strip() or callsign
 
-    now = _cot_time()
-    # Stale time: now + COT_STALE_SECONDS
-    stale_dt = datetime.now(timezone.utc).timestamp() + COT_STALE_SECONDS
-    stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+    if now is None:
+        now = _cot_time()
+    if stale is None:
+        stale_dt = datetime.now(timezone.utc).timestamp() + COT_STALE_SECONDS
+        stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
 
     alt_ft = _parse_float(aircraft.get("alt_baro") or aircraft.get("altitude"))
     hae_m = (alt_ft * 0.3048) if alt_ft is not None else 0.0
@@ -482,16 +506,21 @@ def _run_cot_sender_cycle_impl(requests):
         config = out.get("config") or {}
         include_icon_in_cot = config.get("include_icon_in_cot", True)
         aircraft = filter_aircraft_for_output(with_pos, config)
+        # One DB query for all transforms when use_cotproxy (avoids N lookups for large marker counts)
+        transforms_by_hex = get_transforms_by_hex(output_id) if use_cotproxy else {}
+        now = _cot_time()
+        stale_dt = datetime.now(timezone.utc).timestamp() + COT_STALE_SECONDS
+        stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
         to_send = []
         for ac in aircraft:
             hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
             if not hex_code:
                 continue
-            transform = get_transform_for_aircraft(output_id, hex_code) if use_cotproxy else None
+            transform = transforms_by_hex.get(hex_code) if use_cotproxy else None
             if not pass_all and not transform:
                 continue
             try:
-                xml_str = build_cot_xml(ac, transform, include_icon_in_cot=include_icon_in_cot)
+                xml_str = build_cot_xml(ac, transform, include_icon_in_cot=include_icon_in_cot, now=now, stale=stale)
             except Exception as e:
                 log.warning("CoT sender: %s — skip aircraft %s (build_cot_xml failed): %s", name, hex_code, e)
                 continue
@@ -525,6 +554,7 @@ def _run_cot_sender_cycle_impl(requests):
         sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Connect timeout; send timeout set below for large batches
             sock.settimeout(3)
             log.info("CoT sender: %s — TCP connect to %s:%s", name, host, port)
             sock.connect((host, port))
@@ -558,9 +588,11 @@ def _run_cot_sender_cycle_impl(requests):
             # Log first message for inspection (full CoT XML)
             if to_send:
                 log.info("CoT sender: %s — sample CoT (first of %d): %s", name, len(to_send), to_send[0])
-            for xml_str in to_send:
-                msg = (xml_str + " ").encode("utf-8")
-                sock.sendall(msg)
+            # Batch send: one buffer and one sendall (fewer syscalls; large batches need longer timeout)
+            send_timeout = max(10, 3 + len(to_send) // 100)
+            sock.settimeout(send_timeout)
+            buf = (" ".join(to_send) + " ").encode("utf-8")
+            sock.sendall(buf)
             log.info("CoT sender: %s — sent %d CoT message(s) to %s:%s", name, len(to_send), host, port)
         except Exception as e:
             log.warning("CoT sender: %s — connect/send failed to %s:%s: %s", name, host, port, e)

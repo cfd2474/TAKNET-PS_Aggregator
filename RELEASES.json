@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.173",
+    "date": "2026-03-09",
+    "notes": [
+      "CoT push: optimize for large marker counts (e.g. 3000): bulk-load transforms per output (one DB query instead of N), precompute time/stale once per cycle, batch socket send (single buffer), adaptive send timeout for large batches so 2s update interval can be sustained."
+    ]
+  },
+  {
     "version": "1.0.172",
     "date": "2026-03-09",
     "notes": [
