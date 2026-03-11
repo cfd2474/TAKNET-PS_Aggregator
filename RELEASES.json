@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.172",
+    "date": "2026-03-09",
+    "notes": [
+      "CoT push: derive type description from ICAO type (t) when feed has no t_adsb/type_desc/desc; use web/data/icao_type_to_desc_first.json (tar1090-db) so fixed/rotor CoT types apply when readsb provides t (e.g. B738, A109)."
+    ]
+  },
+  {
     "version": "1.0.171",
     "date": "2026-03-10",
     "notes": [

@@ -191,11 +191,34 @@ EMITTER_GLIDER = 9
 TYPE_DESC_ROTOR_FIRST = frozenset("HG")   # Helicopter, Gyroplane
 TYPE_DESC_FIXED_FIRST = frozenset("LSAT")  # Landplane, Seaplane, Amphibian, Tilt-wing
 
+# ICAO type (t) -> first letter of type description (L/H/G/S/A/T). Loaded from web/data/icao_type_to_desc_first.json (from tar1090-db).
+_ICAO_TYPE_FIRST = None
+
+
+def _load_icao_type_first():
+    """Load ICAO type -> first letter mapping from data file. Once loaded, cached in _ICAO_TYPE_FIRST."""
+    global _ICAO_TYPE_FIRST
+    if _ICAO_TYPE_FIRST is not None:
+        return _ICAO_TYPE_FIRST
+    path = os.path.join(os.path.dirname(__file__), "data", "icao_type_to_desc_first.json")
+    try:
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                _ICAO_TYPE_FIRST = json.load(f)
+        else:
+            _ICAO_TYPE_FIRST = {}
+    except Exception:
+        _ICAO_TYPE_FIRST = {}
+    return _ICAO_TYPE_FIRST
+
 
 def _get_type_desc_from_aircraft(aircraft):
     """
     Return the 3–4 char type description if present (tar1090 / readsb DB / ADS-B Exchange style).
     Checks t_adsb, type_desc, desc. Value must be 3–4 chars with first char in L,H,G,S,A,T.
+    If none of those, derives from ICAO type (t) using web/data/icao_type_to_desc_first.json
+    (from tar1090-db icao_aircraft_types.json) so aggregator can show fixed/rotor/etc. without
+    needing the 3-char field in the feed.
     Refs: https://www.adsbexchange.com/map-help/ https://www.reddit.com/r/ADSB/comments/1161thj/
     Never raises — returns None on any error so CoT flow is not interrupted.
     """
@@ -209,6 +232,14 @@ def _get_type_desc_from_aircraft(aircraft):
             s = val.strip().upper()
             if 3 <= len(s) <= 4 and s[0:1] in "LHSATG":
                 return s
+        # Derive from ICAO type (t) when readsb/tar1090 provide it (e.g. B738, A109)
+        t = aircraft.get("t")
+        if t and isinstance(t, str) and t.strip():
+            icao = t.strip().upper()
+            mapping = _load_icao_type_first()
+            first = mapping.get(icao) if mapping else None
+            if first and first in "LHSATG":
+                return first + "xx"
     except Exception:
         pass
     return None
