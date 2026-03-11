@@ -46,6 +46,17 @@ TAK Server / PyTAK expect **one CoT message per connection** or a stream where m
 
 So each packet on the wire is: `cot_xml_utf8_bytes + b' '`. This matches PyTAK’s `readuntil(" ")` behavior and ensures compatibility with TAK Server and other PyTAK clients.
 
+## Update rate and optimizations (1–2s goal)
+
+To keep marker positions updating every 1–2 seconds in TAK, the aggregator reduces several bottlenecks:
+
+- **Connection reuse:** One persistent TCP/TLS socket per CoT push output; reconnect only on send failure. Avoids 100–500ms connect+TLS handshake every cycle.
+- **Delta updates:** Only build and send CoT for aircraft whose position/state (lat, lon, alt_baro, track, gs) changed since last send. With thousands of aircraft, only a few hundred typically move between 2s cycles, so each cycle does less work and finishes in time for the next run.
+- **Configurable interval:** `COT_PUSH_INTERVAL_SECONDS` (env, default 2) controls how often the cycle runs. Cycle must complete before the next run; with delta + reuse, 2s is usually achievable.
+- **Shorter aircraft fetch timeout:** (1, 2) seconds so the cycle does not block long on the merger.
+
+First cycle after startup sends a full set (no prior state); later cycles send only changes. If the cycle takes longer than the interval, the next run is skipped (single-run lock) until the current one finishes.
+
 ## TLS (tls://)
 
 For `tls://` URLs:

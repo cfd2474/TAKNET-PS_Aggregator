@@ -37,6 +37,15 @@ log.setLevel(logging.INFO)
 # Only one cycle at a time (avoid overlapping fetch/connect from scheduler).
 _cot_sender_lock = threading.Lock()
 
+# Persistent sockets per output_id so we don't connect+TLS every cycle (saves 100–500ms+ per run).
+# Cleared on send failure; next cycle reconnects. Single-threaded per cycle so no lock needed.
+_persistent_sockets = {}
+
+# Last-sent state per (output_id, hex) for delta updates: only send when position/state changed.
+# Format: output_id -> { hex -> (lat, lon, alt_baro, track, gs) }. Pruned to hexes seen recently.
+_last_sent_state = {}
+_MAX_LAST_SENT_HEXES = 15000
+
 # PyTAK/TAK Server wire format: each CoT message is XML UTF-8 bytes followed by this delimiter.
 COT_MESSAGE_DELIMITER = b" "
 
@@ -461,6 +470,63 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True, now=None, 
     return ET.tostring(root, encoding="unicode", default_namespace=None)
 
 
+def _state_key(ac):
+    """Return a comparable state tuple for delta updates: (lat, lon, alt_baro, track, gs). Rounded to avoid float noise."""
+    lat = _parse_float(ac.get("lat"))
+    lon = _parse_float(ac.get("lon"))
+    alt = _parse_float(ac.get("alt_baro") or ac.get("altitude"))
+    track = _parse_float(ac.get("track"))
+    gs = _parse_float(ac.get("gs"))
+    return (
+        round(lat, 5) if lat is not None else None,
+        round(lon, 5) if lon is not None else None,
+        round(alt, 0) if alt is not None else None,
+        round(track, 1) if track is not None else None,
+        round(gs, 1) if gs is not None else None,
+    )
+
+
+def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key):
+    """Create and return a connected socket (plain or TLS), or None on failure."""
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)
+        log.debug("CoT sender: %s — TCP connect to %s:%s", name, host, port)
+        sock.connect((host, port))
+        if is_tls and cert_key:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:
+                cf.write(cert_key["cert_pem"])
+                cert_path = cf.name
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as kf:
+                kf.write(cert_key["key_pem"])
+                key_path = kf.name
+            try:
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context.load_cert_chain(cert_path, key_path)
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                sock = context.wrap_socket(sock, server_hostname=host)
+            finally:
+                try:
+                    os.unlink(cert_path)
+                except Exception:
+                    pass
+                try:
+                    os.unlink(key_path)
+                except Exception:
+                    pass
+        return sock
+    except Exception as e:
+        log.warning("CoT sender: %s — connect failed to %s:%s: %s", name, host, port, e)
+        if sock:
+            try:
+                sock.close()
+            except Exception:
+                pass
+        return None
+
+
 def run_cot_sender_cycle():
     """
     Fetch aircraft, for each CoT push output filter and build CoT, then push to cot_url.
@@ -478,18 +544,17 @@ def run_cot_sender_cycle():
 
 def _run_cot_sender_cycle_impl(requests):
     """Inner implementation; hold _cot_sender_lock before calling."""
-    log.info("CoT sender: cycle start")
+    log.debug("CoT sender: cycle start")
     output_list = get_cot_push_outputs()
-    log.info("CoT sender: got %d push output(s)", len(output_list))
+    log.debug("CoT sender: got %d push output(s)", len(output_list))
     if not output_list:
         return
     aircraft_url = os.environ.get("AIRCRAFT_JSON_URL", "http://aircraft-merger:8090/data/aircraft.json")
     try:
-        log.info("CoT sender: fetching aircraft from %s", aircraft_url)
-        r = requests.get(aircraft_url, timeout=(2, 3))
+        r = requests.get(aircraft_url, timeout=(1, 2))
         r.raise_for_status()
         data = r.json()
-        log.info("CoT sender: aircraft fetch OK (%d aircraft)", len(data.get("aircraft", [])))
+        log.debug("CoT sender: aircraft fetch OK (%d aircraft)", len(data.get("aircraft", [])))
     except Exception as e:
         log.warning("CoT sender: failed to fetch aircraft from %s: %s", aircraft_url, e)
         return
@@ -521,6 +586,9 @@ def _run_cot_sender_cycle_impl(requests):
         now = _cot_time()
         stale_dt = datetime.now(timezone.utc).timestamp() + stale_seconds
         stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+        # Delta updates: only build/send CoT for aircraft whose position/state changed (or new)
+        last_sent = dict(_last_sent_state.get(output_id, {}))
+        seen_hexes = set()
         to_send = []
         for ac in aircraft:
             hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
@@ -529,6 +597,10 @@ def _run_cot_sender_cycle_impl(requests):
             transform = transforms_by_hex.get(hex_code) if use_cotproxy else None
             if not pass_all and not transform:
                 continue
+            seen_hexes.add(hex_code)
+            state = _state_key(ac)
+            if last_sent.get(hex_code) == state:
+                continue
             try:
                 xml_str = build_cot_xml(ac, transform, include_icon_in_cot=include_icon_in_cot, now=now, stale=stale)
             except Exception as e:
@@ -536,14 +608,18 @@ def _run_cot_sender_cycle_impl(requests):
                 continue
             if xml_str:
                 to_send.append(xml_str)
+                last_sent[hex_code] = state
+        # Prune cache to hexes seen this cycle; cap size so we don't grow forever
+        _last_sent_state[output_id] = {h: last_sent[h] for h in seen_hexes if h in last_sent}
+        if len(_last_sent_state[output_id]) > _MAX_LAST_SENT_HEXES:
+            keys = list(_last_sent_state[output_id].keys())[:_MAX_LAST_SENT_HEXES]
+            _last_sent_state[output_id] = {k: _last_sent_state[output_id][k] for k in keys}
         if not to_send:
-            log.warning(
-                "CoT sender: %s — no CoT to send (pass_all=%s, use_cotproxy=%s, aircraft_after_filter=%d). "
-                "If pass_all is False, add transforms for ICAO hexes that are currently in the sky.",
+            log.debug(
+                "CoT sender: %s — no CoT to send this cycle (pass_all=%s, use_cotproxy=%s, aircraft_after_filter=%d, delta may have skipped all).",
                 name, pass_all, use_cotproxy, len(aircraft),
             )
             continue
-        log.info("CoT sender: %s — connecting to %s (TLS=%s), %d message(s) to send", name, cot_url, cot_url.lower().startswith("tls://"), len(to_send))
         is_tls = cot_url.lower().startswith("tls://")
         rest = cot_url.split("://", 1)[-1].strip()
         if "/" in rest:
@@ -561,55 +637,25 @@ def _run_cot_sender_cycle_impl(requests):
             if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
                 log.warning("CoT sender: %s — TLS required but no client cert/key for output_id %s", name, output_id)
                 continue
-        sock = None
+        # Reuse persistent socket to avoid connect+TLS every cycle (saves 100–500ms+)
+        sock = _persistent_sockets.get(output_id)
+        if sock is None:
+            sock = _connect_cot_socket(name, output_id, host, port, is_tls, cert_key)
+            if sock is not None:
+                _persistent_sockets[output_id] = sock
+        if sock is None:
+            continue
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # Connect timeout; send timeout set below for large batches
-            sock.settimeout(3)
-            log.info("CoT sender: %s — TCP connect to %s:%s", name, host, port)
-            sock.connect((host, port))
-            log.info("CoT sender: %s — TCP connected", name)
-            if is_tls and cert_key:
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:
-                    cf.write(cert_key["cert_pem"])
-                    cert_path = cf.name
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as kf:
-                    kf.write(cert_key["key_pem"])
-                    key_path = kf.name
-                try:
-                    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-                    context.load_cert_chain(cert_path, key_path)
-                    # TAK Server often uses self-signed server certs; skip server verification so connection succeeds.
-                    context.check_hostname = False
-                    context.verify_mode = ssl.CERT_NONE
-                    log.info("CoT sender: %s — TLS handshake...", name)
-                    sock = context.wrap_socket(sock, server_hostname=host)
-                    log.info("CoT sender: %s — TLS OK", name)
-                finally:
-                    try:
-                        os.unlink(cert_path)
-                    except Exception:
-                        pass
-                    try:
-                        os.unlink(key_path)
-                    except Exception:
-                        pass
-            log.info("CoT sender: %s — sending %d CoT message(s)", name, len(to_send))
-            # Log first message for inspection (full CoT XML)
-            if to_send:
-                log.info("CoT sender: %s — sample CoT (first of %d): %s", name, len(to_send), to_send[0])
-            # Batch send: one buffer and one sendall (fewer syscalls; large batches need longer timeout)
             send_timeout = max(10, 3 + len(to_send) // 100)
             sock.settimeout(send_timeout)
             buf = (" ".join(to_send) + " ").encode("utf-8")
             sock.sendall(buf)
-            log.info("CoT sender: %s — sent %d CoT message(s) to %s:%s", name, len(to_send), host, port)
+            log.info("CoT sender: %s — sent %d CoT message(s) to %s:%s (connection reused)", name, len(to_send), host, port)
         except Exception as e:
-            log.warning("CoT sender: %s — connect/send failed to %s:%s: %s", name, host, port, e)
-        finally:
-            if sock:
-                try:
-                    sock.close()
-                except Exception:
-                    pass
-    log.info("CoT sender: cycle done")
+            log.warning("CoT sender: %s — send failed to %s:%s: %s (will reconnect next cycle)", name, host, port, e)
+            try:
+                sock.close()
+            except Exception:
+                pass
+            _persistent_sockets.pop(output_id, None)
+    log.debug("CoT sender: cycle done")
