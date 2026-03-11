@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.166",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: add video URL to transforms. Transform modal has Video URL field; when set, CoT includes <__video url=\"...\"/> on event root (COTProxy parity). Table has Video column (Yes/No). CSV import supports VIDEO."
+    ]
+  },
+  {
     "version": "1.0.165",
     "date": "2026-03-10",
     "notes": [

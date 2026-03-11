@@ -150,7 +150,7 @@ def _parse_float(v, default=None):
 def get_transform_for_aircraft(output_id, hex_code):
     """
     Return transform override for an aircraft (by ICAO hex) when use_cotproxy is enabled.
-    Returns dict with keys: callsign, type, cot, icon, domain, agency, reg, model, remarks; or None.
+    Returns dict with keys: callsign, type, cot, icon, domain, agency, reg, model, remarks, video; or None.
     """
     from models import CotTransformModel
     t = CotTransformModel.get_by_hex(output_id, hex_code)
@@ -166,6 +166,7 @@ def get_transform_for_aircraft(output_id, hex_code):
         "reg": t.get("reg"),
         "model": t.get("model"),
         "remarks": t.get("remarks"),
+        "video": t.get("video"),
     }
 
 
@@ -260,6 +261,12 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
             track_attrib["speed"] = str(gs_kts)
         if track_attrib:
             ET.SubElement(detail, "track", attrib=track_attrib)
+    # Video (COTProxy parity): __video as child of event root with url attribute
+    video_url = (transform or {}).get("video") if transform else None
+    if video_url is not None and isinstance(video_url, str) and video_url.strip():
+        video_el = ET.Element("__video")
+        video_el.set("url", _xml_escape(video_url.strip())[:2048])
+        root.append(video_el)
     return ET.tostring(root, encoding="unicode", default_namespace=None)
 
 

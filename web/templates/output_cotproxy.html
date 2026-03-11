@@ -79,15 +79,16 @@ th.sortable:hover { color: var(--accent); }
                     <th>Model</th>
                     <th>COT</th>
                     <th>Icon</th>
+                    <th>Video</th>
                     <th style="width:100px;"></th>
                 </tr>
             </thead>
             <tbody id="transforms-tbody">
-                <tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
+                <tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
             </tbody>
             <tfoot id="transforms-tfoot" style="display:none;">
                 <tr>
-                    <td colspan="11" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
+                    <td colspan="12" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
                         <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-right:12px;">
                             <input type="checkbox" id="select-all-bottom" title="Select all on page"> Select all
                         </label>
@@ -212,6 +213,10 @@ th.sortable:hover { color: var(--accent); }
                 <div class="form-group" style="grid-column:1/-1;">
                     <label>Remarks (CoT &lt;remarks&gt; — optional)</label>
                     <input class="form-control" id="t-remarks" placeholder="e.g. notes, unit info">
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label>Video URL (CoT &lt;__video url="..."&gt; — optional)</label>
+                    <input class="form-control" id="t-video" type="url" placeholder="https://...">
                 </div>
             </div>
             <div id="transform-modal-error" style="display:none;background:rgba(239,68,68,0.1);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-top:8px;"></div>
@@ -578,13 +583,13 @@ async function loadTransforms() {
         updatePaginationBar();
         updateSortArrows();
         if (!items.length && !totalCount) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
             document.getElementById('bulk-delete-btn-top').style.display = 'none';
             document.getElementById('delete-all-btn-top').style.display = 'none';
             return;
         }
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">No results for this page.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">No results for this page.</td></tr>';
         } else {
             tbody.innerHTML = items.map(t => `
                 <tr>
@@ -598,6 +603,7 @@ async function loadTransforms() {
                     <td>${escapeHtml(t.model || '')}</td>
                     <td><code style="font-size:11px;">${escapeHtml(t.cot || '')}</code></td>
                     <td style="max-width:140px;">${renderIconCell(t)}</td>
+                    <td style="text-align:center;">${(t.video && String(t.video).trim()) ? 'Yes' : 'No'}</td>
                     <td style="text-align:right;">
                         <button class="btn" style="font-size:11px;padding:4px 8px;" onclick="openEditModal(${t.id})">Edit</button>
                         <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteTransform(${t.id}, '${(t.hex || '').replace(/'/g, "\\'")}')">Delete</button>
@@ -609,7 +615,7 @@ async function loadTransforms() {
         wireSortHeaders();
         updateBulkDeleteVisibility();
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="11" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
         tfoot.style.display = 'none';
         bar.style.display = 'none';
     }
@@ -625,7 +631,7 @@ function escapeHtml(s) {
 function openAddModal() {
     document.getElementById('transform-modal-title').textContent = 'Add transform';
     document.getElementById('transform-id').value = '';
-    ['hex','callsign','type','cot','domain','agency','reg','model','icon','remarks'].forEach(f => {
+    ['hex','callsign','type','cot','domain','agency','reg','model','icon','remarks','video'].forEach(f => {
         const el = document.getElementById('t-' + f);
         if (el) el.value = '';
     });
@@ -650,6 +656,7 @@ async function openEditModal(id) {
     document.getElementById('t-model').value = t.model || '';
     document.getElementById('t-icon').value = t.icon || '';
     document.getElementById('t-remarks').value = t.remarks || '';
+    document.getElementById('t-video').value = t.video || '';
     document.getElementById('transform-modal-error').style.display = 'none';
     document.getElementById('transform-modal').classList.add('show');
 }
@@ -673,6 +680,7 @@ async function saveTransform() {
         model: document.getElementById('t-model').value.trim(),
         icon: document.getElementById('t-icon').value.trim(),
         remarks: document.getElementById('t-remarks').value.trim(),
+        video: document.getElementById('t-video').value.trim(),
     };
     if (!payload.hex) { errEl.textContent = 'HEX is required.'; errEl.style.display = 'block'; return; }
     const btn = document.getElementById('transform-save-btn');

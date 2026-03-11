@@ -44,7 +44,7 @@ def get_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 output_id INTEGER NOT NULL,
                 domain TEXT, agency TEXT, reg TEXT, callsign TEXT, type TEXT, model TEXT,
-                hex TEXT NOT NULL, cot TEXT, icon TEXT, remarks TEXT,
+                hex TEXT NOT NULL, cot TEXT, icon TEXT, remarks TEXT, video TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
             )
@@ -55,6 +55,12 @@ def get_db():
         # Migration: remarks on cot_transforms (COTProxy parity — CoT <remarks>)
         try:
             conn.execute("ALTER TABLE cot_transforms ADD COLUMN remarks TEXT")
+            conn.commit()
+        except Exception:
+            pass
+        # Migration: video on cot_transforms (CoT __video element)
+        try:
+            conn.execute("ALTER TABLE cot_transforms ADD COLUMN video TEXT")
             conn.commit()
         except Exception:
             pass
@@ -664,7 +670,7 @@ class OutputKeyModel:
 class CotTransformModel:
     """COTProxy-style transform rules per output (hex -> callsign, type, icon, etc.)."""
 
-    CSV_HEADERS = ("DOMAIN", "AGENCY", "REG", "CALLSIGN", "TYPE", "MODEL", "HEX", "COT", "ICON", "REMARKS")
+    CSV_HEADERS = ("DOMAIN", "AGENCY", "REG", "CALLSIGN", "TYPE", "MODEL", "HEX", "COT", "ICON", "REMARKS", "VIDEO")
 
     _SORT_COLUMNS = ("hex", "callsign", "type", "domain", "agency", "reg")
 
@@ -672,7 +678,7 @@ class CotTransformModel:
     def get_all(output_id: int):
         conn = get_db()
         rows = conn.execute(
-            """SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, created_at
+            """SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, created_at
                FROM cot_transforms WHERE output_id = ? ORDER BY hex""",
             (output_id,),
         ).fetchall()
@@ -695,7 +701,7 @@ class CotTransformModel:
             ).fetchone()[0]
             offset = (page - 1) * per_page
             rows = conn.execute(
-                f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, created_at
+                f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, created_at
                     FROM cot_transforms WHERE output_id = ?
                     ORDER BY {sort_by} {order}
                     LIMIT ? OFFSET ?""",
@@ -722,8 +728,8 @@ class CotTransformModel:
             raise ValueError("hex is required")
         conn = get_db()
         cursor = conn.execute(
-            """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 output_id,
                 (data.get("domain") or "").strip() or None,
@@ -736,6 +742,7 @@ class CotTransformModel:
                 (data.get("cot") or "").strip() or None,
                 (data.get("icon") or "").strip() or None,
                 (data.get("remarks") or "").strip() or None,
+                (data.get("video") or "").strip() or None,
             ),
         )
         tid = cursor.lastrowid
@@ -745,14 +752,14 @@ class CotTransformModel:
 
     @staticmethod
     def update(transform_id: int, output_id: int, data: dict) -> bool:
-        allowed = {"domain", "agency", "reg", "callsign", "type", "model", "hex", "cot", "icon", "remarks"}
+        allowed = {"domain", "agency", "reg", "callsign", "type", "model", "hex", "cot", "icon", "remarks", "video"}
         fields = {k: v for k, v in data.items() if k in allowed}
         if not fields:
             return False
         conn = get_db()
         conn.execute(
             """UPDATE cot_transforms SET
-               domain=?, agency=?, reg=?, callsign=?, type=?, model=?, hex=?, cot=?, icon=?, remarks=?
+               domain=?, agency=?, reg=?, callsign=?, type=?, model=?, hex=?, cot=?, icon=?, remarks=?, video=?
                WHERE id = ? AND output_id = ?""",
             (
                 (data.get("domain") or "").strip() or None,
@@ -765,6 +772,7 @@ class CotTransformModel:
                 (data.get("cot") or "").strip() or None,
                 (data.get("icon") or "").strip() or None,
                 (data.get("remarks") or "").strip() or None,
+                (data.get("video") or "").strip() or None,
                 transform_id,
                 output_id,
             ),
@@ -831,8 +839,8 @@ class CotTransformModel:
                         continue
                     try:
                         conn.execute(
-                            """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                             (
                                 output_id,
                                 (row.get("DOMAIN") or "").strip() or None,
@@ -845,6 +853,7 @@ class CotTransformModel:
                                 (row.get("COT") or "").strip() or None,
                                 (row.get("ICON") or "").strip() or None,
                                 (row.get("REMARKS") or "").strip() or None,
+                                (row.get("VIDEO") or "").strip() or None,
                             ),
                         )
                         inserted += 1

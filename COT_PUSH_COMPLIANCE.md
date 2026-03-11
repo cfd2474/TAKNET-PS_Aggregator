@@ -22,7 +22,7 @@ Each CoT message is a single XML document with a root `<event>` element. Minimum
 - **Root:** `<event>`
 - **Attributes:** `version="2.0"`, `type`, `uid`, `how`, `time`, `start`, `stale`
 - **Child:** `<point lat="..." lon="..." le="..." hae="..." ce="..."/>` — `lat`/`lon` in degrees; `hae` (height above ellipsoid), `le` (linear/vertical error), `ce` (circular error) in **meters** (TAK/PyTAK/node-cot standard). Use a fixed vertical accuracy for `le` (e.g. 50) or 9999999 when unknown; do not set `le` to altitude.
-- **Optional:** `<detail>` — the aggregator sends (COTProxy/adsbcot parity): `detail@callsign`; `<contact callsign="..." name="..."/>` (name from transform reg when set); `<usericon iconsetpath="..."/>` when transform has icon and “Include icon in CoT” is on; `<remarks>` when transform has remarks; `<track speed="..." course="..."/>` when aircraft has gs/track.
+- **Optional:** `<detail>` — the aggregator sends (COTProxy/adsbcot parity): `detail@callsign`; `<contact callsign="..." name="..."/>` (name from transform reg when set); `<usericon iconsetpath="..."/>` when transform has icon and “Include icon in CoT” is on; `<remarks>` when transform has remarks; `<track speed="..." course="..."/>` when aircraft has gs/track. When transform has a video URL, `<__video url="..."/>` is added as a child of the event root (COTProxy parity).
 
 Time fields use **W3C XML Schema dateTime** in UTC, e.g. `2025-03-09T12:00:00.000000Z` (see PyTAK `cot_time()`).
 
