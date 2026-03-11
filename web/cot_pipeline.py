@@ -232,6 +232,9 @@ def build_cot_xml(aircraft, transform=None):
     })
     detail = ET.SubElement(root, "detail")
     ET.SubElement(detail, "contact", attrib={"callsign": _xml_escape(callsign)[:128]})
+    icon_path = (transform or {}).get("icon")
+    if icon_path and isinstance(icon_path, str) and icon_path.strip():
+        ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
     return ET.tostring(root, encoding="unicode", default_namespace=None)
 
 

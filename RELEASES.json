@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.163",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: include transform icon in CoT message. When a COTProxy transform has an icon set, add <usericon iconsetpath=\"...\"/> under <detail> so ATAK/TAK displays the chosen icon."
+    ]
+  },
+  {
     "version": "1.0.162",
     "date": "2026-03-10",
     "notes": [
