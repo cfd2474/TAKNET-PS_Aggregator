@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.171",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: fix TypeError when aircraft has no category (cat None); add defensive checks and try/except so CoT flow is not interrupted by bad or missing data."
+    ]
+  },
+  {
     "version": "1.0.170",
     "date": "2026-03-10",
     "notes": [

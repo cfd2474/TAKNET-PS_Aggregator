@@ -197,14 +197,20 @@ def _get_type_desc_from_aircraft(aircraft):
     Return the 3–4 char type description if present (tar1090 / readsb DB / ADS-B Exchange style).
     Checks t_adsb, type_desc, desc. Value must be 3–4 chars with first char in L,H,G,S,A,T.
     Refs: https://www.adsbexchange.com/map-help/ https://www.reddit.com/r/ADSB/comments/1161thj/
+    Never raises — returns None on any error so CoT flow is not interrupted.
     """
-    for key in ("t_adsb", "type_desc", "desc"):
-        val = aircraft.get(key)
-        if not val or not isinstance(val, str):
-            continue
-        s = val.strip().upper()
-        if 3 <= len(s) <= 4 and s[0:1] in "LHSATG":
-            return s
+    try:
+        if not isinstance(aircraft, dict):
+            return None
+        for key in ("t_adsb", "type_desc", "desc"):
+            val = aircraft.get(key)
+            if not val or not isinstance(val, str):
+                continue
+            s = val.strip().upper()
+            if 3 <= len(s) <= 4 and s[0:1] in "LHSATG":
+                return s
+    except Exception:
+        pass
     return None
 
 
@@ -214,36 +220,41 @@ def _cot_type_from_aircraft(aircraft):
     ADS-B emitter category, and dbFlags. FTS CoT table:
     https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/
     dbFlags & 1 => military; else civil. Type desc (L2J, H..) overrides fixed/rotor when present;
-    LTA/UAV still from emitter category only.
+    LTA/UAV still from emitter category only. Never raises — returns DEFAULT_COT_TYPE on error.
     """
-    raw = aircraft.get("dbFlags") or 0
     try:
-        military = bool(int(raw) & 1)
-    except (TypeError, ValueError):
-        military = False
-    cat = _parse_category_int(aircraft.get("category") or aircraft.get("category_adsb"))
-    type_desc = _get_type_desc_from_aircraft(aircraft)
-    first_char = type_desc[0:1] if type_desc else None
+        if not isinstance(aircraft, dict):
+            return DEFAULT_COT_TYPE
+        raw = aircraft.get("dbFlags") or 0
+        try:
+            military = bool(int(raw) & 1)
+        except (TypeError, ValueError):
+            military = False
+        cat = _parse_category_int(aircraft.get("category") or aircraft.get("category_adsb"))
+        type_desc = _get_type_desc_from_aircraft(aircraft)
+        first_char = type_desc[0:1] if type_desc else None
 
-    # LTA and UAV only from emitter category (type desc has no LTA/UAV class)
-    if cat == EMITTER_LTA:
-        return COT_TYPE_MIL_LTA if military else COT_TYPE_CIVIL_LTA
-    if cat in (EMITTER_UAV, EMITTER_UAV_ALT):
-        return COT_TYPE_MIL_UAV if military else COT_TYPE_CIVIL_UAV
+        # LTA and UAV only from emitter category (type desc has no LTA/UAV class)
+        if cat == EMITTER_LTA:
+            return COT_TYPE_MIL_LTA if military else COT_TYPE_CIVIL_LTA
+        if cat in (EMITTER_UAV, EMITTER_UAV_ALT):
+            return COT_TYPE_MIL_UAV if military else COT_TYPE_CIVIL_UAV
 
-    # Rotor from type desc (H, G) or from emitter category 7
-    if first_char in TYPE_DESC_ROTOR_FIRST:
-        return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
-    if cat in (EMITTER_ROTOR,):
-        return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
+        # Rotor from type desc (H, G) or from emitter category 7
+        if first_char in TYPE_DESC_ROTOR_FIRST:
+            return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
+        if cat in (EMITTER_ROTOR,):
+            return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
 
-    # Fixed from type desc (L, S, A, T) or from category (fixed/glider/ultralight)
-    if first_char in TYPE_DESC_FIXED_FIRST:
-        return COT_TYPE_MIL_FIXED if military else COT_TYPE_CIVIL_FIXED
-    if cat in (EMITTER_GLIDER,) or (1 <= cat <= 6) or (cat in (12,)):
-        return COT_TYPE_MIL_FIXED if military else COT_TYPE_CIVIL_FIXED
+        # Fixed from type desc (L, S, A, T) or from category (fixed/glider/ultralight)
+        if first_char in TYPE_DESC_FIXED_FIRST:
+            return COT_TYPE_MIL_FIXED if military else COT_TYPE_CIVIL_FIXED
+        if cat is not None and (cat in (EMITTER_GLIDER,) or (1 <= cat <= 6) or (cat in (12,))):
+            return COT_TYPE_MIL_FIXED if military else COT_TYPE_CIVIL_FIXED
 
-    return COT_TYPE_MIL if military else COT_TYPE_CIVIL
+        return COT_TYPE_MIL if military else COT_TYPE_CIVIL
+    except Exception:
+        return DEFAULT_COT_TYPE
 
 
 def get_transform_for_aircraft(output_id, hex_code):
@@ -442,13 +453,17 @@ def _run_cot_sender_cycle_impl(requests):
         aircraft = filter_aircraft_for_output(with_pos, config)
         to_send = []
         for ac in aircraft:
-            hex_code = (ac.get("hex") or "").strip().upper()
+            hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
             if not hex_code:
                 continue
             transform = get_transform_for_aircraft(output_id, hex_code) if use_cotproxy else None
             if not pass_all and not transform:
                 continue
-            xml_str = build_cot_xml(ac, transform, include_icon_in_cot=include_icon_in_cot)
+            try:
+                xml_str = build_cot_xml(ac, transform, include_icon_in_cot=include_icon_in_cot)
+            except Exception as e:
+                log.warning("CoT sender: %s — skip aircraft %s (build_cot_xml failed): %s", name, hex_code, e)
+                continue
             if xml_str:
                 to_send.append(xml_str)
         if not to_send:
