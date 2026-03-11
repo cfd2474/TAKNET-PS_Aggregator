@@ -186,12 +186,35 @@ EMITTER_UAV = 14
 EMITTER_UAV_ALT = 11  # Parachutist/UAV in some specs
 EMITTER_GLIDER = 9
 
+# Type description (tar1090/ADS-B Exchange style): 3–4 char code, 1st = class.
+# L=landplane, S=seaplane, A=amphibian, H=helicopter, G=gyroplane, T=tilt-wing/tiltrotor (see ADS-B Exchange map help / Reddit filter values).
+TYPE_DESC_ROTOR_FIRST = frozenset("HG")   # Helicopter, Gyroplane
+TYPE_DESC_FIXED_FIRST = frozenset("LSAT")  # Landplane, Seaplane, Amphibian, Tilt-wing
+
+
+def _get_type_desc_from_aircraft(aircraft):
+    """
+    Return the 3–4 char type description if present (tar1090 / readsb DB / ADS-B Exchange style).
+    Checks t_adsb, type_desc, desc. Value must be 3–4 chars with first char in L,H,G,S,A,T.
+    Refs: https://www.adsbexchange.com/map-help/ https://www.reddit.com/r/ADSB/comments/1161thj/
+    """
+    for key in ("t_adsb", "type_desc", "desc"):
+        val = aircraft.get(key)
+        if not val or not isinstance(val, str):
+            continue
+        s = val.strip().upper()
+        if 3 <= len(s) <= 4 and s[0:1] in "LHSATG":
+            return s
+    return None
+
 
 def _cot_type_from_aircraft(aircraft):
     """
-    Derive MIL-STD-2525 CoT type for untransformed aircraft from ADS-B category and dbFlags.
-    FTS CoT table: https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/
-    dbFlags & 1 => military; else civil. Category from ICAO DO-260B (fixed/rotor/LTA/UAV).
+    Derive MIL-STD-2525 CoT type for untransformed aircraft from type description (tar1090),
+    ADS-B emitter category, and dbFlags. FTS CoT table:
+    https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/
+    dbFlags & 1 => military; else civil. Type desc (L2J, H..) overrides fixed/rotor when present;
+    LTA/UAV still from emitter category only.
     """
     raw = aircraft.get("dbFlags") or 0
     try:
@@ -199,16 +222,27 @@ def _cot_type_from_aircraft(aircraft):
     except (TypeError, ValueError):
         military = False
     cat = _parse_category_int(aircraft.get("category") or aircraft.get("category_adsb"))
-    if cat is None:
-        return COT_TYPE_MIL if military else COT_TYPE_CIVIL
-    if cat in (EMITTER_ROTOR,):
-        return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
+    type_desc = _get_type_desc_from_aircraft(aircraft)
+    first_char = type_desc[0:1] if type_desc else None
+
+    # LTA and UAV only from emitter category (type desc has no LTA/UAV class)
     if cat == EMITTER_LTA:
         return COT_TYPE_MIL_LTA if military else COT_TYPE_CIVIL_LTA
     if cat in (EMITTER_UAV, EMITTER_UAV_ALT):
         return COT_TYPE_MIL_UAV if military else COT_TYPE_CIVIL_UAV
-    if cat in (EMITTER_GLIDER,) or (1 <= cat <= 6) or (cat in (12,)):  # fixed / glider / ultralight
+
+    # Rotor from type desc (H, G) or from emitter category 7
+    if first_char in TYPE_DESC_ROTOR_FIRST:
+        return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
+    if cat in (EMITTER_ROTOR,):
+        return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
+
+    # Fixed from type desc (L, S, A, T) or from category (fixed/glider/ultralight)
+    if first_char in TYPE_DESC_FIXED_FIRST:
         return COT_TYPE_MIL_FIXED if military else COT_TYPE_CIVIL_FIXED
+    if cat in (EMITTER_GLIDER,) or (1 <= cat <= 6) or (cat in (12,)):
+        return COT_TYPE_MIL_FIXED if military else COT_TYPE_CIVIL_FIXED
+
     return COT_TYPE_MIL if military else COT_TYPE_CIVIL
 
 

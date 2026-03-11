@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.170",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: use tar1090/ADS-B Exchange type description when present (t_adsb, type_desc, or desc 3–4 char: L/S/A/T=fixed, H/G=rotor) to set CoT type; falls back to emitter category. See ADS-B Exchange map help and FTS CoT table."
+    ]
+  },
+  {
     "version": "1.0.169",
     "date": "2026-03-10",
     "notes": [
