@@ -140,7 +140,7 @@ def create_app():
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
         # Return immediately so scheduler never blocks; cycle uses short timeouts and single-run lock.
-    scheduler.add_job(_run_cot_sender, "interval", seconds=10, id="cot_sender")
+    scheduler.add_job(_run_cot_sender, "interval", seconds=2, id="cot_sender")
 
     scheduler.start()
 
