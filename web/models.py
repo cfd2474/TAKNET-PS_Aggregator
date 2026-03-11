@@ -745,6 +745,34 @@ class CotTransformModel:
         conn.close()
 
     @staticmethod
+    def bulk_delete(output_id: int, ids: list, delete_all: bool = False) -> int:
+        """Delete many transforms: by id list (chunked) or all for output. One connection. Returns count deleted."""
+        conn = get_db()
+        try:
+            if delete_all:
+                cur = conn.execute("DELETE FROM cot_transforms WHERE output_id = ?", (output_id,))
+                deleted = cur.rowcount
+            else:
+                ids = [int(x) for x in (ids or []) if x is not None]
+                if not ids:
+                    conn.close()
+                    return 0
+                chunk_size = 500
+                deleted = 0
+                for i in range(0, len(ids), chunk_size):
+                    chunk = ids[i : i + chunk_size]
+                    placeholders = ",".join("?" * len(chunk))
+                    cur = conn.execute(
+                        f"DELETE FROM cot_transforms WHERE output_id = ? AND id IN ({placeholders})",
+                        (output_id,) + tuple(chunk),
+                    )
+                    deleted += cur.rowcount
+            conn.commit()
+            return deleted
+        finally:
+            conn.close()
+
+    @staticmethod
     def import_from_csv(output_id: int, csv_text: str) -> tuple:
         """Parse CSV (header: DOMAIN,AGENCY,REG,CALLSIGN,TYPE,MODEL,HEX,COT,ICON) and insert rows.
         Uses a single connection and transaction to avoid timeouts on large imports.

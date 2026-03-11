@@ -1158,15 +1158,12 @@ def cot_transforms_bulk_delete(output_id):
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
     data = request.get_json(silent=True) or {}
-    ids = data.get("ids")
-    if not ids or not isinstance(ids, list):
-        return jsonify({"error": "ids array required"}), 400
-    for tid in ids:
-        try:
-            CotTransformModel.delete(int(tid), output_id)
-        except (TypeError, ValueError):
-            pass
-    return jsonify({"success": True, "deleted": len(ids)})
+    delete_all = data.get("delete_all") is True
+    ids = data.get("ids") if not delete_all else []
+    if not delete_all and (not ids or not isinstance(ids, list)):
+        return jsonify({"error": "ids array or delete_all: true required"}), 400
+    deleted = CotTransformModel.bulk_delete(output_id, ids, delete_all=delete_all)
+    return jsonify({"success": True, "deleted": deleted})
 
 
 # ── CoT push TLS certificates (owner-only; never return cert content) ─────────

@@ -51,6 +51,7 @@
                 <input type="checkbox" id="select-all-top" title="Select all"> Select all
             </label>
             <button type="button" class="btn btn-danger" id="bulk-delete-btn-top" style="font-size:12px;display:none;" onclick="bulkDeleteTransforms()">Delete selected</button>
+            <button type="button" class="btn btn-danger" id="delete-all-btn-top" style="font-size:12px;display:none;" onclick="deleteAllTransforms()">Delete all</button>
         </div>
     </div>
     <div class="table-wrap">
@@ -80,6 +81,7 @@
                             <input type="checkbox" id="select-all-bottom" title="Select all"> Select all
                         </label>
                         <button type="button" class="btn btn-danger" id="bulk-delete-btn-bottom" style="font-size:12px;" onclick="bulkDeleteTransforms()">Delete selected</button>
+                        <button type="button" class="btn btn-danger" id="delete-all-btn-bottom" style="font-size:12px;" onclick="deleteAllTransforms()">Delete all</button>
                     </td>
                 </tr>
             </tfoot>
@@ -358,8 +360,11 @@ function updateBulkDeleteVisibility() {
     const n = checked.length;
     const allCount = allCb.length;
     const allSelected = allCount > 0 && n === allCount;
+    const hasAny = allCount > 0;
     document.getElementById('bulk-delete-btn-top').style.display = n ? 'inline-block' : 'none';
     document.getElementById('bulk-delete-btn-bottom').style.display = n ? 'inline-block' : 'none';
+    document.getElementById('delete-all-btn-top').style.display = hasAny ? 'inline-block' : 'none';
+    document.getElementById('delete-all-btn-bottom').style.display = hasAny ? 'inline-block' : 'none';
     document.getElementById('select-all-top').checked = allSelected;
     document.getElementById('select-all-header').checked = allSelected;
     document.getElementById('select-all-bottom').checked = allSelected;
@@ -417,6 +422,31 @@ async function bulkDeleteTransforms() {
     }
 }
 
+async function deleteAllTransforms() {
+    const countEl = document.getElementById('transform-count');
+    const n = parseInt((countEl && countEl.textContent) ? countEl.textContent.replace(/\D/g, '') : '0', 10) || 0;
+    if (!n) return;
+    if (!confirm('Delete all ' + n + ' transform(s)? This cannot be undone.')) return;
+    showBulkDeleteModal('processing');
+    try {
+        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delete_all: true }),
+        });
+        const d = await r.json();
+        if (r.ok && d.success) {
+            showBulkDeleteModal('success', 'Removed ' + (d.deleted || n) + ' transform(s).');
+            loadTransforms();
+            setTimeout(function() { dismissBulkDeleteModal(); }, 1500);
+        } else {
+            showBulkDeleteModal('failure', d.error || 'Delete failed');
+        }
+    } catch (e) {
+        showBulkDeleteModal('failure', 'Request failed: ' + e.message);
+    }
+}
+
 async function loadTransforms() {
     const tbody = document.getElementById('transforms-tbody');
     const tfoot = document.getElementById('transforms-tfoot');
@@ -429,6 +459,7 @@ async function loadTransforms() {
         if (!items.length) {
             tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
             document.getElementById('bulk-delete-btn-top').style.display = 'none';
+            document.getElementById('delete-all-btn-top').style.display = 'none';
             return;
         }
         tbody.innerHTML = items.map(t => `

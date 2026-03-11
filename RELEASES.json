@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.161",
+    "date": "2026-03-10",
+    "notes": [
+      "COTProxy: bulk-delete no longer times out on large transform lists. Single-connection chunked DELETE (500 per batch); add delete_all option and 'Delete all' button for clearing without sending IDs."
+    ]
+  },
+  {
     "version": "1.0.160",
     "date": "2026-03-10",
     "notes": [
