@@ -1309,10 +1309,17 @@ def _haversine_nm(lat1, lon1, lat2, lon2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-@bp.route("/outputs/range/point/<float:lat>/<float:lon>/<float:radius_nm>")
+@bp.route("/outputs/range/point/<string:lat>/<string:lon>/<string:radius_nm>")
 def output_range_point(lat, lon, radius_nm):
-    """Range API: aircraft within radius_nm of (lat, lon). Key required; respects Include Network ADSB."""
+    """Range API: aircraft within radius_nm of (lat, lon). Key required; respects Include Network ADSB.
+    String path segments so negative longitude (e.g. -85.18) matches; parsed to float inside."""
     from models import OutputKeyModel
+    try:
+        lat = float(lat)
+        lon = float(lon)
+        radius_nm = float(radius_nm)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid lat, lon, or radius_nm", "aircraft": []}), 400
     raw_key = _extract_output_key()
     output = OutputKeyModel.validate(raw_key)
     if not output:
@@ -1332,6 +1339,69 @@ def output_range_point(lat, lon, radius_nm):
     radius_nm = min(max(0, radius_nm), 250.0)
     config = _config
     v = config.get("include_network_adsb", True)
+    include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
+    try:
+        resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
+        if resp.status_code != 200:
+            return jsonify({"error": "Upstream data unavailable", "aircraft": []}), 503
+        data = resp.json()
+        aircraft = data.get("aircraft", [])
+        if not include_network:
+            aircraft = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+        matched = []
+        for a in aircraft:
+            a_lat, a_lon = a.get("lat"), a.get("lon")
+            if a_lat is None or a_lon is None:
+                continue
+            dist = _haversine_nm(lat, lon, a_lat, a_lon)
+            if dist <= radius_nm:
+                matched.append({**a, "_distance_nm": round(dist, 2)})
+        matched.sort(key=lambda x: x.get("_distance_nm", 9999))
+        now_ts = data.get("now", time.time())
+        return jsonify({
+            "msg": "No error",
+            "now": now_ts,
+            "total": len(matched),
+            "ctime": now_ts,
+            "ptime": 0,
+            "aircraft": matched,
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "aircraft": []}), 503
+
+
+@bp.route("/outputs/range")
+def output_range_query():
+    """Range API via query params: ?lat=...&lon=...&radius_nm=...&key=... (alternative when path 404s)."""
+    lat_s = request.args.get("lat", "").strip()
+    lon_s = request.args.get("lon", "").strip()
+    radius_s = request.args.get("radius_nm", "").strip()
+    if not lat_s or not lon_s or not radius_s:
+        return jsonify({"error": "Missing lat, lon, or radius_nm query parameter", "aircraft": []}), 400
+    try:
+        lat = float(lat_s)
+        lon = float(lon_s)
+        radius_nm = min(max(0, float(radius_s)), 250.0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid lat, lon, or radius_nm", "aircraft": []}), 400
+    raw_key = _extract_output_key()
+    from models import OutputKeyModel
+    output = OutputKeyModel.validate(raw_key)
+    if not output:
+        return jsonify({"error": "Invalid or inactive API key", "aircraft": []}), 401
+    if output.get("output_type") != "json":
+        return jsonify({"error": "This key is not for JSON API", "aircraft": []}), 400
+    raw_config = output.get("config")
+    if isinstance(raw_config, dict):
+        _config = raw_config
+    else:
+        try:
+            _config = json.loads(str(raw_config or "{}"))
+        except (TypeError, ValueError):
+            _config = {}
+    if not _config.get("range_api"):
+        return jsonify({"error": "This key is for JSON Stream, not Range API", "aircraft": []}), 400
+    v = _config.get("include_network_adsb", True)
     include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
     try:
         resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
