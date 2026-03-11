@@ -50,6 +50,11 @@ th.sortable:hover { color: var(--accent); }
                 <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">Send &lt;usericon&gt; in the CoT message so ATAK/TAK shows the chosen icon. Uncheck if the callsign label appears too high above the icon on the map.</p>
             </div>
         </label>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <label for="cot-stale-seconds" style="font-weight:600;font-size:13px;">CoT stale (seconds)</label>
+            <input type="number" id="cot-stale-seconds" min="5" max="300" step="1" style="width:80px;padding:6px 10px;font-size:13px;">
+            <span style="font-size:12px;color:var(--text-muted);">How long until a marker is considered stale in TAK (5–300). Lower = faster refresh/removal when aircraft leave. Default 15.</span>
+        </div>
     </div>
 </div>
 
@@ -292,6 +297,20 @@ document.getElementById('pass-all-toggle').addEventListener('change', function()
 });
 
 document.getElementById('include-icon-in-cot-toggle').checked = outputConfig.include_icon_in_cot !== false;
+const cotStaleEl = document.getElementById('cot-stale-seconds');
+if (cotStaleEl) {
+    const v = outputConfig.cot_stale_seconds;
+    cotStaleEl.value = (v != null && Number.isFinite(Number(v))) ? String(Math.min(300, Math.max(5, Number(v)))) : '15';
+    cotStaleEl.addEventListener('change', async function() {
+        const n = parseInt(cotStaleEl.value, 10);
+        if (!Number.isFinite(n) || n < 5 || n > 300) return;
+        outputConfig.cot_stale_seconds = n;
+        try {
+            const r = await fetch('/api/outputs/' + outputId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: outputConfig }) });
+            if (!r.ok) throw new Error((await r.json()).error || 'Save failed');
+        } catch (e) { console.error('Failed to save cot_stale_seconds', e); }
+    });
+}
 async function saveIncludeIconInCot() {
     const on = document.getElementById('include-icon-in-cot-toggle').checked;
     outputConfig.include_icon_in_cot = on;

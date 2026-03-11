@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.174",
+    "date": "2026-03-11",
+    "notes": [
+      "CoT push: configurable CoT stale time per output (cot_stale_seconds, 5–300s) and default reduced to 15s so TAK markers refresh/expire sooner; add CoT stale (seconds) control on COTProxy config page to reduce slow-update feel in TAK."
+    ]
+  },
+  {
     "version": "1.0.173",
     "date": "2026-03-09",
     "notes": [

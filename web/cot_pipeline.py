@@ -55,8 +55,8 @@ COT_TYPE_MIL_ROTOR = "a-f-A-M-H"
 COT_TYPE_MIL_LTA = "a-f-A-M-L"
 COT_TYPE_MIL_UAV = "a-f-A-M-F-Q"
 COT_TYPE_MIL = "a-f-A-M"
-# Stale time seconds — how long until position is considered stale
-COT_STALE_SECONDS = 30
+# Stale time seconds — how long until position is considered stale (default; use cot_stale_seconds in output config to override)
+COT_STALE_SECONDS = 15
 # ft/min per knot (for track slope from baro_rate and gs)
 FT_PER_MIN_PER_KNOT = 101.268
 
@@ -505,11 +505,21 @@ def _run_cot_sender_cycle_impl(requests):
         pass_all = out["pass_all"]
         config = out.get("config") or {}
         include_icon_in_cot = config.get("include_icon_in_cot", True)
+        # Per-output stale seconds so TAK refreshes/expires markers sooner (e.g. 10–15 when pushing every 2s)
+        try:
+            ss = config.get("cot_stale_seconds")
+            stale_seconds = int(ss) if ss is not None else COT_STALE_SECONDS
+            if stale_seconds < 5:
+                stale_seconds = 5
+            elif stale_seconds > 300:
+                stale_seconds = 300
+        except (TypeError, ValueError):
+            stale_seconds = COT_STALE_SECONDS
         aircraft = filter_aircraft_for_output(with_pos, config)
         # One DB query for all transforms when use_cotproxy (avoids N lookups for large marker counts)
         transforms_by_hex = get_transforms_by_hex(output_id) if use_cotproxy else {}
         now = _cot_time()
-        stale_dt = datetime.now(timezone.utc).timestamp() + COT_STALE_SECONDS
+        stale_dt = datetime.now(timezone.utc).timestamp() + stale_seconds
         stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
         to_send = []
         for ac in aircraft:
