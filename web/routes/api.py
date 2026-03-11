@@ -1,6 +1,7 @@
 """API routes — JSON endpoints for dashboard data."""
 
 import json
+import math
 import os
 import queue
 import threading
@@ -994,8 +995,10 @@ def output_create():
     key_type    = data.get("key_type", "single_use")
     if not name or not output_type:
         return jsonify({"error": "name and output_type are required"}), 400
-    if output_type not in ("json", "beast_raw", "cot"):
-        return jsonify({"error": "output_type must be 'json', 'beast_raw', or 'cot'"}), 400
+    if output_type not in ("json", "beast_raw", "cot", "range_api"):
+        return jsonify({"error": "output_type must be 'json', 'beast_raw', 'cot', or 'range_api'"}), 400
+    if output_type == "range_api" and mode != "api":
+        mode = "api"
     if mode not in ("api", "push"):
         return jsonify({"error": "mode must be 'api' or 'push'"}), 400
     if key_type not in ("single_use", "durable"):
@@ -1003,6 +1006,8 @@ def output_create():
     output_format = (data.get("output_format") or ("cot" if output_type == "cot" else "as_is")).strip()
     if output_format not in ("as_is", "cot"):
         output_format = "cot" if output_type == "cot" else "as_is"
+    if output_type == "range_api":
+        output_format = "as_is"
     use_cotproxy = bool(data.get("use_cotproxy")) if output_type == "cot" else False
     import json as _json
     config = _json.dumps(data.get("config") or {})
@@ -1258,6 +1263,81 @@ def cot_transforms_import(output_id):
     # Single transaction in import_from_csv to avoid 504 on large CSVs; if behind nginx, consider proxy_read_timeout.
     inserted, errors = CotTransformModel.import_from_csv(output_id, csv_text)
     return jsonify({"success": True, "inserted": inserted, "errors": errors})
+
+
+def _extract_output_key():
+    """Get API key from ?key=, X-API-Key:, or Authorization: Bearer (for Range API)."""
+    k = request.args.get("key", "").strip()
+    if k:
+        return k
+    k = request.headers.get("X-API-Key", "").strip()
+    if k:
+        return k
+    auth = request.headers.get("Authorization", "")
+    if auth and auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return ""
+
+
+def _haversine_nm(lat1, lon1, lat2, lon2):
+    """Great-circle distance in nautical miles."""
+    R = 3440.065
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+@bp.route("/outputs/range/point/<float:lat>/<float:lon>/<float:radius_nm>")
+def output_range_point(lat, lon, radius_nm):
+    """Range API: aircraft within radius_nm of (lat, lon). Key required; respects Include Network ADSB."""
+    from models import OutputKeyModel
+    raw_key = _extract_output_key()
+    output = OutputKeyModel.validate(raw_key)
+    if not output:
+        return jsonify({"error": "Invalid or inactive API key", "aircraft": []}), 401
+    if output.get("output_type") != "range_api":
+        return jsonify({"error": "This key is not for Range API", "aircraft": []}), 400
+    radius_nm = min(max(0, radius_nm), 250.0)
+    raw_config = output.get("config")
+    if isinstance(raw_config, dict):
+        config = raw_config
+    else:
+        try:
+            config = json.loads(str(raw_config or "{}"))
+        except (TypeError, ValueError):
+            config = {}
+    v = config.get("include_network_adsb", True)
+    include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
+    try:
+        resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
+        if resp.status_code != 200:
+            return jsonify({"error": "Upstream data unavailable", "aircraft": []}), 503
+        data = resp.json()
+        aircraft = data.get("aircraft", [])
+        if not include_network:
+            aircraft = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+        matched = []
+        for a in aircraft:
+            a_lat, a_lon = a.get("lat"), a.get("lon")
+            if a_lat is None or a_lon is None:
+                continue
+            dist = _haversine_nm(lat, lon, a_lat, a_lon)
+            if dist <= radius_nm:
+                matched.append({**a, "_distance_nm": round(dist, 2)})
+        matched.sort(key=lambda x: x.get("_distance_nm", 9999))
+        now_ts = data.get("now", time.time())
+        return jsonify({
+            "msg": "No error",
+            "now": now_ts,
+            "total": len(matched),
+            "ctime": now_ts,
+            "ptime": 0,
+            "aircraft": matched,
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "aircraft": []}), 503
 
 
 @bp.route("/outputs/stream/<string:raw_key>")

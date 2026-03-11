@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.160",
+    "date": "2026-03-10",
+    "notes": [
+      "New output type: Range API. Key-authenticated endpoint with center point and radius in URL: GET /api/outputs/range/point/<lat>/<lon>/<radius_nm>?key=<key>. Respects Include Network ADSB; no range/elevation config in modal (all from URL)."
+    ]
+  },
+  {
     "version": "1.0.159",
     "date": "2026-03-10",
     "notes": [
