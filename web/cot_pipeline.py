@@ -41,8 +41,20 @@ _cot_sender_lock = threading.Lock()
 COT_MESSAGE_DELIMITER = b" "
 
 # Default CoT type for aircraft when no transform specifies one.
-# MIL-STD-2525: a = atoms, f = friend, A = Air (battle dimension). See FTS/2525 docs.
+# MIL-STD-2525 / FTS CoT table: a = atoms, f = friend, A = Air. See:
+# https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/
 DEFAULT_COT_TYPE = "a-f-A"
+# FTS CoT table air types: civil (a-f-A-C-*) and military (a-f-A-M-*) by category
+COT_TYPE_CIVIL_FIXED = "a-f-A-C-F"
+COT_TYPE_CIVIL_ROTOR = "a-f-A-C-H"
+COT_TYPE_CIVIL_LTA = "a-f-A-C-L"
+COT_TYPE_CIVIL_UAV = "a-f-A-C-F-q"
+COT_TYPE_CIVIL = "a-f-A-C"
+COT_TYPE_MIL_FIXED = "a-f-A-M-F"
+COT_TYPE_MIL_ROTOR = "a-f-A-M-H"
+COT_TYPE_MIL_LTA = "a-f-A-M-L"
+COT_TYPE_MIL_UAV = "a-f-A-M-F-Q"
+COT_TYPE_MIL = "a-f-A-M"
 # Stale time seconds — how long until position is considered stale
 COT_STALE_SECONDS = 30
 # ft/min per knot (for track slope from baro_rate and gs)
@@ -150,6 +162,56 @@ def _parse_float(v, default=None):
         return default
 
 
+def _parse_category_int(category):
+    """Return ADS-B emitter category as int, or None. Handles hex strings (e.g. 'A1' -> 161) or decimal."""
+    if category is None:
+        return None
+    if isinstance(category, int):
+        return category if 0 <= category <= 255 else None
+    s = str(category).strip()
+    if not s:
+        return None
+    try:
+        if s.startswith("0x") or s.startswith("0X"):
+            return int(s, 16)
+        return int(s, 10)
+    except (TypeError, ValueError):
+        return None
+
+
+# ICAO ADS-B emitter category (decimal): 1=no info, 2–6=fixed wing, 7=rotor, 9=glider, 10=LTA, 11/14=UAV
+EMITTER_ROTOR = 7
+EMITTER_LTA = 10
+EMITTER_UAV = 14
+EMITTER_UAV_ALT = 11  # Parachutist/UAV in some specs
+EMITTER_GLIDER = 9
+
+
+def _cot_type_from_aircraft(aircraft):
+    """
+    Derive MIL-STD-2525 CoT type for untransformed aircraft from ADS-B category and dbFlags.
+    FTS CoT table: https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/
+    dbFlags & 1 => military; else civil. Category from ICAO DO-260B (fixed/rotor/LTA/UAV).
+    """
+    raw = aircraft.get("dbFlags") or 0
+    try:
+        military = bool(int(raw) & 1)
+    except (TypeError, ValueError):
+        military = False
+    cat = _parse_category_int(aircraft.get("category") or aircraft.get("category_adsb"))
+    if cat is None:
+        return COT_TYPE_MIL if military else COT_TYPE_CIVIL
+    if cat in (EMITTER_ROTOR,):
+        return COT_TYPE_MIL_ROTOR if military else COT_TYPE_CIVIL_ROTOR
+    if cat == EMITTER_LTA:
+        return COT_TYPE_MIL_LTA if military else COT_TYPE_CIVIL_LTA
+    if cat in (EMITTER_UAV, EMITTER_UAV_ALT):
+        return COT_TYPE_MIL_UAV if military else COT_TYPE_CIVIL_UAV
+    if cat in (EMITTER_GLIDER,) or (1 <= cat <= 6) or (cat in (12,)):  # fixed / glider / ultralight
+        return COT_TYPE_MIL_FIXED if military else COT_TYPE_CIVIL_FIXED
+    return COT_TYPE_MIL if military else COT_TYPE_CIVIL
+
+
 def get_transform_for_aircraft(output_id, hex_code):
     """
     Return transform override for an aircraft (by ICAO hex) when use_cotproxy is enabled.
@@ -200,11 +262,11 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
     if lat is None or lon is None:
         return None
 
-    cot_type = DEFAULT_COT_TYPE
+    cot_type = _cot_type_from_aircraft(aircraft)
     callsign = (aircraft.get("flight") or "").strip() or hex_code
     if transform:
         if transform.get("cot"):
-            cot_type = (transform["cot"] or "").strip() or DEFAULT_COT_TYPE
+            cot_type = (transform["cot"] or "").strip() or _cot_type_from_aircraft(aircraft)
         if transform.get("callsign"):
             callsign = (transform["callsign"] or "").strip() or callsign
 

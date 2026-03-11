@@ -21,7 +21,7 @@ Each CoT message is a single XML document with a root `<event>` element. Minimum
 
 - **Root:** `<event>`
 - **Attributes:** `version="2.0"`, `type`, `uid`, `how`, `time`, `start`, `stale`
-- **Event type (untransformed):** Default `type` is **a-f-A** (MIL-STD-2525: atoms–friendly–**Air**). See [FTS MIL-STD-2525](https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/mil_std_2525/). Transforms may override with a custom CoT type string.
+- **Event type (untransformed):** The aggregator derives `type` from ADS-B data to match the [FTS CoT table](https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/): **civil vs military** from `dbFlags` (bit 1 = military), then **fixed / rotor / LTA / UAV** from ICAO emitter category (e.g. 7=rotor, 10=LTA, 14=UAV, 2–6/9/12=fixed). Types used: **a-f-A-C-F** (civil fixed), **a-f-A-C-H** (civil rotary), **a-f-A-C-L** (civil LTA), **a-f-A-C-F-q** (civil UAV), **a-f-A-M-F** (military fixed), **a-f-A-M-H** (military rotary), **a-f-A-M-L** (military LTA), **a-f-A-M-F-Q** (military UAV), or generic **a-f-A-C** / **a-f-A-M**. See [FTS MIL-STD-2525](https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/mil_std_2525/). Transforms may override with a custom CoT type string.
 - **Child:** `<point lat="..." lon="..." le="..." hae="..." ce="..."/>` — `lat`/`lon` in degrees; `hae` (height above ellipsoid), `le` (linear/vertical error), `ce` (circular error) in **meters** (TAK/PyTAK/node-cot standard). Use a fixed vertical accuracy for `le` (e.g. 50) or 9999999 when unknown; do not set `le` to altitude.
 - **Optional:** `<detail>` — the aggregator sends (COTProxy/adsbcot parity): `detail@callsign`; `<contact callsign="..." name="..."/>` (name from transform reg when set); `<usericon iconsetpath="..."/>` when transform has icon and “Include icon in CoT” is on; `<remarks>` when transform has remarks; `<track speed="..." course="..." slope="..."/>` when aircraft has gs/track (and optional `slope` in degrees from baro_rate when gs present). Remarks always include source: "taknet-ps", feed type ("ADSBHub" or "direct feed"), and "CoT-Proxy" when a transform was applied; then transform remarks text or (when no transform remarks) squawk/category. When transform has a video URL, `<__video url="..."/>` is added as a child of the event root (COTProxy parity).
 
@@ -35,7 +35,7 @@ Example (minimal):
   <detail><contact callsign="N12345"/></detail>
 </event>
 ```
-(Untransformed aircraft use type **a-f-A** = friendly air per MIL-STD-2525.)
+(Untransformed aircraft use a derived type from the FTS CoT table per category and dbFlags, e.g. **a-f-A-C-F** for civil fixed wing.)
 
 ## Message framing (wire format)
 

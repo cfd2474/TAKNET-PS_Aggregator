@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.169",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: untransformed CoT type derived from ADS-B per FTS CoT table — civil/military from dbFlags (bit 1), fixed/rotor/LTA/UAV from ICAO emitter category (e.g. a-f-A-C-F, a-f-A-M-H)."
+    ]
+  },
+  {
     "version": "1.0.168",
     "date": "2026-03-10",
     "notes": [
