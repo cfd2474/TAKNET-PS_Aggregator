@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.178",
+    "date": "2026-03-11",
+    "notes": [
+      "COTProxy transforms: CoT type is a dropdown of 2525c/d presets (common names); table shows common name (and code on hover); custom CoT string still available via Custom option."
+    ]
+  },
+  {
     "version": "1.0.177",
     "date": "2026-03-11",
     "notes": [

@@ -82,7 +82,7 @@ th.sortable:hover { color: var(--accent); }
                     <th class="sortable" data-sort="agency" style="cursor:pointer;user-select:none;" title="Sort by Agency">Agency <span id="sort-agency" class="sort-arrow"></span></th>
                     <th class="sortable" data-sort="reg" style="cursor:pointer;user-select:none;" title="Sort by Reg">Reg <span id="sort-reg" class="sort-arrow"></span></th>
                     <th>Model</th>
-                    <th>COT</th>
+                    <th>CoT type</th>
                     <th>Icon</th>
                     <th>Video</th>
                     <th style="width:100px;"></th>
@@ -188,8 +188,23 @@ th.sortable:hover { color: var(--accent); }
                     <input class="form-control" id="t-type" placeholder="HELICOPTER, FIXED WING">
                 </div>
                 <div class="form-group">
-                    <label>COT type string</label>
-                    <input class="form-control" id="t-cot" placeholder="a-f-A-C-H, a-n-A-M-H-A">
+                    <label>CoT type (2525)</label>
+                    <select class="form-control" id="t-cot-preset" style="max-width:100%;">
+                        <option value="">Default (from aircraft)</option>
+                        <option value="a-f-A">Generic (air)</option>
+                        <option value="a-f-A-C">Civil (generic)</option>
+                        <option value="a-f-A-C-F">Civil fixed wing</option>
+                        <option value="a-f-A-C-H">Civil rotary</option>
+                        <option value="a-f-A-C-L">Civil LTA</option>
+                        <option value="a-f-A-C-F-q">Civil UAV</option>
+                        <option value="a-f-A-M">Military (generic)</option>
+                        <option value="a-f-A-M-F">Military fixed wing</option>
+                        <option value="a-f-A-M-H">Military rotary</option>
+                        <option value="a-f-A-M-L">Military LTA</option>
+                        <option value="a-f-A-M-F-Q">Military UAV</option>
+                        <option value="__custom__">Custom…</option>
+                    </select>
+                    <input class="form-control" id="t-cot-custom" placeholder="e.g. a-f-A-C-H" style="margin-top:6px;display:none;">
                 </div>
                 <div class="form-group">
                     <label>Domain</label>
@@ -256,6 +271,49 @@ th.sortable:hover { color: var(--accent); }
 const outputId = {{ output.id }};
 let outputConfig = {{ output_config | tojson }};
 let psAirIcons = [];
+
+// MIL-STD-2525 / FTS CoT type presets: code -> common name (for table display and edit matching)
+const COT_PRESETS = {
+    '': 'Default (from aircraft)',
+    'a-f-A': 'Generic (air)',
+    'a-f-A-C': 'Civil (generic)',
+    'a-f-A-C-F': 'Civil fixed wing',
+    'a-f-A-C-H': 'Civil rotary',
+    'a-f-A-C-L': 'Civil LTA',
+    'a-f-A-C-F-q': 'Civil UAV',
+    'a-f-A-M': 'Military (generic)',
+    'a-f-A-M-F': 'Military fixed wing',
+    'a-f-A-M-H': 'Military rotary',
+    'a-f-A-M-L': 'Military LTA',
+    'a-f-A-M-F-Q': 'Military UAV',
+};
+function cotDisplayName(cot) {
+    if (cot == null || String(cot).trim() === '') return '—';
+    const name = COT_PRESETS[String(cot).trim()];
+    return name ? name + ' (' + escapeHtml(cot) + ')' : escapeHtml(cot);
+}
+function getCotValueFromForm() {
+    const preset = document.getElementById('t-cot-preset').value;
+    if (preset === '__custom__') return document.getElementById('t-cot-custom').value.trim();
+    return preset || '';
+}
+function setCotValueInForm(cot) {
+    const s = (cot || '').trim();
+    const presetEl = document.getElementById('t-cot-preset');
+    const customEl = document.getElementById('t-cot-custom');
+    if (COT_PRESETS.hasOwnProperty(s)) {
+        presetEl.value = s;
+        customEl.style.display = 'none';
+        customEl.value = '';
+    } else {
+        presetEl.value = '__custom__';
+        customEl.value = s;
+        customEl.style.display = 'block';
+    }
+}
+document.getElementById('t-cot-preset').addEventListener('change', function() {
+    document.getElementById('t-cot-custom').style.display = this.value === '__custom__' ? 'block' : 'none';
+});
 let currentPage = 1;
 let totalPages = 1;
 let totalCount = 0;
@@ -338,8 +396,7 @@ function iconUrlForPath(iconPath) {
 
 function pickIcon(path, cot) {
     document.getElementById('t-icon').value = path || '';
-    const cotEl = document.getElementById('t-cot');
-    if (cotEl) cotEl.value = cot || '';
+    setCotValueInForm(cot || '');
 }
 
 function renderIconCell(t) {
@@ -620,7 +677,7 @@ async function loadTransforms() {
                     <td>${escapeHtml(t.agency || '')}</td>
                     <td>${escapeHtml(t.reg || '')}</td>
                     <td>${escapeHtml(t.model || '')}</td>
-                    <td><code style="font-size:11px;">${escapeHtml(t.cot || '')}</code></td>
+                    <td style="font-size:12px;" title="${escapeHtml(t.cot || '')}">${cotDisplayName(t.cot)}</td>
                     <td style="max-width:140px;">${renderIconCell(t)}</td>
                     <td style="text-align:center;">${(t.video && String(t.video).trim()) ? 'Yes' : 'No'}</td>
                     <td style="text-align:right;">
@@ -650,10 +707,11 @@ function escapeHtml(s) {
 function openAddModal() {
     document.getElementById('transform-modal-title').textContent = 'Add transform';
     document.getElementById('transform-id').value = '';
-    ['hex','callsign','type','cot','domain','agency','reg','model','icon','remarks','video'].forEach(f => {
+    ['hex','callsign','type','domain','agency','reg','model','icon','remarks','video'].forEach(f => {
         const el = document.getElementById('t-' + f);
         if (el) el.value = '';
     });
+    setCotValueInForm('');
     document.getElementById('transform-modal-error').style.display = 'none';
     document.getElementById('transform-modal').classList.add('show');
 }
@@ -668,7 +726,7 @@ async function openEditModal(id) {
     document.getElementById('t-hex').value = t.hex || '';
     document.getElementById('t-callsign').value = t.callsign || '';
     document.getElementById('t-type').value = t.type || '';
-    document.getElementById('t-cot').value = t.cot || '';
+    setCotValueInForm(t.cot || '');
     document.getElementById('t-domain').value = t.domain || '';
     document.getElementById('t-agency').value = t.agency || '';
     document.getElementById('t-reg').value = t.reg || '';
@@ -692,7 +750,7 @@ async function saveTransform() {
         hex: document.getElementById('t-hex').value.trim().toUpperCase(),
         callsign: document.getElementById('t-callsign').value.trim(),
         type: document.getElementById('t-type').value.trim(),
-        cot: document.getElementById('t-cot').value.trim(),
+        cot: getCotValueFromForm(),
         domain: document.getElementById('t-domain').value.trim(),
         agency: document.getElementById('t-agency').value.trim(),
         reg: document.getElementById('t-reg').value.trim(),
