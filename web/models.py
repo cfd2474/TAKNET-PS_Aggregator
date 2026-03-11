@@ -686,28 +686,112 @@ class CotTransformModel:
         return [dict(r) for r in rows]
 
     @staticmethod
-    def get_paginated(output_id: int, page: int = 1, per_page: int = 100, sort_by: str = "hex", order: str = "asc") -> tuple:
-        """Return (list of transforms for page, total count). sort_by must be in _SORT_COLUMNS."""
+    def _like_escape(s: str) -> str:
+        """Escape % and _ for use in LIKE with ESCAPE '\\'."""
+        if not s:
+            return s
+        return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    @staticmethod
+    def get_paginated(
+        output_id: int,
+        page: int = 1,
+        per_page: int = 100,
+        sort_by: str = "hex",
+        order: str = "asc",
+        *,
+        filter_hex: str | None = None,
+        filter_callsign: str | None = None,
+        filter_type: str | None = None,
+        filter_domain: str | None = None,
+        filter_agency: str | None = None,
+        filter_reg: str | None = None,
+        filter_model: str | None = None,
+        filter_cot: str | None = None,
+    ) -> tuple:
+        """Return (list of transforms for page, total count). sort_by must be in _SORT_COLUMNS.
+        Text filters (hex, callsign, reg, model) use case-insensitive substring match;
+        type, domain, agency, cot use exact match."""
         if sort_by not in CotTransformModel._SORT_COLUMNS:
             sort_by = "hex"
         order = "DESC" if (order or "").lower() == "desc" else "ASC"
         page = max(1, int(page))
         per_page = max(1, min(500, int(per_page)))
+        where_parts = ["output_id = ?"]
+        params = [output_id]
+        if filter_hex and filter_hex.strip():
+            where_parts.append("UPPER(hex) LIKE UPPER(?) ESCAPE '\\'")
+            params.append("%" + CotTransformModel._like_escape(filter_hex.strip()) + "%")
+        if filter_callsign and filter_callsign.strip():
+            where_parts.append("callsign LIKE ? ESCAPE '\\'")
+            params.append("%" + CotTransformModel._like_escape(filter_callsign.strip()) + "%")
+        if filter_type and filter_type.strip():
+            where_parts.append("type = ?")
+            params.append(filter_type.strip())
+        if filter_domain and filter_domain.strip():
+            where_parts.append("domain = ?")
+            params.append(filter_domain.strip())
+        if filter_agency and filter_agency.strip():
+            where_parts.append("agency = ?")
+            params.append(filter_agency.strip())
+        if filter_reg and filter_reg.strip():
+            where_parts.append("reg LIKE ? ESCAPE '\\'")
+            params.append("%" + CotTransformModel._like_escape(filter_reg.strip()) + "%")
+        if filter_model and filter_model.strip():
+            where_parts.append("model LIKE ? ESCAPE '\\'")
+            params.append("%" + CotTransformModel._like_escape(filter_model.strip()) + "%")
+        if filter_cot is not None and filter_cot.strip() == "":
+            where_parts.append("(cot IS NULL OR TRIM(COALESCE(cot, '')) = '')")
+        elif filter_cot and filter_cot.strip():
+            where_parts.append("cot = ?")
+            params.append(filter_cot.strip())
+        where_sql = " AND ".join(where_parts)
         conn = get_db()
         try:
             total = conn.execute(
-                "SELECT COUNT(*) FROM cot_transforms WHERE output_id = ?",
-                (output_id,),
+                "SELECT COUNT(*) FROM cot_transforms WHERE " + where_sql,
+                tuple(params),
             ).fetchone()[0]
             offset = (page - 1) * per_page
+            q_params = params + [per_page, offset]
             rows = conn.execute(
                 f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, created_at
-                    FROM cot_transforms WHERE output_id = ?
+                    FROM cot_transforms WHERE {where_sql}
                     ORDER BY {sort_by} {order}
                     LIMIT ? OFFSET ?""",
-                (output_id, per_page, offset),
+                tuple(q_params),
             ).fetchall()
             return [dict(r) for r in rows], total
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_facets(output_id: int) -> dict:
+        """Return distinct values for type, domain, agency (for filter dropdowns)."""
+        conn = get_db()
+        try:
+            types = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT type FROM cot_transforms WHERE output_id = ? AND type IS NOT NULL AND TRIM(type) != '' ORDER BY type",
+                    (output_id,),
+                ).fetchall()
+            ]
+            domains = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT domain FROM cot_transforms WHERE output_id = ? AND domain IS NOT NULL AND TRIM(domain) != '' ORDER BY domain",
+                    (output_id,),
+                ).fetchall()
+            ]
+            agencies = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT agency FROM cot_transforms WHERE output_id = ? AND agency IS NOT NULL AND TRIM(agency) != '' ORDER BY agency",
+                    (output_id,),
+                ).fetchall()
+            ]
+            return {"type": types, "domain": domains, "agency": agencies}
         finally:
             conn.close()
 

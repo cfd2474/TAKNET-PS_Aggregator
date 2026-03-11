@@ -1086,6 +1086,11 @@ def ps_air_icons_list():
         return jsonify({"icons": [], "error": str(e)})
 
 
+def _cot_filter_arg(name: str) -> str | None:
+    v = request.args.get("filter_" + name)
+    return (v.strip() if v and isinstance(v, str) else None) or None
+
+
 @bp.route("/outputs/<int:output_id>/cot-transforms")
 @network_admin_required
 def cot_transforms_list(output_id):
@@ -1100,7 +1105,21 @@ def cot_transforms_list(output_id):
         p, pp = max(1, int(page)), max(1, min(500, int(per_page)))
     except (TypeError, ValueError):
         p, pp = 1, 100
-    items, total = CotTransformModel.get_paginated(output_id, page=p, per_page=pp, sort_by=sort, order=order)
+    items, total = CotTransformModel.get_paginated(
+        output_id,
+        page=p,
+        per_page=pp,
+        sort_by=sort,
+        order=order,
+        filter_hex=_cot_filter_arg("hex"),
+        filter_callsign=_cot_filter_arg("callsign"),
+        filter_type=_cot_filter_arg("type"),
+        filter_domain=_cot_filter_arg("domain"),
+        filter_agency=_cot_filter_arg("agency"),
+        filter_reg=_cot_filter_arg("reg"),
+        filter_model=_cot_filter_arg("model"),
+        filter_cot=request.args.get("filter_cot"),  # allow empty string for "Default"
+    )
     total_pages = max(1, (total + pp - 1) // pp) if total else 1
     return jsonify({
         "transforms": items,
@@ -1109,6 +1128,16 @@ def cot_transforms_list(output_id):
         "per_page": pp,
         "total_pages": total_pages,
     })
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/facets")
+@network_admin_required
+def cot_transforms_facets(output_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    facets = CotTransformModel.get_facets(output_id)
+    return jsonify(facets)
 
 
 @bp.route("/outputs/cot-transforms/template")
