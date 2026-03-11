@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.175",
+    "date": "2026-03-11",
+    "notes": [
+      "CoT push: interval increased from 2s to 5s so each cycle has time to complete when sending large marker counts (e.g. 3000); avoids skipped runs and allows full batch per cycle."
+    ]
+  },
+  {
     "version": "1.0.174",
     "date": "2026-03-11",
     "notes": [
