@@ -995,10 +995,8 @@ def output_create():
     key_type    = data.get("key_type", "single_use")
     if not name or not output_type:
         return jsonify({"error": "name and output_type are required"}), 400
-    if output_type not in ("json", "beast_raw", "cot", "range_api"):
-        return jsonify({"error": "output_type must be 'json', 'beast_raw', 'cot', or 'range_api'"}), 400
-    if output_type == "range_api" and mode != "api":
-        mode = "api"
+    if output_type not in ("json", "beast_raw", "cot"):
+        return jsonify({"error": "output_type must be 'json', 'beast_raw', or 'cot'"}), 400
     if mode not in ("api", "push"):
         return jsonify({"error": "mode must be 'api' or 'push'"}), 400
     if key_type not in ("single_use", "durable"):
@@ -1006,8 +1004,6 @@ def output_create():
     output_format = (data.get("output_format") or ("cot" if output_type == "cot" else "as_is")).strip()
     if output_format not in ("as_is", "cot"):
         output_format = "cot" if output_type == "cot" else "as_is"
-    if output_type == "range_api":
-        output_format = "as_is"
     use_cotproxy = bool(data.get("use_cotproxy")) if output_type == "cot" else False
     import json as _json
     config = _json.dumps(data.get("config") or {})
@@ -1297,17 +1293,20 @@ def output_range_point(lat, lon, radius_nm):
     output = OutputKeyModel.validate(raw_key)
     if not output:
         return jsonify({"error": "Invalid or inactive API key", "aircraft": []}), 401
-    if output.get("output_type") != "range_api":
-        return jsonify({"error": "This key is not for Range API", "aircraft": []}), 400
-    radius_nm = min(max(0, radius_nm), 250.0)
+    if output.get("output_type") != "json":
+        return jsonify({"error": "This key is not for JSON API", "aircraft": []}), 400
     raw_config = output.get("config")
     if isinstance(raw_config, dict):
-        config = raw_config
+        _config = raw_config
     else:
         try:
-            config = json.loads(str(raw_config or "{}"))
+            _config = json.loads(str(raw_config or "{}"))
         except (TypeError, ValueError):
-            config = {}
+            _config = {}
+    if not _config.get("range_api"):
+        return jsonify({"error": "This key is for JSON Stream, not Range API", "aircraft": []}), 400
+    radius_nm = min(max(0, radius_nm), 250.0)
+    config = _config
     v = config.get("include_network_adsb", True)
     include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
     try:
@@ -1349,16 +1348,19 @@ def output_json_stream(raw_key):
         return jsonify({"error": "Invalid or inactive API key"}), 401
     if output.get("output_type") != "json":
         return jsonify({"error": "This key is for a beast_raw output, not JSON"}), 400
-
-    # Output config: include_network_adsb False => only direct feeder traffic (exclude source=adsbhub)
     raw_config = output.get("config")
     if isinstance(raw_config, dict):
-        config = raw_config
+        _stream_config = raw_config
     else:
         try:
-            config = json.loads(str(raw_config or "{}"))
+            _stream_config = json.loads(str(raw_config or "{}"))
         except (TypeError, ValueError):
-            config = {}
+            _stream_config = {}
+    if _stream_config.get("range_api"):
+        return jsonify({"error": "This key is for Range API, not Stream. Use /api/outputs/range/point/<lat>/<lon>/<radius_nm>?key=..."}), 400
+
+    # Output config: include_network_adsb False => only direct feeder traffic (exclude source=adsbhub)
+    config = _stream_config
     # Normalize to bool: checkbox unchecked => False; default True for backward compat
     v = config.get("include_network_adsb", True)
     include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
