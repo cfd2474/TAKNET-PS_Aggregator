@@ -1092,8 +1092,23 @@ def cot_transforms_list(output_id):
     from flask_login import current_user
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
-    items = CotTransformModel.get_all(output_id)
-    return jsonify({"transforms": items})
+    page = request.args.get("page", "1")
+    per_page = request.args.get("per_page", "100")
+    sort = request.args.get("sort", "hex")
+    order = request.args.get("order", "asc")
+    try:
+        p, pp = max(1, int(page)), max(1, min(500, int(per_page)))
+    except (TypeError, ValueError):
+        p, pp = 1, 100
+    items, total = CotTransformModel.get_paginated(output_id, page=p, per_page=pp, sort_by=sort, order=order)
+    total_pages = max(1, (total + pp - 1) // pp) if total else 1
+    return jsonify({
+        "transforms": items,
+        "total": total,
+        "page": p,
+        "per_page": pp,
+        "total_pages": total_pages,
+    })
 
 
 @bp.route("/outputs/cot-transforms/template")
@@ -1126,6 +1141,18 @@ def cot_transform_create(output_id):
         return jsonify({"success": True, "id": tid}), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/<int:transform_id>", methods=["GET"])
+@network_admin_required
+def cot_transform_get(output_id, transform_id):
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    t = CotTransformModel.get_by_id(transform_id, output_id)
+    if not t:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"transform": t})
 
 
 @bp.route("/outputs/<int:output_id>/cot-transforms/<int:transform_id>", methods=["PUT"])

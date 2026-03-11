@@ -9,6 +9,10 @@
 .ps-air-icon-grid .icon-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; padding: 4px; border-radius: 6px; }
 .ps-air-icon-grid .icon-cell:hover { background: var(--bg-card-hover); }
 .ps-air-icon-grid .icon-cell span { font-size: 10px; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+th.sortable:hover { color: var(--accent); }
+.sort-arrow { font-size:10px; color: var(--text-muted); margin-left:2px; }
+.sort-arrow.asc::after { content: ' ▲'; }
+.sort-arrow.desc::after { content: ' ▼'; }
 </style>
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
@@ -58,13 +62,13 @@
         <table>
             <thead>
                 <tr>
-                    <th style="width:36px;"><input type="checkbox" id="select-all-header" title="Select all"></th>
-                    <th>HEX</th>
-                    <th>Callsign</th>
-                    <th>Type</th>
-                    <th>Domain</th>
-                    <th>Agency</th>
-                    <th>Reg</th>
+                    <th style="width:36px;"><input type="checkbox" id="select-all-header" title="Select all on page"></th>
+                    <th class="sortable" data-sort="hex" style="cursor:pointer;user-select:none;" title="Sort by HEX">HEX <span id="sort-hex" class="sort-arrow"></span></th>
+                    <th class="sortable" data-sort="callsign" style="cursor:pointer;user-select:none;" title="Sort by Callsign">Callsign <span id="sort-callsign" class="sort-arrow"></span></th>
+                    <th class="sortable" data-sort="type" style="cursor:pointer;user-select:none;" title="Sort by Type">Type <span id="sort-type" class="sort-arrow"></span></th>
+                    <th class="sortable" data-sort="domain" style="cursor:pointer;user-select:none;" title="Sort by Domain">Domain <span id="sort-domain" class="sort-arrow"></span></th>
+                    <th class="sortable" data-sort="agency" style="cursor:pointer;user-select:none;" title="Sort by Agency">Agency <span id="sort-agency" class="sort-arrow"></span></th>
+                    <th class="sortable" data-sort="reg" style="cursor:pointer;user-select:none;" title="Sort by Reg">Reg <span id="sort-reg" class="sort-arrow"></span></th>
                     <th>Model</th>
                     <th>COT</th>
                     <th>Icon</th>
@@ -78,7 +82,7 @@
                 <tr>
                     <td colspan="11" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
                         <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-right:12px;">
-                            <input type="checkbox" id="select-all-bottom" title="Select all"> Select all
+                            <input type="checkbox" id="select-all-bottom" title="Select all on page"> Select all
                         </label>
                         <button type="button" class="btn btn-danger" id="bulk-delete-btn-bottom" style="font-size:12px;" onclick="bulkDeleteTransforms()">Delete selected</button>
                         <button type="button" class="btn btn-danger" id="delete-all-btn-bottom" style="font-size:12px;" onclick="deleteAllTransforms()">Delete all</button>
@@ -86,6 +90,21 @@
                 </tr>
             </tfoot>
         </table>
+    </div>
+    <div id="pagination-bar" style="display:none;padding:12px 20px;background:var(--bg-secondary);border-top:1px solid var(--border);flex-wrap:wrap;gap:12px;align-items:center;">
+        <span style="font-size:12px;color:var(--text-muted);">Rows per page:</span>
+        <select id="per-page-select" style="font-size:12px;padding:4px 8px;" onchange="changePerPage()">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+        </select>
+        <span id="pagination-range" style="font-size:12px;color:var(--text-secondary);"></span>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+            <button type="button" class="btn" id="page-prev" style="font-size:12px;padding:4px 10px;" onclick="goToPage(currentPage - 1)">Prev</button>
+            <span id="page-indicator" style="font-size:12px;color:var(--text-secondary);">Page 1 of 1</span>
+            <button type="button" class="btn" id="page-next" style="font-size:12px;padding:4px 10px;" onclick="goToPage(currentPage + 1)">Next</button>
+        </div>
     </div>
 </div>
 
@@ -216,6 +235,12 @@
 const outputId = {{ output.id }};
 let outputConfig = {{ output_config | tojson }};
 let psAirIcons = [];
+let currentPage = 1;
+let totalPages = 1;
+let totalCount = 0;
+let currentPerPage = 100;
+let currentSort = 'hex';
+let currentOrder = 'asc';
 
 function updatePassAllDescription() {
     const el = document.getElementById('pass-all-description');
@@ -447,44 +472,116 @@ async function deleteAllTransforms() {
     }
 }
 
+function buildTransformsUrl() {
+    const params = new URLSearchParams({ page: currentPage, per_page: currentPerPage, sort: currentSort, order: currentOrder });
+    return '/api/outputs/' + outputId + '/cot-transforms?' + params.toString();
+}
+
+function updateSortArrows() {
+    ['hex','callsign','type','domain','agency','reg'].forEach(col => {
+        const el = document.getElementById('sort-' + col);
+        if (!el) return;
+        el.className = 'sort-arrow' + (currentSort === col ? ' ' + currentOrder : '');
+    });
+}
+
+function updatePaginationBar() {
+    const bar = document.getElementById('pagination-bar');
+    const rangeEl = document.getElementById('pagination-range');
+    const indicatorEl = document.getElementById('page-indicator');
+    const prevBtn = document.getElementById('page-prev');
+    const nextBtn = document.getElementById('page-next');
+    if (!totalCount) {
+        bar.style.display = 'none';
+        return;
+    }
+    bar.style.display = 'flex';
+    const start = (currentPage - 1) * currentPerPage + 1;
+    const end = Math.min(currentPage * currentPerPage, totalCount);
+    rangeEl.textContent = totalCount ? (start + '–' + end + ' of ' + totalCount) : '';
+    indicatorEl.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+    prevBtn.disabled = currentPage <= 1;
+    nextBtn.disabled = currentPage >= totalPages;
+    document.getElementById('per-page-select').value = String(currentPerPage);
+}
+
+function changePerPage() {
+    currentPerPage = parseInt(document.getElementById('per-page-select').value, 10) || 100;
+    currentPage = 1;
+    loadTransforms();
+}
+
+function goToPage(page) {
+    page = Math.max(1, Math.min(totalPages, page));
+    if (page === currentPage) return;
+    currentPage = page;
+    loadTransforms();
+}
+
+function wireSortHeaders() {
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.onclick = function() {
+            const sort = this.getAttribute('data-sort');
+            if (!sort) return;
+            if (currentSort === sort) currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+            else { currentSort = sort; currentOrder = 'asc'; }
+            currentPage = 1;
+            loadTransforms();
+        };
+    });
+}
+
 async function loadTransforms() {
     const tbody = document.getElementById('transforms-tbody');
     const tfoot = document.getElementById('transforms-tfoot');
+    const bar = document.getElementById('pagination-bar');
     try {
-        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms');
+        const r = await fetch(buildTransformsUrl());
         const d = await r.json();
         const items = d.transforms || [];
-        document.getElementById('transform-count').textContent = items.length + ' rule(s)';
+        totalCount = d.total ?? 0;
+        currentPage = d.page ?? 1;
+        totalPages = d.total_pages ?? 1;
+        currentPerPage = d.per_page ?? 100;
+        document.getElementById('transform-count').textContent = totalCount + ' rule(s)';
         tfoot.style.display = items.length ? 'table-footer-group' : 'none';
-        if (!items.length) {
+        updatePaginationBar();
+        updateSortArrows();
+        if (!items.length && !totalCount) {
             tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
             document.getElementById('bulk-delete-btn-top').style.display = 'none';
             document.getElementById('delete-all-btn-top').style.display = 'none';
             return;
         }
-        tbody.innerHTML = items.map(t => `
-            <tr>
-                <td style="vertical-align:middle;"><input type="checkbox" class="transform-cb" value="${t.id}" title="Select"></td>
-                <td><code style="font-size:12px;">${escapeHtml(t.hex || '')}</code></td>
-                <td>${escapeHtml(t.callsign || '')}</td>
-                <td>${escapeHtml(t.type || '')}</td>
-                <td>${escapeHtml(t.domain || '')}</td>
-                <td>${escapeHtml(t.agency || '')}</td>
-                <td>${escapeHtml(t.reg || '')}</td>
-                <td>${escapeHtml(t.model || '')}</td>
-                <td><code style="font-size:11px;">${escapeHtml(t.cot || '')}</code></td>
-                <td style="max-width:140px;">${renderIconCell(t)}</td>
-                <td style="text-align:right;">
-                    <button class="btn" style="font-size:11px;padding:4px 8px;" onclick="openEditModal(${t.id})">Edit</button>
-                    <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteTransform(${t.id}, '${(t.hex || '').replace(/'/g, "\\'")}')">Delete</button>
-                </td>
-            </tr>
-        `).join('');
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">No results for this page.</td></tr>';
+        } else {
+            tbody.innerHTML = items.map(t => `
+                <tr>
+                    <td style="vertical-align:middle;"><input type="checkbox" class="transform-cb" value="${t.id}" title="Select"></td>
+                    <td><code style="font-size:12px;">${escapeHtml(t.hex || '')}</code></td>
+                    <td>${escapeHtml(t.callsign || '')}</td>
+                    <td>${escapeHtml(t.type || '')}</td>
+                    <td>${escapeHtml(t.domain || '')}</td>
+                    <td>${escapeHtml(t.agency || '')}</td>
+                    <td>${escapeHtml(t.reg || '')}</td>
+                    <td>${escapeHtml(t.model || '')}</td>
+                    <td><code style="font-size:11px;">${escapeHtml(t.cot || '')}</code></td>
+                    <td style="max-width:140px;">${renderIconCell(t)}</td>
+                    <td style="text-align:right;">
+                        <button class="btn" style="font-size:11px;padding:4px 8px;" onclick="openEditModal(${t.id})">Edit</button>
+                        <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteTransform(${t.id}, '${(t.hex || '').replace(/'/g, "\\'")}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
         wireSelectAll();
+        wireSortHeaders();
         updateBulkDeleteVisibility();
     } catch (e) {
         tbody.innerHTML = '<tr><td colspan="11" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
         tfoot.style.display = 'none';
+        bar.style.display = 'none';
     }
 }
 
@@ -507,9 +604,9 @@ function openAddModal() {
 }
 
 async function openEditModal(id) {
-    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms');
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + id);
     const d = await r.json();
-    const t = (d.transforms || []).find(x => x.id === id);
+    const t = d.transform;
     if (!t) return;
     document.getElementById('transform-modal-title').textContent = 'Edit transform';
     document.getElementById('transform-id').value = t.id;

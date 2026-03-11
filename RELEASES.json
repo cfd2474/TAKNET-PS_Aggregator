@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.162",
+    "date": "2026-03-10",
+    "notes": [
+      "COTProxy transform rules: paginated table (50/100/200/500 per page), page navigation, sortable columns (Hex, Callsign, Type, Domain, Agency, Reg). GET single transform for edit modal."
+    ]
+  },
+  {
     "version": "1.0.161",
     "date": "2026-03-10",
     "notes": [

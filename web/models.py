@@ -660,6 +660,8 @@ class CotTransformModel:
 
     CSV_HEADERS = ("DOMAIN", "AGENCY", "REG", "CALLSIGN", "TYPE", "MODEL", "HEX", "COT", "ICON")
 
+    _SORT_COLUMNS = ("hex", "callsign", "type", "domain", "agency", "reg")
+
     @staticmethod
     def get_all(output_id: int):
         conn = get_db()
@@ -670,6 +672,32 @@ class CotTransformModel:
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+    @staticmethod
+    def get_paginated(output_id: int, page: int = 1, per_page: int = 100, sort_by: str = "hex", order: str = "asc") -> tuple:
+        """Return (list of transforms for page, total count). sort_by must be in _SORT_COLUMNS."""
+        if sort_by not in CotTransformModel._SORT_COLUMNS:
+            sort_by = "hex"
+        order = "DESC" if (order or "").lower() == "desc" else "ASC"
+        page = max(1, int(page))
+        per_page = max(1, min(500, int(per_page)))
+        conn = get_db()
+        try:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM cot_transforms WHERE output_id = ?",
+                (output_id,),
+            ).fetchone()[0]
+            offset = (page - 1) * per_page
+            rows = conn.execute(
+                f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, created_at
+                    FROM cot_transforms WHERE output_id = ?
+                    ORDER BY {sort_by} {order}
+                    LIMIT ? OFFSET ?""",
+                (output_id, per_page, offset),
+            ).fetchall()
+            return [dict(r) for r in rows], total
+        finally:
+            conn.close()
 
     @staticmethod
     def get_by_id(transform_id: int, output_id: int):
