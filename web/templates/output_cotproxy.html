@@ -30,17 +30,24 @@ th.sortable:hover { color: var(--accent); }
     </div>
 </div>
 
-<!-- Pass all traffic toggle: when off = transformed only; when on = all traffic -->
+<!-- Pass all traffic and CoT options -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
-        <h3 style="margin:0;font-size:14px;">Traffic filter</h3>
+        <h3 style="margin:0;font-size:14px;">Traffic filter &amp; CoT options</h3>
     </div>
-    <div style="padding:14px 20px;">
+    <div style="padding:14px 20px;display:flex;flex-direction:column;gap:16px;">
         <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
             <input type="checkbox" id="pass-all-toggle" style="margin-top:3px;">
             <div>
                 <span style="font-weight:600;font-size:13px;">Pass all traffic</span>
                 <p id="pass-all-description" style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">Only transformed data is sent — aircraft that have a transform rule are sent; all other traffic is filtered out.</p>
+            </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+            <input type="checkbox" id="include-icon-in-cot-toggle" style="margin-top:3px;">
+            <div>
+                <span style="font-weight:600;font-size:13px;">Include transform icon in CoT</span>
+                <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">Send &lt;usericon&gt; in the CoT message so ATAK/TAK shows the chosen icon. Uncheck if the callsign label appears too high above the icon on the map.</p>
             </div>
         </label>
     </div>
@@ -274,6 +281,25 @@ document.getElementById('pass-all-toggle').addEventListener('change', function()
     updatePassAllDescription();
     savePassAll();
 });
+
+document.getElementById('include-icon-in-cot-toggle').checked = outputConfig.include_icon_in_cot !== false;
+async function saveIncludeIconInCot() {
+    const on = document.getElementById('include-icon-in-cot-toggle').checked;
+    outputConfig.include_icon_in_cot = on;
+    try {
+        const r = await fetch('/api/outputs/' + outputId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: outputConfig })
+        });
+        if (!r.ok) throw new Error((await r.json()).error || 'Save failed');
+    } catch (e) {
+        console.error('Failed to save include_icon_in_cot', e);
+        document.getElementById('include-icon-in-cot-toggle').checked = !on;
+        outputConfig.include_icon_in_cot = !on;
+    }
+}
+document.getElementById('include-icon-in-cot-toggle').addEventListener('change', saveIncludeIconInCot);
 
 function iconUrlForPath(iconPath) {
     if (!iconPath) return null;

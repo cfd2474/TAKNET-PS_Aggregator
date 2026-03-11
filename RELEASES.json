@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.164",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: add option to omit icon from CoT. 'Include transform icon in CoT' toggle on COTProxy config (default on). Uncheck to stop sending <usericon> so ATAK label sits at normal height when custom icon caused label to appear too high."
+    ]
+  },
+  {
     "version": "1.0.163",
     "date": "2026-03-10",
     "notes": [

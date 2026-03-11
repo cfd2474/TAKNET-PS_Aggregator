@@ -180,11 +180,12 @@ def _xml_escape(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def build_cot_xml(aircraft, transform=None):
+def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
     """
     Build a single CoT <event> XML string for one aircraft.
     aircraft: dict with hex, lat, lon, optional alt_baro/altitude, optional flight (callsign).
     transform: optional dict from get_transform_for_aircraft (callsign, type, cot, etc.).
+    include_icon_in_cot: when False, do not add <usericon> (avoids ATAK label sitting too high above icon).
     """
     hex_code = (aircraft.get("hex") or "").strip().upper()
     if not hex_code:
@@ -232,9 +233,10 @@ def build_cot_xml(aircraft, transform=None):
     })
     detail = ET.SubElement(root, "detail")
     ET.SubElement(detail, "contact", attrib={"callsign": _xml_escape(callsign)[:128]})
-    icon_path = (transform or {}).get("icon")
-    if icon_path and isinstance(icon_path, str) and icon_path.strip():
-        ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
+    if include_icon_in_cot:
+        icon_path = (transform or {}).get("icon")
+        if icon_path and isinstance(icon_path, str) and icon_path.strip():
+            ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
     return ET.tostring(root, encoding="unicode", default_namespace=None)
 
 
@@ -281,6 +283,7 @@ def _run_cot_sender_cycle_impl(requests):
         use_cotproxy = out["use_cotproxy"]
         pass_all = out["pass_all"]
         config = out.get("config") or {}
+        include_icon_in_cot = config.get("include_icon_in_cot", True)
         aircraft = filter_aircraft_for_output(with_pos, config)
         to_send = []
         for ac in aircraft:
@@ -290,7 +293,7 @@ def _run_cot_sender_cycle_impl(requests):
             transform = get_transform_for_aircraft(output_id, hex_code) if use_cotproxy else None
             if not pass_all and not transform:
                 continue
-            xml_str = build_cot_xml(ac, transform)
+            xml_str = build_cot_xml(ac, transform, include_icon_in_cot=include_icon_in_cot)
             if xml_str:
                 to_send.append(xml_str)
         if not to_send:
