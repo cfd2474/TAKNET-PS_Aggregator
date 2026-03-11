@@ -40,10 +40,13 @@ _cot_sender_lock = threading.Lock()
 # PyTAK/TAK Server wire format: each CoT message is XML UTF-8 bytes followed by this delimiter.
 COT_MESSAGE_DELIMITER = b" "
 
-# Default CoT type for aircraft when no transform specifies one
-DEFAULT_COT_TYPE = "a-f-G"
+# Default CoT type for aircraft when no transform specifies one.
+# MIL-STD-2525: a = atoms, f = friend, A = Air (battle dimension). See FTS/2525 docs.
+DEFAULT_COT_TYPE = "a-f-A"
 # Stale time seconds — how long until position is considered stale
 COT_STALE_SECONDS = 30
+# ft/min per knot (for track slope from baro_rate and gs)
+FT_PER_MIN_PER_KNOT = 101.268
 
 
 def get_cot_push_outputs():
@@ -250,15 +253,36 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
     if remarks is not None and isinstance(remarks, str) and remarks.strip():
         rem_el = ET.SubElement(detail, "remarks")
         rem_el.text = _xml_escape(remarks.strip())[:1024]
-    # Track (speed/course) from aircraft when available — standard CoT detail, ATAK TrackDetailHandler
+    # When no transform (or transform has no remarks): add ADS-B–derived remarks so untransformed CoT carries adsbcot-style info
+    if not transform or not (transform.get("remarks") and str(transform.get("remarks", "")).strip()):
+        adsb_parts = []
+        raw_squawk = aircraft.get("squawk")
+        if raw_squawk is not None and (raw_squawk != "" or raw_squawk == 0) and isinstance(raw_squawk, (str, int)):
+            adsb_parts.append("Squawk: %s" % str(raw_squawk).zfill(4)[:4])
+        category = aircraft.get("category") or aircraft.get("category_adsb")
+        if category is not None and str(category).strip():
+            adsb_parts.append("Category: %s" % _xml_escape(str(category).strip())[:32])
+        if adsb_parts:
+            rem_el = ET.SubElement(detail, "remarks")
+            rem_el.text = _xml_escape(" | ".join(adsb_parts))[:512]
+    # Track (speed/course/slope) from aircraft when available — standard CoT detail, ATAK TrackDetailHandler
     track_deg = _parse_float(aircraft.get("track"))
     gs_kts = _parse_float(aircraft.get("gs"))
-    if track_deg is not None or gs_kts is not None:
+    baro_rate = _parse_float(aircraft.get("baro_rate"))  # ft/min
+    if track_deg is not None or gs_kts is not None or baro_rate is not None:
         track_attrib = {}
         if track_deg is not None:
             track_attrib["course"] = str(track_deg)
         if gs_kts is not None:
             track_attrib["speed"] = str(gs_kts)
+        # Slope (climb/descent angle in degrees) when we have baro_rate and gs — adsbcot-style
+        if baro_rate is not None and gs_kts is not None and gs_kts > 0:
+            try:
+                gs_ft_min = gs_kts * FT_PER_MIN_PER_KNOT
+                slope_deg = math.degrees(math.atan2(baro_rate, gs_ft_min))
+                track_attrib["slope"] = "%.2f" % slope_deg
+            except (ValueError, TypeError, ZeroDivisionError):
+                pass
         if track_attrib:
             ET.SubElement(detail, "track", attrib=track_attrib)
     # Video (COTProxy parity): __video as child of event root with url attribute

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.167",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: untransformed aircraft use MIL-STD-2525 type a-f-A (friendly air). Add ADS-B-derived detail: remarks with squawk/category when no transform; track slope (climb angle) from baro_rate when gs present. Ensures adsbcot-style values from network data."
+    ]
+  },
+  {
     "version": "1.0.166",
     "date": "2026-03-10",
     "notes": [

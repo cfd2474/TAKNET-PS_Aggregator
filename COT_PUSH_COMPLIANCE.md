@@ -21,19 +21,21 @@ Each CoT message is a single XML document with a root `<event>` element. Minimum
 
 - **Root:** `<event>`
 - **Attributes:** `version="2.0"`, `type`, `uid`, `how`, `time`, `start`, `stale`
+- **Event type (untransformed):** Default `type` is **a-f-A** (MIL-STD-2525: atoms–friendly–**Air**). See [FTS MIL-STD-2525](https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/mil_std_2525/). Transforms may override with a custom CoT type string.
 - **Child:** `<point lat="..." lon="..." le="..." hae="..." ce="..."/>` — `lat`/`lon` in degrees; `hae` (height above ellipsoid), `le` (linear/vertical error), `ce` (circular error) in **meters** (TAK/PyTAK/node-cot standard). Use a fixed vertical accuracy for `le` (e.g. 50) or 9999999 when unknown; do not set `le` to altitude.
-- **Optional:** `<detail>` — the aggregator sends (COTProxy/adsbcot parity): `detail@callsign`; `<contact callsign="..." name="..."/>` (name from transform reg when set); `<usericon iconsetpath="..."/>` when transform has icon and “Include icon in CoT” is on; `<remarks>` when transform has remarks; `<track speed="..." course="..."/>` when aircraft has gs/track. When transform has a video URL, `<__video url="..."/>` is added as a child of the event root (COTProxy parity).
+- **Optional:** `<detail>` — the aggregator sends (COTProxy/adsbcot parity): `detail@callsign`; `<contact callsign="..." name="..."/>` (name from transform reg when set); `<usericon iconsetpath="..."/>` when transform has icon and “Include icon in CoT” is on; `<remarks>` when transform has remarks; `<track speed="..." course="..." slope="..."/>` when aircraft has gs/track (and optional `slope` in degrees from baro_rate when gs present). When no transform, `<remarks>` may include squawk/category (e.g. "Squawk: 1234 | Category: A1"). When transform has a video URL, `<__video url="..."/>` is added as a child of the event root (COTProxy parity).
 
 Time fields use **W3C XML Schema dateTime** in UTC, e.g. `2025-03-09T12:00:00.000000Z` (see PyTAK `cot_time()`).
 
 Example (minimal):
 
 ```xml
-<event version="2.0" type="a-f-G" uid="ICAO_HEX" how="m-g" time="..." start="..." stale="...">
+<event version="2.0" type="a-f-A" uid="ICAO_HEX" how="m-g" time="..." start="..." stale="...">
   <point lat="40.78" lon="-73.96" le="50" hae="0" ce="10"/>
   <detail><contact callsign="N12345"/></detail>
 </event>
 ```
+(Untransformed aircraft use type **a-f-A** = friendly air per MIL-STD-2525.)
 
 ## Message framing (wire format)
 
