@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.165",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: full COTProxy/adsbcot parity. Send detail@callsign; contact with optional name (from transform reg); <remarks> when transform has remarks; <track speed=\"...\" course=\"...\"/> from aircraft gs/track when available. Added remarks column to cot_transforms and Remarks field in COTProxy UI; CSV import supports REMARKS."
+    ]
+  },
+  {
     "version": "1.0.164",
     "date": "2026-03-10",
     "notes": [

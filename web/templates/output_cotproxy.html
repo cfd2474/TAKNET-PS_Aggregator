@@ -209,6 +209,10 @@ th.sortable:hover { color: var(--accent); }
                     <label style="margin-bottom:6px;">Choose from PS Air Icons</label>
                     <div id="modal-icon-picker" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;padding:8px;background:var(--bg-secondary);border-radius:8px;"></div>
                 </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label>Remarks (CoT &lt;remarks&gt; — optional)</label>
+                    <input class="form-control" id="t-remarks" placeholder="e.g. notes, unit info">
+                </div>
             </div>
             <div id="transform-modal-error" style="display:none;background:rgba(239,68,68,0.1);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-top:8px;"></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
@@ -621,7 +625,7 @@ function escapeHtml(s) {
 function openAddModal() {
     document.getElementById('transform-modal-title').textContent = 'Add transform';
     document.getElementById('transform-id').value = '';
-    ['hex','callsign','type','cot','domain','agency','reg','model','icon'].forEach(f => {
+    ['hex','callsign','type','cot','domain','agency','reg','model','icon','remarks'].forEach(f => {
         const el = document.getElementById('t-' + f);
         if (el) el.value = '';
     });
@@ -645,6 +649,7 @@ async function openEditModal(id) {
     document.getElementById('t-reg').value = t.reg || '';
     document.getElementById('t-model').value = t.model || '';
     document.getElementById('t-icon').value = t.icon || '';
+    document.getElementById('t-remarks').value = t.remarks || '';
     document.getElementById('transform-modal-error').style.display = 'none';
     document.getElementById('transform-modal').classList.add('show');
 }
@@ -667,6 +672,7 @@ async function saveTransform() {
         reg: document.getElementById('t-reg').value.trim(),
         model: document.getElementById('t-model').value.trim(),
         icon: document.getElementById('t-icon').value.trim(),
+        remarks: document.getElementById('t-remarks').value.trim(),
     };
     if (!payload.hex) { errEl.textContent = 'HEX is required.'; errEl.style.display = 'block'; return; }
     const btn = document.getElementById('transform-save-btn');

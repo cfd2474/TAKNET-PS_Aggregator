@@ -150,7 +150,7 @@ def _parse_float(v, default=None):
 def get_transform_for_aircraft(output_id, hex_code):
     """
     Return transform override for an aircraft (by ICAO hex) when use_cotproxy is enabled.
-    Returns dict with keys: callsign, type, cot, icon, domain, agency, reg, model; or None.
+    Returns dict with keys: callsign, type, cot, icon, domain, agency, reg, model, remarks; or None.
     """
     from models import CotTransformModel
     t = CotTransformModel.get_by_hex(output_id, hex_code)
@@ -165,6 +165,7 @@ def get_transform_for_aircraft(output_id, hex_code):
         "agency": t.get("agency"),
         "reg": t.get("reg"),
         "model": t.get("model"),
+        "remarks": t.get("remarks"),
     }
 
 
@@ -232,11 +233,33 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
         "ce": ce,
     })
     detail = ET.SubElement(root, "detail")
-    ET.SubElement(detail, "contact", attrib={"callsign": _xml_escape(callsign)[:128]})
+    # COTProxy/compatibility: some clients read detail@callsign as well as contact@callsign
+    detail.set("callsign", _xml_escape(callsign)[:128])
+    contact_attrib = {"callsign": _xml_escape(callsign)[:128]}
+    reg = (transform or {}).get("reg") if transform else None
+    if reg and isinstance(reg, str) and reg.strip():
+        contact_attrib["name"] = _xml_escape(reg.strip())[:128]
+    ET.SubElement(detail, "contact", attrib=contact_attrib)
     if include_icon_in_cot:
         icon_path = (transform or {}).get("icon")
         if icon_path and isinstance(icon_path, str) and icon_path.strip():
             ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
+    # Remarks (COTProxy transform_cot / ATAK RemarksDetailHandler): <remarks>text</remarks>
+    remarks = (transform or {}).get("remarks") if transform else None
+    if remarks is not None and isinstance(remarks, str) and remarks.strip():
+        rem_el = ET.SubElement(detail, "remarks")
+        rem_el.text = _xml_escape(remarks.strip())[:1024]
+    # Track (speed/course) from aircraft when available — standard CoT detail, ATAK TrackDetailHandler
+    track_deg = _parse_float(aircraft.get("track"))
+    gs_kts = _parse_float(aircraft.get("gs"))
+    if track_deg is not None or gs_kts is not None:
+        track_attrib = {}
+        if track_deg is not None:
+            track_attrib["course"] = str(track_deg)
+        if gs_kts is not None:
+            track_attrib["speed"] = str(gs_kts)
+        if track_attrib:
+            ET.SubElement(detail, "track", attrib=track_attrib)
     return ET.tostring(root, encoding="unicode", default_namespace=None)
 
 
