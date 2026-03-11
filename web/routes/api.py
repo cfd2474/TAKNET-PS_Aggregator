@@ -1012,7 +1012,7 @@ def output_create():
         output_type=output_type,
         mode=mode,
         config=config,
-        created_by=current_user.id,
+        created_by=int(current_user.id),
         notes=data.get("notes"),
         output_format=output_format,
         use_cotproxy=use_cotproxy,

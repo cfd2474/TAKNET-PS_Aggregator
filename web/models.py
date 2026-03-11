@@ -472,13 +472,13 @@ class OutputModel:
                    FROM outputs o JOIN users u ON o.created_by = u.id
                    ORDER BY o.created_at DESC"""
             ).fetchall()
-        else:  # network_admin
+        else:  # network_admin — compare as int so string user_id matches DB integer
             rows = conn.execute(
                 """SELECT o.*, u.username as creator_name
                    FROM outputs o JOIN users u ON o.created_by = u.id
                    WHERE o.created_by = ?
                    ORDER BY o.created_at DESC""",
-                (user_id,)
+                (int(user_id),)
             ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
@@ -497,7 +497,8 @@ class OutputModel:
         row = dict(row)
         if role == "admin":
             return row
-        if role == "network_admin" and row["created_by"] == user_id:
+        # Compare as int so string user_id (e.g. from Flask-Login) matches DB integer created_by
+        if role == "network_admin" and int(row["created_by"]) == int(user_id):
             return row
         return None
 
@@ -511,7 +512,8 @@ class OutputModel:
         conn = get_db()
         row = conn.execute("SELECT created_by FROM outputs WHERE id = ?", (output_id,)).fetchone()
         conn.close()
-        return row is not None and row["created_by"] == user_id
+        # Compare as int so string user_id (e.g. from Flask-Login) matches DB integer created_by
+        return row is not None and int(row["created_by"]) == int(user_id)
 
     @staticmethod
     def create(name, output_type, config, created_by, mode="api", notes=None,

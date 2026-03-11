@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.180",
+    "date": "2026-03-11",
+    "notes": [
+      "Outputs: fix network admin unable to edit/delete own connection — compare created_by to user_id as int so Flask-Login string id matches DB; users can always view, edit, delete their own outputs."
+    ]
+  },
+  {
     "version": "1.0.179",
     "date": "2026-03-11",
     "notes": [
