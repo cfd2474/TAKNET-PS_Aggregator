@@ -248,23 +248,28 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True):
         icon_path = (transform or {}).get("icon")
         if icon_path and isinstance(icon_path, str) and icon_path.strip():
             ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
-    # Remarks (COTProxy transform_cot / ATAK RemarksDetailHandler): <remarks>text</remarks>
-    remarks = (transform or {}).get("remarks") if transform else None
-    if remarks is not None and isinstance(remarks, str) and remarks.strip():
-        rem_el = ET.SubElement(detail, "remarks")
-        rem_el.text = _xml_escape(remarks.strip())[:1024]
-    # When no transform (or transform has no remarks): add ADS-B–derived remarks so untransformed CoT carries adsbcot-style info
-    if not transform or not (transform.get("remarks") and str(transform.get("remarks", "")).strip()):
+    # Remarks: always include source (taknet-ps, feed type), CoT-Proxy when transformed, then transform text or ADS-B info
+    feed_type = "ADSBHub" if (aircraft.get("source") or "").strip().lower() == "adsbhub" else "direct feed"
+    rem_parts = ["taknet-ps", feed_type]
+    if transform:
+        rem_parts.append("CoT-Proxy")
+    transform_remarks = (transform or {}).get("remarks") if transform else None
+    if transform_remarks is not None and isinstance(transform_remarks, str) and transform_remarks.strip():
+        rem_parts.append(transform_remarks.strip()[:1024])
+    elif not transform or not (transform.get("remarks") and str(transform.get("remarks", "")).strip()):
         adsb_parts = []
         raw_squawk = aircraft.get("squawk")
         if raw_squawk is not None and (raw_squawk != "" or raw_squawk == 0) and isinstance(raw_squawk, (str, int)):
             adsb_parts.append("Squawk: %s" % str(raw_squawk).zfill(4)[:4])
         category = aircraft.get("category") or aircraft.get("category_adsb")
         if category is not None and str(category).strip():
-            adsb_parts.append("Category: %s" % _xml_escape(str(category).strip())[:32])
+            adsb_parts.append("Category: %s" % str(category).strip()[:32])
         if adsb_parts:
-            rem_el = ET.SubElement(detail, "remarks")
-            rem_el.text = _xml_escape(" | ".join(adsb_parts))[:512]
+            rem_parts.append(" | ".join(adsb_parts))
+    rem_text = " | ".join(rem_parts)
+    if rem_text:
+        rem_el = ET.SubElement(detail, "remarks")
+        rem_el.text = _xml_escape(rem_text)[:2048]
     # Track (speed/course/slope) from aircraft when available — standard CoT detail, ATAK TrackDetailHandler
     track_deg = _parse_float(aircraft.get("track"))
     gs_kts = _parse_float(aircraft.get("gs"))

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.168",
+    "date": "2026-03-10",
+    "notes": [
+      "CoT push: remarks on all sent CoT now include source (taknet-ps), feed type (ADSBHub or direct feed), and CoT-Proxy when transformed; then transform remarks or squawk/category as before."
+    ]
+  },
+  {
     "version": "1.0.167",
     "date": "2026-03-10",
     "notes": [
