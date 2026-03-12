@@ -374,6 +374,32 @@
             .card-grid-4, .card-grid-3, .card-grid-2 { grid-template-columns: 1fr; }
             .content { padding: 16px; }
         }
+
+        /* ── High contrast (bright conditions / glare) ─────────────────────── */
+        body.high-contrast {
+            --bg-primary: #e8e8e8;
+            --bg-secondary: #d8d8d8;
+            --bg-card: #f5f5f5;
+            --bg-card-hover: #eaeaea;
+            --bg-input: #fff;
+            --border: #222;
+            --text-primary: #0a0a0a;
+            --text-secondary: #1a1a1a;
+            --text-muted: #444;
+            --accent: #0d47a1;
+            --accent-hover: #0a3d8f;
+            --green: #1b5e20;
+            --green-bg: rgba(27,94,32,0.15);
+            --yellow: #f57f17;
+            --yellow-bg: rgba(245,127,23,0.15);
+            --red: #b71c1c;
+            --red-bg: rgba(183,28,28,0.15);
+            --cyan: #006064;
+            --purple: #4a148c;
+            --orange: #e65100;
+        }
+        body.high-contrast .nav-item.active { color: #fff; }
+        body.high-contrast .btn-primary { color: #fff; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -470,6 +496,7 @@
                             {{ current_user.role if current_user.is_authenticated else '' }}
                         </div>
                         <a href="/profile" style="display:block;padding:10px 12px;font-size:13px;color:var(--text-secondary);text-decoration:none;" onmouseenter="this.style.background='var(--bg-input)'" onmouseleave="this.style.background='none'">Change Password</a>
+                        <button type="button" id="high-contrast-toggle" style="display:block;width:100%;padding:10px 12px;font-size:13px;color:var(--text-secondary);text-decoration:none;border:none;background:none;text-align:left;cursor:pointer;border-top:1px solid var(--border);" onmouseenter="this.style.background='var(--bg-input)'" onmouseleave="this.style.background='none'">High contrast view</button>
                         <a href="/logout" style="display:block;padding:10px 12px;font-size:13px;color:var(--red);text-decoration:none;border-top:1px solid var(--border);" onmouseenter="this.style.background='rgba(239,68,68,0.08)'" onmouseleave="this.style.background='none'">Sign Out</a>
                     </div>
                 </div>
@@ -485,6 +512,25 @@
     <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
 
     <script>
+        // High contrast: apply saved preference on load
+        (function applyHighContrastPreference() {
+            try {
+                if (localStorage.getItem('highContrast') === '1') document.body.classList.add('high-contrast');
+            } catch (e) {}
+        })();
+
+        function toggleHighContrast() {
+            document.body.classList.toggle('high-contrast');
+            try {
+                localStorage.setItem('highContrast', document.body.classList.contains('high-contrast') ? '1' : '0');
+            } catch (e) {}
+            updateHighContrastLabel();
+        }
+        function updateHighContrastLabel() {
+            const btn = document.getElementById('high-contrast-toggle');
+            if (btn) btn.textContent = document.body.classList.contains('high-contrast') ? 'High contrast view ✓' : 'High contrast view';
+        }
+
         // User menu toggle
         function toggleUserMenu() {
             const menu = document.getElementById('user-menu');
@@ -497,6 +543,8 @@
                 if (menu) menu.style.display = 'none';
             }
         });
+        document.getElementById('high-contrast-toggle').addEventListener('click', toggleHighContrast);
+        updateHighContrastLabel();
 
         // Global: update topbar stats
         async function updateTopbar() {

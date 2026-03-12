@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.181",
+    "date": "2026-03-11",
+    "notes": [
+      "User menu: High contrast view toggle — light theme with dark text for bright conditions/glare; preference stored in localStorage and applied across pages."
+    ]
+  },
+  {
     "version": "1.0.180",
     "date": "2026-03-11",
     "notes": [
