@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.192",
+    "date": "2026-03-13",
+    "notes": [
+      "COTProxy: Remove descriptive paragraphs from Civil, Military, and PS Air reference sections."
+    ]
+  },
+  {
     "version": "1.0.191",
     "date": "2026-03-13",
     "notes": [
