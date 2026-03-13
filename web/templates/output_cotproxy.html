@@ -17,6 +17,8 @@ th.sortable:hover { color: var(--accent); }
 .filter-row input, .filter-row select { width: 100%; max-width: 140px; font-size: 12px; padding: 4px 6px; box-sizing: border-box; }
 .filter-row .filter-clear { font-size: 11px; color: var(--accent); cursor: pointer; }
 .filter-row .filter-clear:hover { text-decoration: underline; }
+.cot-ref-symbol { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+.cot-ref-symbol svg { max-width: 36px; max-height: 36px; }
 </style>
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
@@ -273,20 +275,20 @@ th.sortable:hover { color: var(--accent); }
         <span id="cot-ref-civil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-civil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. See <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a> for full MIL-STD-2525D reference.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. Symbols from <a href="https://sidc.milsymb.net/#/APP6" target="_blank" rel="noopener">sidc.milsymb.net</a> (MIL-STD-2525 / APP-6). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
         <div class="table-wrap">
             <table style="font-size:13px;">
                 <thead>
-                    <tr><th style="width:180px;">Code</th><th>Name</th></tr>
+                    <tr><th style="width:52px;">Symbol</th><th style="width:180px;">Code</th><th>Name</th></tr>
                 </thead>
-                <tbody>
-                    <tr><td><code>a-f-A</code></td><td>Generic (air)</td></tr>
-                    <tr><td><code>a-f-A-C</code></td><td>Civil (generic)</td></tr>
-                    <tr><td><code>a-f-A-C-F</code></td><td>Civil fixed wing</td></tr>
-                    <tr><td><code>a-f-A-C-H</code></td><td>Civil rotary</td></tr>
-                    <tr><td><code>a-f-A-C-L</code></td><td>Civil LTA</td></tr>
-                    <tr><td><code>a-f-A-C-F-q</code></td><td>Civil UAV</td></tr>
-                    <tr><td><code>a-f-A-U</code></td><td>Unknown air (TIS-B)</td></tr>
+                <tbody id="cot-ref-civil-tbody">
+                    <tr data-cot="a-f-A" data-sidc="SA-----------"><td class="cot-ref-symbol"></td><td><code>a-f-A</code></td><td>Generic (air)</td></tr>
+                    <tr data-cot="a-f-A-C" data-sidc="SAC----------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C</code></td><td>Civil (generic)</td></tr>
+                    <tr data-cot="a-f-A-C-F" data-sidc="SACF---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-F</code></td><td>Civil fixed wing</td></tr>
+                    <tr data-cot="a-f-A-C-H" data-sidc="SACH---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-H</code></td><td>Civil rotary</td></tr>
+                    <tr data-cot="a-f-A-C-L" data-sidc="SACL---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-L</code></td><td>Civil LTA</td></tr>
+                    <tr data-cot="a-f-A-C-F-q" data-sidc="SACF---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-F-q</code></td><td>Civil UAV</td></tr>
+                    <tr data-cot="a-f-A-U" data-sidc="SAU----------"><td class="cot-ref-symbol"></td><td><code>a-f-A-U</code></td><td>Unknown air (TIS-B)</td></tr>
                 </tbody>
             </table>
         </div>
@@ -300,18 +302,18 @@ th.sortable:hover { color: var(--accent); }
         <span id="cot-ref-mil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-mil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. See <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a> for full MIL-STD-2525D reference.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. Symbols from <a href="https://sidc.milsymb.net/#/APP6" target="_blank" rel="noopener">sidc.milsymb.net</a> (MIL-STD-2525 / APP-6). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
         <div class="table-wrap">
             <table style="font-size:13px;">
                 <thead>
-                    <tr><th style="width:180px;">Code</th><th>Name</th></tr>
+                    <tr><th style="width:52px;">Symbol</th><th style="width:180px;">Code</th><th>Name</th></tr>
                 </thead>
-                <tbody>
-                    <tr><td><code>a-f-A-M</code></td><td>Military (generic)</td></tr>
-                    <tr><td><code>a-f-A-M-F</code></td><td>Military fixed wing</td></tr>
-                    <tr><td><code>a-f-A-M-H</code></td><td>Military rotary</td></tr>
-                    <tr><td><code>a-f-A-M-L</code></td><td>Military LTA</td></tr>
-                    <tr><td><code>a-f-A-M-F-Q</code></td><td>Military UAV</td></tr>
+                <tbody id="cot-ref-mil-tbody">
+                    <tr data-cot="a-f-A-M" data-sidc="SAM----------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M</code></td><td>Military (generic)</td></tr>
+                    <tr data-cot="a-f-A-M-F" data-sidc="SAMF---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-F</code></td><td>Military fixed wing</td></tr>
+                    <tr data-cot="a-f-A-M-H" data-sidc="SAMH---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-H</code></td><td>Military rotary</td></tr>
+                    <tr data-cot="a-f-A-M-L" data-sidc="SAML---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-L</code></td><td>Military LTA</td></tr>
+                    <tr data-cot="a-f-A-M-F-Q" data-sidc="SAMFQ---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-F-Q</code></td><td>Military UAV</td></tr>
                 </tbody>
             </table>
         </div>
@@ -337,8 +339,45 @@ th.sortable:hover { color: var(--accent); }
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/milsymbol@2.0.0/dist/milsymbol.min.js"></script>
 <script>
 const outputId = {{ output.id }};
+
+// CoT reference tables: render 2525 symbols (PNG from milsymbol) into Symbol column
+function renderCotRefSymbols() {
+    if (typeof ms === 'undefined') return;
+    var size = 36;
+    function pad15(s) { return (String(s) + '---------------').substring(0, 15); }
+    var civilRows = document.querySelectorAll('#cot-ref-civil-tbody tr');
+    var milRows = document.querySelectorAll('#cot-ref-mil-tbody tr');
+    function renderRow(tr) {
+        var sidc = (tr.getAttribute('data-sidc') || '').trim();
+        if (!sidc) return;
+        sidc = pad15(sidc);
+        var cell = tr.querySelector('td.cot-ref-symbol');
+        if (!cell) return;
+        try {
+            var sym = new ms.Symbol(sidc, { size: size });
+            var canvas = sym.asCanvas();
+            if (canvas && canvas.toDataURL) {
+                var dataUrl = canvas.toDataURL('image/png');
+                var img = document.createElement('img');
+                img.src = dataUrl;
+                img.alt = '';
+                img.style.maxWidth = (size - 2) + 'px';
+                img.style.maxHeight = (size - 2) + 'px';
+                cell.appendChild(img);
+            } else if (sym.asSVG) {
+                var svgStr = sym.asSVG();
+                if (svgStr) cell.innerHTML = svgStr;
+            }
+        } catch (e) {}
+    }
+    civilRows.forEach(renderRow);
+    milRows.forEach(renderRow);
+}
+window.addEventListener('load', renderCotRefSymbols);
+
 let outputConfig = {{ output_config | tojson }};
 let psAirIcons = [];
 

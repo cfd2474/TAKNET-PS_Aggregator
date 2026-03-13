@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.185",
+    "date": "2026-03-11",
+    "notes": [
+      "COTProxy: CoT type reference tables show 2525 symbol PNGs via milsymbol library; link to sidc.milsymb.net for reference."
+    ]
+  },
+  {
     "version": "1.0.184",
     "date": "2026-03-11",
     "notes": [
