@@ -275,55 +275,27 @@ th.sortable:hover { color: var(--accent); }
     </div>
 </div>
 
-<!-- MIL-STD-2525D CoT type reference: Civil (collapsible) -->
+<!-- Civil aircraft reference (collapsible) — same grid layout as PS Air / NATO -->
 <div class="card" style="margin-top:16px;">
     <div class="card-header" style="cursor:pointer;" onclick="document.getElementById('cot-ref-civil-body').classList.toggle('collapse-hidden'); document.getElementById('cot-ref-civil-toggle').textContent = document.getElementById('cot-ref-civil-body').classList.contains('collapse-hidden') ? '▼ Show' : '▲ Hide';">
-        <h3 style="margin:0;font-size:14px;">CoT type reference — Civil aircraft (MIL-STD-2525D)</h3>
+        <h3 style="margin:0;font-size:14px;">Civil aircraft (MIL-STD-2525D)</h3>
         <span id="cot-ref-civil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-civil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. Icons from NATO symbol set (Friend Air). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
-        <div class="table-wrap">
-            <table style="font-size:13px;">
-                <thead>
-                    <tr><th style="width:52px;">Symbol</th><th style="width:180px;">Code</th><th>Name</th></tr>
-                </thead>
-                <tbody id="cot-ref-civil-tbody">
-                    <tr data-cot="a-f-A" data-sidc="SA-----------"><td class="cot-ref-symbol"></td><td><code>a-f-A</code></td><td>Generic (air)</td></tr>
-                    <tr data-cot="a-f-A-C" data-sidc="SAC----------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C</code></td><td>Civil (generic)</td></tr>
-                    <tr data-cot="a-f-A-C-F" data-sidc="SACF---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-F</code></td><td>Civil fixed wing</td></tr>
-                    <tr data-cot="a-f-A-C-H" data-sidc="SACH---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-H</code></td><td>Civil rotary</td></tr>
-                    <tr data-cot="a-f-A-C-L" data-sidc="SACL---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-L</code></td><td>Civil LTA</td></tr>
-                    <tr data-cot="a-f-A-C-F-q" data-sidc="SACF---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-C-F-q</code></td><td>Civil UAV</td></tr>
-                    <tr data-cot="a-f-A-U" data-sidc="SAU----------"><td class="cot-ref-symbol"></td><td><code>a-f-A-U</code></td><td>Unknown air (TIS-B)</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). Icons from NATO symbol set (Friend Air). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
+        <div id="cot-ref-civil-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
 </div>
 
-<!-- MIL-STD-2525D CoT type reference: Military (collapsible) -->
+<!-- Military aircraft reference (collapsible) — same grid layout as PS Air / NATO -->
 <div class="card" style="margin-top:16px;">
     <div class="card-header" style="cursor:pointer;" onclick="document.getElementById('cot-ref-mil-body').classList.toggle('collapse-hidden'); document.getElementById('cot-ref-mil-toggle').textContent = document.getElementById('cot-ref-mil-body').classList.contains('collapse-hidden') ? '▼ Show' : '▲ Hide';">
-        <h3 style="margin:0;font-size:14px;">CoT type reference — Military aircraft (MIL-STD-2525D)</h3>
+        <h3 style="margin:0;font-size:14px;">Military aircraft (MIL-STD-2525D)</h3>
         <span id="cot-ref-mil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-mil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. Icons from NATO symbol set (Friend Air). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
-        <div class="table-wrap">
-            <table style="font-size:13px;">
-                <thead>
-                    <tr><th style="width:52px;">Symbol</th><th style="width:180px;">Code</th><th>Name</th></tr>
-                </thead>
-                <tbody id="cot-ref-mil-tbody">
-                    <tr data-cot="a-f-A-M" data-sidc="SAM----------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M</code></td><td>Military (generic)</td></tr>
-                    <tr data-cot="a-f-A-M-F" data-sidc="SAMF---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-F</code></td><td>Military fixed wing</td></tr>
-                    <tr data-cot="a-f-A-M-H" data-sidc="SAMH---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-H</code></td><td>Military rotary</td></tr>
-                    <tr data-cot="a-f-A-M-L" data-sidc="SAML---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-L</code></td><td>Military LTA</td></tr>
-                    <tr data-cot="a-f-A-M-F-Q" data-sidc="SAMFQ---------"><td class="cot-ref-symbol"></td><td><code>a-f-A-M-F-Q</code></td><td>Military UAV</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). Icons from NATO symbol set (Friend Air). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
+        <div id="cot-ref-mil-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
 </div>
 
@@ -358,62 +330,48 @@ th.sortable:hover { color: var(--accent); }
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/milsymbol@2.0.0/dist/milsymbol.min.js"></script>
 <script>
 const outputId = {{ output.id }};
 
-// CoT reference tables: render symbols — NATO Friend Air PNGs (primary), milsymbol (fallback)
-var NATO_SIDC_TO_ICON = {
-    'SA': '1.sfap-----------.png', 'SAC': '1.sfapc----------.png', 'SACF': '1.sfapcf---------.png',
-    'SACH': '1.sfapch---------.png', 'SACL': '1.sfapcl---------.png', 'SAU': '1.sfap-----------.png',
-    'SAM': '1.sfapm----------.png', 'SAMF': '1.sfapmf---------.png', 'SAMH': '1.sfapmh---------.png',
-    'SAML': '1.sfapml---------.png', 'SAMFQ': '1.sfapmfq---------.png'
-};
-function renderCotRefSymbols() {
-    var size = 36;
-    var natoBase = '{{ url_for("static", filename="nato_icons/friend_air/") }}';
-    function pad15(s) { return (String(s) + '---------------').substring(0, 15); }
-    var civilRows = document.querySelectorAll('#cot-ref-civil-tbody tr');
-    var milRows = document.querySelectorAll('#cot-ref-mil-tbody tr');
-    function renderRow(tr) {
-        var sidc = (tr.getAttribute('data-sidc') || '').trim();
-        if (!sidc) return;
-        var key = sidc.replace(/-/g, '');
-        var cell = tr.querySelector('td.cot-ref-symbol');
-        if (!cell) return;
-        var natoFile = NATO_SIDC_TO_ICON[key];
-        if (natoFile) {
-            var img = document.createElement('img');
-            img.src = (natoBase.endsWith('/') ? natoBase : natoBase + '/') + natoFile;
-            img.alt = '';
-            img.style.maxWidth = (size - 2) + 'px';
-            img.style.maxHeight = (size - 2) + 'px';
-            cell.appendChild(img);
-            return;
-        }
-        if (typeof ms === 'undefined') return;
-        sidc = pad15(sidc);
-        try {
-            var sym = new ms.Symbol(sidc, { size: size });
-            var canvas = sym.asCanvas();
-            if (canvas && canvas.toDataURL) {
-                var dataUrl = canvas.toDataURL('image/png');
-                var img = document.createElement('img');
-                img.src = dataUrl;
-                img.alt = '';
-                img.style.maxWidth = (size - 2) + 'px';
-                img.style.maxHeight = (size - 2) + 'px';
-                cell.appendChild(img);
-            } else if (sym.asSVG) {
-                var svgStr = sym.asSVG();
-                if (svgStr) cell.innerHTML = svgStr;
-            }
-        } catch (e) {}
+// Civil / Military ref icons: cot, name, nato filename (Friend Air)
+var CIVIL_REF_ICONS = [
+    { cot: 'a-f-A', name: 'Generic (air)', icon: '1.sfap-----------.png' },
+    { cot: 'a-f-A-C', name: 'Civil (generic)', icon: '1.sfapc----------.png' },
+    { cot: 'a-f-A-C-F', name: 'Civil fixed wing', icon: '1.sfapcf---------.png' },
+    { cot: 'a-f-A-C-H', name: 'Civil rotary', icon: '1.sfapch---------.png' },
+    { cot: 'a-f-A-C-L', name: 'Civil LTA', icon: '1.sfapcl---------.png' },
+    { cot: 'a-f-A-C-F-q', name: 'Civil UAV', icon: '1.sfapcf---------.png' },
+    { cot: 'a-f-A-U', name: 'Unknown air (TIS-B)', icon: '1.sfap-----------.png' }
+];
+var MIL_REF_ICONS = [
+    { cot: 'a-f-A-M', name: 'Military (generic)', icon: '1.sfapm----------.png' },
+    { cot: 'a-f-A-M-F', name: 'Military fixed wing', icon: '1.sfapmf---------.png' },
+    { cot: 'a-f-A-M-H', name: 'Military rotary', icon: '1.sfapmh---------.png' },
+    { cot: 'a-f-A-M-L', name: 'Military LTA', icon: '1.sfapml---------.png' },
+    { cot: 'a-f-A-M-F-Q', name: 'Military UAV', icon: '1.sfapmfq---------.png' }
+];
+var NATO_ICON_BASE = '{{ url_for("static", filename="nato_icons/friend_air/") }}';
+function loadCivilMilitaryRefs() {
+    function addRefGrid(containerId, items) {
+        var el = document.getElementById(containerId);
+        if (!el) return;
+        el.innerHTML = '';
+        items.forEach(function(item) {
+            var path = 'Friend Air/' + item.icon;
+            var url = (NATO_ICON_BASE.endsWith('/') ? NATO_ICON_BASE : NATO_ICON_BASE + '/') + item.icon;
+            var cell = document.createElement('div');
+            cell.className = 'icon-cell';
+            cell.dataset.path = path;
+            cell.dataset.cot = item.cot;
+            cell.title = item.cot + ' — ' + item.name;
+            cell.innerHTML = '<img src="' + url + '" alt=""><span>' + escapeHtml(item.name) + '</span>';
+            cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
+            el.appendChild(cell);
+        });
     }
-    civilRows.forEach(renderRow);
-    milRows.forEach(renderRow);
+    addRefGrid('cot-ref-civil-grid', CIVIL_REF_ICONS);
+    addRefGrid('cot-ref-mil-grid', MIL_REF_ICONS);
 }
-window.addEventListener('load', renderCotRefSymbols);
 
 let outputConfig = {{ output_config | tojson }};
 let psAirIcons = {{ (ps_air_icons or []) | tojson }};
@@ -1053,6 +1011,7 @@ async function deleteTransform(id, hex) {
 
 wireFilterInputs();
 loadFacets();
+loadCivilMilitaryRefs();
 loadPsAirIcons();
 loadNatoIcons();
 loadTransforms();

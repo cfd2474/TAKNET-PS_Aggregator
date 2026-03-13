@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.190",
+    "date": "2026-03-13",
+    "notes": [
+      "COTProxy: Civil and Military reference sections overhauled — now use icon grids (same layout as PS Air / NATO Icons); clickable to pick icon + CoT type; removed milsymbol dependency."
+    ]
+  },
+  {
     "version": "1.0.189",
     "date": "2026-03-13",
     "notes": [
