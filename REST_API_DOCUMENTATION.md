@@ -72,6 +72,39 @@ For `/v2/point/...` results, each aircraft is additionally annotated with:
 
 - `dst` – distance in nautical miles from the query point (float, rounded to 2 decimals)
 
+### 1.3 How TIS-B is identified in aircraft.json
+
+The aircraft list is produced by **readsb** (via tar1090 or the aircraft-merger). readsb uses the following to identify TIS-B vs ADS-B:
+
+**`type` (string)**  
+The best source of current data for this aircraft. Common values:
+
+| Value | Meaning |
+|-------|--------|
+| `adsb_icao` | ADS-B from a Mode S transponder with 24-bit ICAO address |
+| `tisb_icao` | TIS-B: non-ADS-B target identified by 24-bit ICAO (e.g. Mode S tracked by secondary radar) |
+| `tisb_trackfile` | TIS-B: non-ADS-B target using track/file ID (e.g. primary or Mode A/C radar) |
+| `tisb_other` | TIS-B: non-ADS-B target with non-ICAO address |
+| `mlat` | Position from MLAT (multilateration) |
+| `mode_s` | Mode S data, no position |
+| `adsr_icao` / `adsr_other` | ADS-B rebroadcast from another link (e.g. UAT) |
+| `adsb_icao_nt` | ADS-B “non-transponder” (e.g. ground vehicle) with ICAO address |
+| `other` | Miscellaneous / unknown source |
+
+So **TIS-B targets** are those with `type` equal to `tisb_icao`, `tisb_trackfile`, or `tisb_other`.
+
+**`hex` (string)**  
+If the ICAO hex starts with `~` (e.g. `"~123456"`), the address is non-ICAO; readsb uses this for some TIS-B or other non-ICAO targets.
+
+**`tisb` (array, optional)**  
+When present, lists field names that were derived from TIS-B data for this aircraft.
+
+**Example:** To list only TIS-B aircraft from the API:
+
+```bash
+curl -s "https://adsb.tak-solutions.com/v2/all" | jq '[.aircraft[] | select(.type | startswith("tisb_"))]'
+```
+
 ---
 
 ## 2. Health Check

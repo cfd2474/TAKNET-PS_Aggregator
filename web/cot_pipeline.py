@@ -64,6 +64,8 @@ COT_TYPE_MIL_ROTOR = "a-f-A-M-H"
 COT_TYPE_MIL_LTA = "a-f-A-M-L"
 COT_TYPE_MIL_UAV = "a-f-A-M-F-Q"
 COT_TYPE_MIL = "a-f-A-M"
+# Unknown air track (e.g. TIS-B); MIL-STD-2525 a-f-A-U
+COT_TYPE_UNKNOWN_AIR = "a-f-A-U"
 # Stale time seconds — how long until position is considered stale (default; use cot_stale_seconds in output config to override)
 COT_STALE_SECONDS = 15
 # ft/min per knot (for track slope from baro_rate and gs)
@@ -254,6 +256,14 @@ def _get_type_desc_from_aircraft(aircraft):
     return None
 
 
+def _is_tisb(aircraft):
+    """True if aircraft is TIS-B (readsb type is tisb_icao, tisb_trackfile, or tisb_other)."""
+    if not isinstance(aircraft, dict):
+        return False
+    t = (aircraft.get("type") or "").strip().lower()
+    return t.startswith("tisb_")
+
+
 def _cot_type_from_aircraft(aircraft):
     """
     Derive MIL-STD-2525 CoT type for untransformed aircraft from type description (tar1090),
@@ -377,6 +387,9 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True, now=None, 
             cot_type = (transform["cot"] or "").strip() or _cot_type_from_aircraft(aircraft)
         if transform.get("callsign"):
             callsign = (transform["callsign"] or "").strip() or callsign
+    # TIS-B: force unknown air track and add TISB_B squawk in remarks
+    if _is_tisb(aircraft):
+        cot_type = COT_TYPE_UNKNOWN_AIR
 
     if now is None:
         now = _cot_time()
@@ -419,11 +432,13 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True, now=None, 
         icon_path = (transform or {}).get("icon")
         if icon_path and isinstance(icon_path, str) and icon_path.strip():
             ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
-    # Remarks: always include source (taknet-ps, feed type), CoT-Proxy when transformed, then transform text or ADS-B info
+    # Remarks: always include source (taknet-ps, feed type), CoT-Proxy when transformed, TIS-B squawk when TIS-B, then transform text or ADS-B info
     feed_type = "ADSBHub" if (aircraft.get("source") or "").strip().lower() == "adsbhub" else "direct feed"
     rem_parts = ["taknet-ps", feed_type]
     if transform:
         rem_parts.append("CoT-Proxy")
+    if _is_tisb(aircraft):
+        rem_parts.append("Squawk: TISB_B")
     transform_remarks = (transform or {}).get("remarks") if transform else None
     if transform_remarks is not None and isinstance(transform_remarks, str) and transform_remarks.strip():
         rem_parts.append(transform_remarks.strip()[:1024])

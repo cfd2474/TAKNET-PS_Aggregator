@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.182",
+    "date": "2026-03-11",
+    "notes": [
+      "CoT: TIS-B specialized handling — TIS-B aircraft (readsb type tisb_*) get unknown air track (a-f-A-U) and remarks include Squawk: TISB_B."
+    ]
+  },
+  {
     "version": "1.0.181",
     "date": "2026-03-11",
     "notes": [
