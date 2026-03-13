@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.187",
+    "date": "2026-03-11",
+    "notes": [
+      "Feeders: also parse MLAT client name on '___v' (e.g. 92563-Leckliter___v2.59.34) in addition to ' | v' for software version."
+    ]
+  },
+  {
     "version": "1.0.186",
     "date": "2026-03-11",
     "notes": [

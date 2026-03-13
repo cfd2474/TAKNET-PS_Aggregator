@@ -94,15 +94,16 @@ def dict_rows(rows):
 
 
 def parse_mlat_client_name(name):
-    """Parse MLAT client name 'DisplayName | vX.Y.Z' into (display_name, software_version).
-    If no ' | v' separator, return (name, '') with version blank.
+    """Parse MLAT client name into (display_name, software_version).
+    Tries separators: ' | v' (e.g. '92882-corona-feeder-1 | v2.59.33'), then '___v' (e.g. '92563-Leckliter___v2.59.34').
+    If none match, return (name, '') with version blank.
     """
     if not name or not isinstance(name, str):
         return (name or "", "")
-    sep = " | v"
-    if sep in name:
-        parts = name.split(sep, 1)
-        return (parts[0].strip(), (parts[1].strip() if len(parts) > 1 else ""))
+    for sep in (" | v", "___v"):
+        if sep in name:
+            parts = name.split(sep, 1)
+            return (parts[0].strip(), (parts[1].strip() if len(parts) > 1 else ""))
     return (name.strip(), "")
 
 
