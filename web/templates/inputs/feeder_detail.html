@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block page_title %}Feeder: {{ feeder.name or 'Unknown' }}{% endblock %}
+{% block page_title %}Feeder: {{ feeder.display_name or feeder.name or 'Unknown' }}{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:16px;">
@@ -15,7 +15,9 @@
         </div>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;">
             <span style="color:var(--text-muted)">Name</span>
-            <span id="fd-name" style="color:var(--text-primary);font-weight:500">{{ feeder.name or '—' }}</span>
+            <span id="fd-name" style="color:var(--text-primary);font-weight:500">{{ feeder.display_name or feeder.name or '—' }}</span>
+            <span style="color:var(--text-muted)">Software version</span>
+            <span id="fd-software-version" style="font-size:12px;">{{ feeder.software_version or '—' }}</span>
             <span style="color:var(--text-muted)">Type</span>
             <span id="fd-type"></span>
             <span style="color:var(--text-muted)">IP Address</span>

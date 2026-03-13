@@ -47,6 +47,7 @@
             <thead>
                 <tr>
                     <th>Name</th>
+                    <th>Software version</th>
                     <th>Type</th>
                     <th>IP Address</th>
                     <th>Location</th>
@@ -57,7 +58,7 @@
                 </tr>
             </thead>
             <tbody id="feeder-table">
-                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
+                <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -66,6 +67,10 @@
 
 {% block extra_scripts %}
 <script>
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 let allFeeders = [];
 
 async function loadFeeders() {
@@ -99,7 +104,7 @@ function renderTable() {
 
     const tbody = document.getElementById('feeder-table');
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;">No feeders found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px;">No feeders found</td></tr>';
         return;
     }
 
@@ -112,9 +117,12 @@ function renderTable() {
             loc = f.location;
         }
         const mlat = f.mlat_enabled ? '<span class="badge badge-live">Yes</span>' : '<span style="color:var(--text-muted)">No</span>';
+        const displayName = (f.display_name !== undefined ? f.display_name : f.name) || '—';
+        const swVer = (f.software_version !== undefined && f.software_version) ? f.software_version : '—';
 
         html += '<tr class="clickable" onclick="location.href=\'/inputs/feeder/' + f.id + '\'">';
-        html += '<td style="color:var(--text-primary);font-weight:500">' + (f.name || '—') + '</td>';
+        html += '<td style="color:var(--text-primary);font-weight:500">' + escapeHtml(displayName) + '</td>';
+        html += '<td style="font-size:12px;color:var(--text-muted)">' + escapeHtml(swVer) + '</td>';
         html += '<td>' + typeBadge(f.conn_type) + '</td>';
         html += '<td style="font-family:monospace;font-size:12px;">' + (f.ip_address || '—') + '</td>';
         html += '<td style="font-size:12px;">' + loc + '</td>';

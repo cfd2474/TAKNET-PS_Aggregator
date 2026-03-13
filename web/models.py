@@ -93,6 +93,31 @@ def dict_rows(rows):
     return [dict(r) for r in rows]
 
 
+def parse_mlat_client_name(name):
+    """Parse MLAT client name 'DisplayName | vX.Y.Z' into (display_name, software_version).
+    If no ' | v' separator, return (name, '') with version blank.
+    """
+    if not name or not isinstance(name, str):
+        return (name or "", "")
+    sep = " | v"
+    if sep in name:
+        parts = name.split(sep, 1)
+        return (parts[0].strip(), (parts[1].strip() if len(parts) > 1 else ""))
+    return (name.strip(), "")
+
+
+def enrich_feeder_mlat_display(feeder):
+    """Add display_name and software_version to a feeder dict from its name (parsed)."""
+    if not feeder:
+        return feeder
+    name = feeder.get("name") or ""
+    display_name, software_version = parse_mlat_client_name(name)
+    feeder = dict(feeder)
+    feeder["display_name"] = display_name or name
+    feeder["software_version"] = software_version  # blank when no " | v"
+    return feeder
+
+
 # ── Feeders ──────────────────────────────────────────────────────────────────
 
 class FeederModel:

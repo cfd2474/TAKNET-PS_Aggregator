@@ -118,11 +118,13 @@ async function loadVPN() {
         html += '<div id="nb-body" style="display:none;">';
         if (nb.enabled && nb.state === 'running') {
             if (nb.peers && nb.peers.length > 0) {
-                html += '<div class="table-wrap"><table><thead><tr><th>Hostname</th><th>IP</th><th>OS</th><th>Status</th></tr></thead><tbody>';
+                html += '<div class="table-wrap"><table><thead><tr><th>Hostname</th><th>IP</th><th>Software version</th><th>OS</th><th>Status</th></tr></thead><tbody>';
                 nb.peers.forEach(p => {
                     const badge = p.connected ? '<span class="badge badge-live">Connected</span>' : '<span class="badge badge-offline">Offline</span>';
-                    html += '<tr><td style="font-weight:500;color:var(--text-primary)">' + p.hostname + '</td>';
+                    const swVer = (p.feeder_software_version !== undefined && p.feeder_software_version && p.feeder_software_version !== '—') ? p.feeder_software_version : '—';
+                    html += '<tr><td style="font-weight:500;color:var(--text-primary)">' + (p.hostname || '—') + '</td>';
                     html += '<td style="font-family:monospace;font-size:12px;">' + (p.ip || '—') + '</td>';
+                    html += '<td style="font-size:12px;color:var(--text-muted)">' + swVer + '</td>';
                     html += '<td>' + (p.os || '—') + '</td>';
                     html += '<td>' + badge + '</td></tr>';
                 });

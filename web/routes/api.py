@@ -12,6 +12,7 @@ import requests as http_requests
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 
 from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel, OutputCotCertModel
+from models import enrich_feeder_mlat_display
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
@@ -206,6 +207,7 @@ def feeders_list():
     status_filter = request.args.get("status", "all")
     conn_type = request.args.get("conn_type", "all")
     feeders = FeederModel.get_all(status_filter=status_filter, conn_type_filter=conn_type)
+    feeders = [enrich_feeder_mlat_display(f) for f in feeders]
     stats = FeederModel.get_stats()
     return jsonify({"feeders": feeders, "stats": stats})
 
@@ -217,6 +219,7 @@ def feeder_detail(feeder_id):
     feeder = FeederModel.get_by_id(feeder_id)
     if not feeder:
         return jsonify({"error": "Feeder not found"}), 404
+    feeder = enrich_feeder_mlat_display(feeder)
     connections = ConnectionModel.get_history(feeder_id, limit=20)
     return jsonify({"feeder": feeder, "connections": connections})
 
@@ -417,8 +420,21 @@ def aircraft_json():
 @bp.route("/vpn/status")
 @admin_required
 def vpn_status():
-    """Combined VPN status (Tailscale + NetBird)."""
-    return jsonify(get_combined_status())
+    """Combined VPN status (Tailscale + NetBird). Enriches NetBird peers with feeder software version by IP."""
+    from models import parse_mlat_client_name
+    data = get_combined_status()
+    nb = data.get("netbird") or {}
+    peers = nb.get("peers") or []
+    if peers:
+        netbird_feeders = FeederModel.get_all(conn_type_filter="netbird")
+        ip_to_version = {}
+        for f in netbird_feeders:
+            _, ver = parse_mlat_client_name(f.get("name") or "")
+            if f.get("ip_address") and ver:
+                ip_to_version[f["ip_address"]] = ver
+        for p in peers:
+            p["feeder_software_version"] = ip_to_version.get(p.get("ip") or "", "") or "—"
+    return jsonify(data)
 
 
 # ── NetBird Client (server enrollment) ───────────────────────────────────────
