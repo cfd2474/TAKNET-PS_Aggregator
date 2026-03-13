@@ -1102,6 +1102,18 @@ def ps_air_icons_list():
         return jsonify({"icons": [], "error": str(e)})
 
 
+@bp.route("/nato-icons")
+@network_admin_required
+def nato_icons_list():
+    """Return list of NATO Friend Air icons for COTProxy icon picker/reference."""
+    try:
+        from nato_icons import get_nato_icons_list
+        icons = get_nato_icons_list()
+        return jsonify({"icons": icons})
+    except Exception as e:
+        return jsonify({"icons": [], "error": str(e)})
+
+
 def _cot_filter_arg(name: str) -> str | None:
     v = request.args.get("filter_" + name)
     return (v.strip() if v and isinstance(v, str) else None) or None

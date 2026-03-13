@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.189",
+    "date": "2026-03-13",
+    "notes": [
+      "COTProxy: NATO Icons (Friend Air) reference section — grid of 104 icons like PS Air Icons; clickable to pick for transform; added to modal icon picker; iconUrlForPath resolves Friend Air paths."
+    ]
+  },
+  {
     "version": "1.0.188",
     "date": "2026-03-13",
     "notes": [
