@@ -266,6 +266,58 @@ th.sortable:hover { color: var(--accent); }
     </div>
 </div>
 
+<!-- MIL-STD-2525D CoT type reference: Civil (collapsible) -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="cursor:pointer;" onclick="document.getElementById('cot-ref-civil-body').classList.toggle('collapse-hidden'); document.getElementById('cot-ref-civil-toggle').textContent = document.getElementById('cot-ref-civil-body').classList.contains('collapse-hidden') ? '▼ Show' : '▲ Hide';">
+        <h3 style="margin:0;font-size:14px;">CoT type reference — Civil aircraft (MIL-STD-2525D)</h3>
+        <span id="cot-ref-civil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
+    </div>
+    <div id="cot-ref-civil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. See <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a> for full MIL-STD-2525D reference.</p>
+        <div class="table-wrap">
+            <table style="font-size:13px;">
+                <thead>
+                    <tr><th style="width:180px;">Code</th><th>Name</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>a-f-A</code></td><td>Generic (air)</td></tr>
+                    <tr><td><code>a-f-A-C</code></td><td>Civil (generic)</td></tr>
+                    <tr><td><code>a-f-A-C-F</code></td><td>Civil fixed wing</td></tr>
+                    <tr><td><code>a-f-A-C-H</code></td><td>Civil rotary</td></tr>
+                    <tr><td><code>a-f-A-C-L</code></td><td>Civil LTA</td></tr>
+                    <tr><td><code>a-f-A-C-F-q</code></td><td>Civil UAV</td></tr>
+                    <tr><td><code>a-f-A-U</code></td><td>Unknown air (TIS-B)</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MIL-STD-2525D CoT type reference: Military (collapsible) -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="cursor:pointer;" onclick="document.getElementById('cot-ref-mil-body').classList.toggle('collapse-hidden'); document.getElementById('cot-ref-mil-toggle').textContent = document.getElementById('cot-ref-mil-body').classList.contains('collapse-hidden') ? '▼ Show' : '▲ Hide';">
+        <h3 style="margin:0;font-size:14px;">CoT type reference — Military aircraft (MIL-STD-2525D)</h3>
+        <span id="cot-ref-mil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
+    </div>
+    <div id="cot-ref-mil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Symbol types matching the CoT type (2525) dropdown. See <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a> for full MIL-STD-2525D reference.</p>
+        <div class="table-wrap">
+            <table style="font-size:13px;">
+                <thead>
+                    <tr><th style="width:180px;">Code</th><th>Name</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>a-f-A-M</code></td><td>Military (generic)</td></tr>
+                    <tr><td><code>a-f-A-M-F</code></td><td>Military fixed wing</td></tr>
+                    <tr><td><code>a-f-A-M-H</code></td><td>Military rotary</td></tr>
+                    <tr><td><code>a-f-A-M-L</code></td><td>Military LTA</td></tr>
+                    <tr><td><code>a-f-A-M-F-Q</code></td><td>Military UAV</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <!-- PS Air Icons reference (collapsible) -->
 <div class="card" style="margin-top:16px;">
     <div class="card-header" style="cursor:pointer;" onclick="document.getElementById('ps-air-ref-body').classList.toggle('collapse-hidden'); document.getElementById('ps-air-ref-toggle').textContent = document.getElementById('ps-air-ref-body').classList.contains('collapse-hidden') ? '▼ Show' : '▲ Hide';">

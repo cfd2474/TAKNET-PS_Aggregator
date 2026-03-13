@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.184",
+    "date": "2026-03-11",
+    "notes": [
+      "COTProxy: expandable CoT type reference sections — Civil aircraft and Military aircraft (MIL-STD-2525D), code + name tables matching CoT type dropdown; link to FTS CoT table."
+    ]
+  },
+  {
     "version": "1.0.183",
     "date": "2026-03-11",
     "notes": [
