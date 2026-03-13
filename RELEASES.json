@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.191",
+    "date": "2026-03-13",
+    "notes": [
+      "COTProxy: Removed NATO Friend Air from reference and selector; Civil/Military icons now use custom icons from cot_ref_icons (civ/mil generic, fixed wing, rotary, LTA, UAV); Unknown air (TIS-B) uses Unknown air.png."
+    ]
+  },
+  {
     "version": "1.0.190",
     "date": "2026-03-13",
     "notes": [
