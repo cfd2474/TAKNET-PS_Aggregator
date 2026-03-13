@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.183",
+    "date": "2026-03-11",
+    "notes": [
+      "COTProxy: PS Air Icons — remove path-format code text; show icon names as readable (underscores to spaces, no .png); full label visible with wrap."
+    ]
+  },
+  {
     "version": "1.0.182",
     "date": "2026-03-11",
     "notes": [

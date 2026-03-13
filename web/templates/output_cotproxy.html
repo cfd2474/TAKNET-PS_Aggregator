@@ -8,7 +8,7 @@
 .ps-air-icon-grid img:hover { border-color: var(--accent); }
 .ps-air-icon-grid .icon-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; padding: 4px; border-radius: 6px; }
 .ps-air-icon-grid .icon-cell:hover { background: var(--bg-card-hover); }
-.ps-air-icon-grid .icon-cell span { font-size: 10px; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.ps-air-icon-grid .icon-cell span { font-size: 10px; max-width: 140px; white-space: normal; word-break: break-word; text-align: center; color: var(--text-muted); }
 th.sortable:hover { color: var(--accent); }
 .sort-arrow { font-size:10px; color: var(--text-muted); margin-left:2px; }
 .sort-arrow.asc::after { content: ' ▲'; }
@@ -273,7 +273,7 @@ th.sortable:hover { color: var(--accent); }
         <span id="ps-air-ref-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="ps-air-ref-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). Path format: <code style="font-size:11px;">66f14976-4b62-4023-8edb-d8d2ebeaa336/Public Safety Air/name.png</code></p>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first).</p>
         <div id="ps-air-ref-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
 </div>
@@ -505,16 +505,20 @@ async function loadPsAirIcons() {
         const picker = document.getElementById('modal-icon-picker');
         const uid = d.iconset_uid || '66f14976-4b62-4023-8edb-d8d2ebeaa336';
         const folder = 'Public Safety Air';
+        function iconDisplayName(name) {
+            return (name || '').replace(/\.png$/i, '').replace(/_/g, ' ');
+        }
         psAirIcons.forEach(ico => {
             const path = ico.path || (uid + '/' + folder + '/' + ico.name);
             const cot = ico.cot || '';
+            const displayName = iconDisplayName(ico.name);
             function addCell(container) {
                 const cell = document.createElement('div');
                 cell.className = 'icon-cell';
                 cell.dataset.path = path;
                 cell.dataset.cot = cot;
                 cell.title = path;
-                cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(ico.name) + '</span>';
+                cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(displayName) + '</span>';
                 cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
                 container.appendChild(cell);
             }
