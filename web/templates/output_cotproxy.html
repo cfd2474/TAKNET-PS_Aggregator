@@ -416,8 +416,8 @@ function renderCotRefSymbols() {
 window.addEventListener('load', renderCotRefSymbols);
 
 let outputConfig = {{ output_config | tojson }};
-let psAirIcons = [];
-let natoIcons = [];
+let psAirIcons = {{ (ps_air_icons or []) | tojson }};
+let natoIcons = {{ (nato_icons or []) | tojson }};
 
 // MIL-STD-2525 / FTS CoT type presets: code -> common name (for table display and edit matching)
 const COT_PRESETS = {
@@ -627,82 +627,66 @@ function renderIconCell(t) {
     return '<span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block;" title="' + escapeHtml(t.icon || '') + '">' + escapeHtml((t.icon || '').slice(0, 28)) + ((t.icon || '').length > 28 ? '…' : '') + '</span>';
 }
 
-async function loadPsAirIcons() {
-    try {
-        const r = await fetch('/api/ps-air-icons');
-        const d = await r.json();
-        psAirIcons = d.icons || [];
-        const grid = document.getElementById('ps-air-ref-grid');
-        const picker = document.getElementById('modal-icon-picker');
-        const uid = d.iconset_uid || '66f14976-4b62-4023-8edb-d8d2ebeaa336';
-        const folder = 'Public Safety Air';
-        function iconDisplayName(name) {
-            return (name || '').replace(/\.png$/i, '').replace(/_/g, ' ');
+function loadPsAirIcons() {
+    const grid = document.getElementById('ps-air-ref-grid');
+    const picker = document.getElementById('modal-icon-picker');
+    if (!grid || !picker) return;
+    const uid = '66f14976-4b62-4023-8edb-d8d2ebeaa336';
+    const folder = 'Public Safety Air';
+    function iconDisplayName(name) {
+        return (name || '').replace(/\.png$/i, '').replace(/_/g, ' ');
+    }
+    psAirIcons.forEach(ico => {
+        const path = ico.path || (uid + '/' + folder + '/' + ico.name);
+        const cot = ico.cot || '';
+        const displayName = iconDisplayName(ico.name);
+        function addCell(container) {
+            const cell = document.createElement('div');
+            cell.className = 'icon-cell';
+            cell.dataset.path = path;
+            cell.dataset.cot = cot;
+            cell.title = path;
+            cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(displayName) + '</span>';
+            cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
+            container.appendChild(cell);
         }
-        psAirIcons.forEach(ico => {
-            const path = ico.path || (uid + '/' + folder + '/' + ico.name);
-            const cot = ico.cot || '';
-            const displayName = iconDisplayName(ico.name);
-            function addCell(container) {
-                const cell = document.createElement('div');
-                cell.className = 'icon-cell';
-                cell.dataset.path = path;
-                cell.dataset.cot = cot;
-                cell.title = path;
-                cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(displayName) + '</span>';
-                cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
-                container.appendChild(cell);
-            }
-            addCell(grid);
-            addCell(picker);
-        });
-        if (!psAirIcons.length) {
-            grid.innerHTML = '<span style="color:var(--text-muted);">No icons loaded.</span>';
-            picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No icons loaded.</span>';
-        }
-    } catch (e) {
-        document.getElementById('ps-air-ref-grid').innerHTML = '<span style="color:var(--text-muted);">Failed to load icons.</span>';
-        document.getElementById('modal-icon-picker').innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Failed to load icons.</span>';
+        addCell(grid);
+        addCell(picker);
+    });
+    if (!psAirIcons.length) {
+        grid.innerHTML = '<span style="color:var(--text-muted);">No icons loaded.</span>';
+        picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No icons loaded.</span>';
     }
 }
 
-async function loadNatoIcons() {
-    try {
-        const r = await fetch('/api/nato-icons');
-        const d = await r.json();
-        natoIcons = d.icons || [];
-        const grid = document.getElementById('nato-ref-grid');
-        const picker = document.getElementById('modal-nato-icon-picker');
-        if (!grid || !picker) return;
-        function iconDisplayName(name) {
-            return (name || '').replace(/\.png$/i, '').replace(/\./g, ' ');
+function loadNatoIcons() {
+    const grid = document.getElementById('nato-ref-grid');
+    const picker = document.getElementById('modal-nato-icon-picker');
+    if (!grid || !picker) return;
+    natoIcons = Array.isArray(natoIcons) ? natoIcons : [];
+    function iconDisplayName(name) {
+        return (name || '').replace(/\.png$/i, '').replace(/\./g, ' ');
+    }
+    natoIcons.forEach(ico => {
+        const path = ico.path || ('Friend Air/' + ico.name);
+        const cot = ico.cot || '';
+        const displayName = iconDisplayName(ico.name);
+        function addCell(container) {
+            const cell = document.createElement('div');
+            cell.className = 'icon-cell';
+            cell.dataset.path = path;
+            cell.dataset.cot = cot;
+            cell.title = path;
+            cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(displayName) + '</span>';
+            cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
+            container.appendChild(cell);
         }
-        natoIcons.forEach(ico => {
-            const path = ico.path || ('Friend Air/' + ico.name);
-            const cot = ico.cot || '';
-            const displayName = iconDisplayName(ico.name);
-            function addCell(container) {
-                const cell = document.createElement('div');
-                cell.className = 'icon-cell';
-                cell.dataset.path = path;
-                cell.dataset.cot = cot;
-                cell.title = path;
-                cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(displayName) + '</span>';
-                cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
-                container.appendChild(cell);
-            }
-            addCell(grid);
-            addCell(picker);
-        });
-        if (!natoIcons.length) {
-            grid.innerHTML = '<span style="color:var(--text-muted);">No icons loaded.</span>';
-            picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No icons loaded.</span>';
-        }
-    } catch (e) {
-        const grid = document.getElementById('nato-ref-grid');
-        const picker = document.getElementById('modal-nato-icon-picker');
-        if (grid) grid.innerHTML = '<span style="color:var(--text-muted);">Failed to load icons.</span>';
-        if (picker) picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Failed to load icons.</span>';
+        addCell(grid);
+        addCell(picker);
+    });
+    if (!natoIcons.length) {
+        grid.innerHTML = '<span style="color:var(--text-muted);">No icons loaded.</span>';
+        picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No icons loaded.</span>';
     }
 }
 
