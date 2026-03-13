@@ -248,13 +248,9 @@ th.sortable:hover { color: var(--accent); }
                 </div>
                 <div class="form-group" style="grid-column:1/-1;">
                     <label style="margin-bottom:6px;">Choose icon</label>
-                    <div style="margin-bottom:8px;">
+                    <div>
                         <span style="font-size:12px;color:var(--text-muted);">PS Air Icons</span>
                         <div id="modal-icon-picker" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:140px;overflow-y:auto;padding:8px;background:var(--bg-secondary);border-radius:8px;margin-top:4px;"></div>
-                    </div>
-                    <div>
-                        <span style="font-size:12px;color:var(--text-muted);">NATO Icons (Friend Air)</span>
-                        <div id="modal-nato-icon-picker" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:140px;overflow-y:auto;padding:8px;background:var(--bg-secondary);border-radius:8px;margin-top:4px;"></div>
                     </div>
                 </div>
                 <div class="form-group" style="grid-column:1/-1;">
@@ -282,7 +278,7 @@ th.sortable:hover { color: var(--accent); }
         <span id="cot-ref-civil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-civil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). Icons from NATO symbol set (Friend Air). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
         <div id="cot-ref-civil-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
 </div>
@@ -294,7 +290,7 @@ th.sortable:hover { color: var(--accent); }
         <span id="cot-ref-mil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-mil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). Icons from NATO symbol set (Friend Air). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first). <a href="https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/" target="_blank" rel="noopener">FTS CoT table</a>.</p>
         <div id="cot-ref-mil-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
 </div>
@@ -311,18 +307,6 @@ th.sortable:hover { color: var(--accent); }
     </div>
 </div>
 
-<!-- NATO Icons reference (collapsible) - Friend Air, same layout as PS Air -->
-<div class="card" style="margin-top:16px;">
-    <div class="card-header" style="cursor:pointer;" onclick="document.getElementById('nato-ref-body').classList.toggle('collapse-hidden'); document.getElementById('nato-ref-toggle').textContent = document.getElementById('nato-ref-body').classList.contains('collapse-hidden') ? '▼ Show' : '▲ Hide';">
-        <h3 style="margin:0;font-size:14px;">NATO Icons reference (Friend Air)</h3>
-        <span id="nato-ref-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
-    </div>
-    <div id="nato-ref-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Click an icon to use it in the transform (open Add/Edit first).</p>
-        <div id="nato-ref-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
-    </div>
-</div>
-
 <footer style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);">
     CoT output uses <a href="https://github.com/snstac/pytak" target="_blank" rel="noopener">PyTAK</a> for TAK ecosystem compatibility. Icons: PS Air Icons v8 (Public Safety Air).
 </footer>
@@ -333,32 +317,32 @@ th.sortable:hover { color: var(--accent); }
 <script>
 const outputId = {{ output.id }};
 
-// Civil / Military ref icons: cot, name, nato filename (Friend Air)
+// Civil / Military ref icons: cot, name, icon filename (cot_ref_icons)
 var CIVIL_REF_ICONS = [
-    { cot: 'a-f-A', name: 'Generic (air)', icon: '1.sfap-----------.png' },
-    { cot: 'a-f-A-C', name: 'Civil (generic)', icon: '1.sfapc----------.png' },
-    { cot: 'a-f-A-C-F', name: 'Civil fixed wing', icon: '1.sfapcf---------.png' },
-    { cot: 'a-f-A-C-H', name: 'Civil rotary', icon: '1.sfapch---------.png' },
-    { cot: 'a-f-A-C-L', name: 'Civil LTA', icon: '1.sfapcl---------.png' },
-    { cot: 'a-f-A-C-F-q', name: 'Civil UAV', icon: '1.sfapcf---------.png' },
-    { cot: 'a-f-A-U', name: 'Unknown air (TIS-B)', icon: '1.sfap-----------.png' }
+    { cot: 'a-f-A', name: 'Generic (air)', icon: 'civ generic.png' },
+    { cot: 'a-f-A-C', name: 'Civil (generic)', icon: 'civ generic.png' },
+    { cot: 'a-f-A-C-F', name: 'Civil fixed wing', icon: 'civ fixed wing.png' },
+    { cot: 'a-f-A-C-H', name: 'Civil rotary', icon: 'civ rotary wing.png' },
+    { cot: 'a-f-A-C-L', name: 'Civil LTA', icon: 'civ lighter than air.png' },
+    { cot: 'a-f-A-C-F-q', name: 'Civil UAV', icon: 'civ drone uav.png' },
+    { cot: 'a-f-A-U', name: 'Unknown air (TIS-B)', icon: 'Unknown air.png' }
 ];
 var MIL_REF_ICONS = [
-    { cot: 'a-f-A-M', name: 'Military (generic)', icon: '1.sfapm----------.png' },
-    { cot: 'a-f-A-M-F', name: 'Military fixed wing', icon: '1.sfapmf---------.png' },
-    { cot: 'a-f-A-M-H', name: 'Military rotary', icon: '1.sfapmh---------.png' },
-    { cot: 'a-f-A-M-L', name: 'Military LTA', icon: '1.sfapml---------.png' },
-    { cot: 'a-f-A-M-F-Q', name: 'Military UAV', icon: '1.sfapmfq---------.png' }
+    { cot: 'a-f-A-M', name: 'Military (generic)', icon: 'mil generic.png' },
+    { cot: 'a-f-A-M-F', name: 'Military fixed wing', icon: 'mil fixed wing.png' },
+    { cot: 'a-f-A-M-H', name: 'Military rotary', icon: 'Mil rotary.png' },
+    { cot: 'a-f-A-M-L', name: 'Military LTA', icon: 'mil lighter than air.png' },
+    { cot: 'a-f-A-M-F-Q', name: 'Military UAV', icon: 'mil drone uav.png' }
 ];
-var NATO_ICON_BASE = '{{ url_for("static", filename="nato_icons/friend_air/") }}';
+var COT_REF_ICON_BASE = '{{ url_for("static", filename="cot_ref_icons/") }}';
 function loadCivilMilitaryRefs() {
     function addRefGrid(containerId, items) {
         var el = document.getElementById(containerId);
         if (!el) return;
         el.innerHTML = '';
         items.forEach(function(item) {
-            var path = 'Friend Air/' + item.icon;
-            var url = (NATO_ICON_BASE.endsWith('/') ? NATO_ICON_BASE : NATO_ICON_BASE + '/') + item.icon;
+            var path = 'cot_ref_icons/' + item.icon;
+            var url = (COT_REF_ICON_BASE.endsWith('/') ? COT_REF_ICON_BASE : COT_REF_ICON_BASE + '/') + encodeURIComponent(item.icon);
             var cell = document.createElement('div');
             cell.className = 'icon-cell';
             cell.dataset.path = path;
@@ -375,7 +359,6 @@ function loadCivilMilitaryRefs() {
 
 let outputConfig = {{ output_config | tojson }};
 let psAirIcons = {{ (ps_air_icons or []) | tojson }};
-let natoIcons = {{ (nato_icons or []) | tojson }};
 
 // MIL-STD-2525 / FTS CoT type presets: code -> common name (for table display and edit matching)
 const COT_PRESETS = {
@@ -570,8 +553,11 @@ function iconUrlForPath(iconPath) {
     const s = String(iconPath).trim();
     const icon = psAirIcons.find(i => s === i.path || s.endsWith(i.name) || s.includes('Public Safety Air/' + i.name));
     if (icon) return icon.url_path;
-    const nato = natoIcons.find(i => s === i.path || s.endsWith(i.name) || s.includes('Friend Air/' + i.name));
-    return nato ? nato.url_path : null;
+    if (s.startsWith('cot_ref_icons/')) {
+        const rest = s.slice('cot_ref_icons/'.length);
+        return '/static/cot_ref_icons/' + encodeURIComponent(rest);
+    }
+    return null;
 }
 
 function pickIcon(path, cot) {
@@ -612,37 +598,6 @@ function loadPsAirIcons() {
         addCell(picker);
     });
     if (!psAirIcons.length) {
-        grid.innerHTML = '<span style="color:var(--text-muted);">No icons loaded.</span>';
-        picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No icons loaded.</span>';
-    }
-}
-
-function loadNatoIcons() {
-    const grid = document.getElementById('nato-ref-grid');
-    const picker = document.getElementById('modal-nato-icon-picker');
-    if (!grid || !picker) return;
-    natoIcons = Array.isArray(natoIcons) ? natoIcons : [];
-    function iconDisplayName(name) {
-        return (name || '').replace(/\.png$/i, '').replace(/\./g, ' ');
-    }
-    natoIcons.forEach(ico => {
-        const path = ico.path || ('Friend Air/' + ico.name);
-        const cot = ico.cot || '';
-        const displayName = iconDisplayName(ico.name);
-        function addCell(container) {
-            const cell = document.createElement('div');
-            cell.className = 'icon-cell';
-            cell.dataset.path = path;
-            cell.dataset.cot = cot;
-            cell.title = path;
-            cell.innerHTML = '<img src="' + escapeHtml(ico.url_path) + '" alt=""><span>' + escapeHtml(displayName) + '</span>';
-            cell.addEventListener('click', function() { pickIcon(this.dataset.path, this.dataset.cot); });
-            container.appendChild(cell);
-        }
-        addCell(grid);
-        addCell(picker);
-    });
-    if (!natoIcons.length) {
         grid.innerHTML = '<span style="color:var(--text-muted);">No icons loaded.</span>';
         picker.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No icons loaded.</span>';
     }
@@ -1013,7 +968,6 @@ wireFilterInputs();
 loadFacets();
 loadCivilMilitaryRefs();
 loadPsAirIcons();
-loadNatoIcons();
 loadTransforms();
 </script>
 {% endblock %}
