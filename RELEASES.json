@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.188",
+    "date": "2026-03-13",
+    "notes": [
+      "COTProxy: Civil and Military CoT reference tables now use NATO Friend Air icons (from NATO Icons zip) instead of milsymbol; Military UAV falls back to milsymbol."
+    ]
+  },
+  {
     "version": "1.0.187",
     "date": "2026-03-11",
     "notes": [
