@@ -9,6 +9,7 @@
 .ps-air-icon-grid .icon-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; padding: 4px; border-radius: 6px; }
 .ps-air-icon-grid .icon-cell:hover { background: var(--bg-card-hover); }
 .ps-air-icon-grid .icon-cell span { font-size: 10px; max-width: 140px; white-space: normal; word-break: break-word; text-align: center; color: var(--text-muted); }
+.ps-air-icon-grid.icon-grid-even { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 12px; justify-items: center; }
 th.sortable:hover { color: var(--accent); }
 .sort-arrow { font-size:10px; color: var(--text-muted); margin-left:2px; }
 .sort-arrow.asc::after { content: ' ▲'; }
@@ -278,7 +279,7 @@ th.sortable:hover { color: var(--accent); }
         <span id="cot-ref-civil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-civil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <div id="cot-ref-civil-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        <div id="cot-ref-civil-grid" class="ps-air-icon-grid icon-grid-even"></div>
     </div>
 </div>
 
@@ -289,7 +290,7 @@ th.sortable:hover { color: var(--accent); }
         <span id="cot-ref-mil-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="cot-ref-mil-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <div id="cot-ref-mil-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        <div id="cot-ref-mil-grid" class="ps-air-icon-grid icon-grid-even"></div>
     </div>
 </div>
 
@@ -300,7 +301,7 @@ th.sortable:hover { color: var(--accent); }
         <span id="ps-air-ref-toggle" style="font-size:12px;color:var(--text-muted);">▼ Show</span>
     </div>
     <div id="ps-air-ref-body" class="collapse-hidden" style="padding:12px 20px 20px;">
-        <div id="ps-air-ref-grid" class="ps-air-icon-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        <div id="ps-air-ref-grid" class="ps-air-icon-grid icon-grid-even"></div>
     </div>
 </div>
 

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.193",
+    "date": "2026-03-13",
+    "notes": [
+      "COTProxy: Evenly space icons in Civil, Military, PS Air reference tables using CSS Grid."
+    ]
+  },
+  {
     "version": "1.0.192",
     "date": "2026-03-13",
     "notes": [
