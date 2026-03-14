@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.194",
+    "date": "2026-03-13",
+    "notes": [
+      "Feeders page: default status filter to Active."
+    ]
+  },
+  {
     "version": "1.0.193",
     "date": "2026-03-13",
     "notes": [
