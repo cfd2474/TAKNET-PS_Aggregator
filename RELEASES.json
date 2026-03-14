@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.195",
+    "date": "2026-03-09",
+    "notes": [
+      "VPN page: preserve open/closed state of Tailscale and NetBird sections on refresh."
+    ]
+  },
+  {
     "version": "1.0.194",
     "date": "2026-03-13",
     "notes": [

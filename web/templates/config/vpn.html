@@ -52,6 +52,10 @@
 {% block extra_scripts %}
 <script>
 async function loadVPN() {
+    const tsBody = document.getElementById('ts-body');
+    const nbBody = document.getElementById('nb-body');
+    const tsOpen = tsBody && tsBody.style.display !== 'none';
+    const nbOpen = nbBody && nbBody.style.display !== 'none';
     try {
         const r = await fetch('/api/vpn/status');
         const d = await r.json();
@@ -142,6 +146,18 @@ async function loadVPN() {
         html += '</div></div>';
 
         document.getElementById('vpn-content').innerHTML = html;
+        if (tsOpen) {
+            const b = document.getElementById('ts-body');
+            const c = document.getElementById('ts-chevron');
+            if (b) b.style.display = 'block';
+            if (c) c.style.transform = 'rotate(0deg)';
+        }
+        if (nbOpen) {
+            const b = document.getElementById('nb-body');
+            const c = document.getElementById('nb-chevron');
+            if (b) b.style.display = 'block';
+            if (c) c.style.transform = 'rotate(0deg)';
+        }
     } catch(e) {
         document.getElementById('vpn-content').innerHTML =
             '<div class="card"><div style="color:var(--red);padding:20px;">Error loading VPN status: ' + e + '</div></div>';
