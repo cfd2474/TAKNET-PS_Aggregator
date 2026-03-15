@@ -55,10 +55,13 @@
                     <th>MLAT</th>
                     <th>Last Seen</th>
                     <th>Status</th>
+                    {% if current_user.role in ['admin', 'network_admin'] %}
+                    <th style="width:1%;white-space:nowrap;">Connect</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody id="feeder-table">
-                <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
+                <tr><td colspan="{% if current_user.role in ['admin', 'network_admin'] %}10{% else %}9{% endif %}" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -102,9 +105,12 @@ function renderTable() {
                (f.hostname || '').toLowerCase().includes(search);
     });
 
+    const canConnect = {{ 'true' if current_user.role in ['admin', 'network_admin'] else 'false' }};
+    const colCount = canConnect ? 10 : 9;
+
     const tbody = document.getElementById('feeder-table');
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px;">No feeders found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="text-align:center;color:var(--text-muted);padding:40px;">No feeders found</td></tr>';
         return;
     }
 
@@ -130,6 +136,11 @@ function renderTable() {
         html += '<td>' + mlat + '</td>';
         html += '<td>' + fmtAgo(f.last_seen) + '</td>';
         html += '<td>' + statusBadge(f.status) + '</td>';
+        if (canConnect && f.tunnel_feeder_id) {
+            html += '<td onclick="event.stopPropagation();"><a href="/feeder/' + escapeHtml(f.tunnel_feeder_id) + '/" class="btn" style="font-size:12px;padding:4px 10px;" target="_blank" rel="noopener">Connect</a></td>';
+        } else if (canConnect) {
+            html += '<td></td>';
+        }
         html += '</tr>';
     });
     tbody.innerHTML = html;

@@ -2,8 +2,11 @@
 {% block page_title %}Feeder: {{ feeder.display_name or feeder.name or 'Unknown' }}{% endblock %}
 
 {% block content %}
-<div style="margin-bottom:16px;">
+<div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <a href="/inputs/feeders" style="font-size:13px;color:var(--text-muted);">&larr; Back to Feeders</a>
+    {% if current_user.role in ['admin', 'network_admin'] %}
+    <a href="/feeder/{{ feeder.tunnel_feeder_id }}/" class="btn btn-primary" target="_blank" rel="noopener">Connect to feeder</a>
+    {% endif %}
 </div>
 
 <div class="card-grid card-grid-2">

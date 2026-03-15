@@ -129,6 +129,16 @@ services:
       readsb:
         condition: service_started
 
+  # Feeder tunnel — WebSocket at /tunnel, internal /proxy for dashboard
+  tunnel:
+    build:
+      context: ./tunnel-service
+      dockerfile: Dockerfile
+    container_name: taknet-tunnel
+    restart: unless-stopped
+    networks:
+      - taknet-internal
+
   # Flask Dashboard
   dashboard:
     build:
@@ -153,6 +163,7 @@ services:
       - INSTALL_DIR=/opt/taknet-aggregator
       - AIRCRAFT_JSON_URL=${AIRCRAFT_JSON_URL:-http://aircraft-merger:8090/data/aircraft.json}
       - ADSBHUB_STATUS_PATH=/app/adsbhub-status
+      - TUNNEL_SERVICE_URL=http://tunnel:5001
     volumes:
       - db-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -172,6 +183,8 @@ services:
       beast-proxy:
         condition: service_started
       aircraft-merger:
+        condition: service_started
+      tunnel:
         condition: service_started
 
   # Aircraft merger — merges local (tar1090) + optional ADSBHub SBS; prefer local per ICAO
@@ -252,6 +265,7 @@ services:
       - tar1090
       - aircraft-merger
       - api
+      - tunnel
 
 volumes:
   db-data:

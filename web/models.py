@@ -107,8 +107,24 @@ def parse_mlat_client_name(name):
     return (name.strip(), "")
 
 
+def tunnel_feeder_id(feeder):
+    """Derive tunnel feeder_id (same logic as feeder tunnel client: MLAT_SITE_NAME sanitized or hostname).
+    Used for /feeder/<tunnel_feeder_id>/ URL. Sanitize: lowercase, spaces to dashes, [a-z0-9-] only.
+    """
+    import re
+    raw = (
+        (feeder.get("display_name") or feeder.get("name") or feeder.get("hostname") or "")
+        .strip()
+        or str(feeder.get("id") or "")
+    )
+    s = raw.lower().replace(" ", "-")
+    s = re.sub(r"[^a-z0-9\-]", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s or str(feeder.get("id") or "unknown")
+
+
 def enrich_feeder_mlat_display(feeder):
-    """Add display_name and software_version to a feeder dict from its name (parsed)."""
+    """Add display_name, software_version, and tunnel_feeder_id to a feeder dict from its name (parsed)."""
     if not feeder:
         return feeder
     name = feeder.get("name") or ""
@@ -116,6 +132,7 @@ def enrich_feeder_mlat_display(feeder):
     feeder = dict(feeder)
     feeder["display_name"] = display_name or name
     feeder["software_version"] = software_version  # blank when no " | v"
+    feeder["tunnel_feeder_id"] = tunnel_feeder_id(feeder)
     return feeder
 
 

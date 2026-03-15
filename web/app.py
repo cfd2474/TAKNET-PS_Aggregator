@@ -114,6 +114,7 @@ def create_app():
     from routes.config import bp as config_bp
     from routes.pages import bp as pages_bp
     from routes.api import bp as api_bp
+    from routes.feeder_tunnel import bp as feeder_tunnel_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -121,6 +122,7 @@ def create_app():
     app.register_blueprint(config_bp)
     app.register_blueprint(pages_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(feeder_tunnel_bp)
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(mark_stale_feeders, "interval", seconds=30, id="mark_stale")

@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.197",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeders: 'Connect to feeder' button on feeder detail and list opens feeder web UI via tunnel (/feeder/<tunnel_feeder_id>/). Visible only to admin and network_admin; viewers do not see the button."
+    ]
+  },
+  {
+    "version": "1.0.196",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel: WebSocket server at /tunnel for outbound feeder connections; reverse proxy at /feeder/<feeder_id>/ to access feeder web UIs by URL without VPN. Login required for /feeder/; Location/Content-Location rewritten to stay under proxy path."
+    ]
+  },
+  {
     "version": "1.0.195",
     "date": "2026-03-09",
     "notes": [
