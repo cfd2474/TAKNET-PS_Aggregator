@@ -1,8 +1,10 @@
 """Feeder tunnel reverse proxy: /feeder/<feeder_id>/... proxies HTTP to feeder over its WebSocket tunnel."""
 
 import base64
+import gzip
 import os
 import re
+import zlib
 
 import requests
 from flask import Blueprint, Response, request
@@ -41,6 +43,30 @@ def _request_headers_for_proxy():
             continue
         out[key] = value
     return out
+
+
+def _decompress_body(body: bytes, content_encoding: str) -> bytes:
+    """Return decompressed body when Content-Encoding is gzip, deflate, or br; else return body unchanged."""
+    if not body or not content_encoding:
+        return body
+    enc = content_encoding.lower().strip()
+    try:
+        if "gzip" in enc:
+            return gzip.decompress(body)
+        if "deflate" in enc:
+            try:
+                return zlib.decompress(body, 15)  # zlib format
+            except zlib.error:
+                return zlib.decompress(body, -zlib.MAX_WBITS)  # raw deflate
+        if "br" in enc:
+            try:
+                import brotli
+                return brotli.decompress(body)
+            except Exception:
+                return body
+    except Exception:
+        return body
+    return body
 
 
 def _rewrite_location_header(value: str, feeder_id: str) -> str:
@@ -179,31 +205,46 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     if status == 504:
         return "Feeder response timeout", 504
 
-    # Rewrite Location and Content-Location so links stay under /feeder/<feeder_id>/
+    # Collect content-type and content-encoding; rewrite Location; build headers (we'll drop encoding/length when we rewrite)
     headers_out = []
     content_type = ""
+    content_encoding = ""
     for name, value in resp_headers.items():
         if name.lower() == "content-type":
             content_type = (value or "").lower()
+        if name.lower() == "content-encoding":
+            content_encoding = (value or "").strip()
         if name.lower() in ("location", "content-location") and value:
             value = _rewrite_location_header(value, feeder_id)
         headers_out.append((name, value))
 
-    # Rewrite response body so assets and API calls go through the proxy (fix 404s and broken page)
+    # Rewrite response body so assets and API calls go through the proxy (fix 404s and broken page).
+    # For HTML/JS/CSS: if feeder sent gzip etc., decompress first so we have plain text; then rewrite; then drop Content-Encoding.
+    we_rewrote = False
     if body_bytes and content_type:
         if "text/html" in content_type:
+            if content_encoding:
+                body_bytes = _decompress_body(body_bytes, content_encoding)
             base_url = request.url_root.rstrip("/") + _feeder_prefix(feeder_id) + "/"
             body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url)
+            we_rewrote = True
         elif "javascript" in content_type:
+            if content_encoding:
+                body_bytes = _decompress_body(body_bytes, content_encoding)
             body_bytes = _rewrite_js_body(body_bytes, feeder_id)
+            we_rewrote = True
         elif "text/css" in content_type:
+            if content_encoding:
+                body_bytes = _decompress_body(body_bytes, content_encoding)
             body_bytes = _rewrite_css_body(body_bytes, feeder_id)
+            we_rewrote = True
 
-    # Build Flask Response (omit content-length so Flask sets it from body)
+    # When we rewrote, body is uncompressed — drop content-encoding and content-length so browser decodes correctly
     resp = Response(body_bytes, status=status)
     for name, value in headers_out:
-        if name.lower() != "content-length":
-            resp.headers[name] = value
+        if we_rewrote and name.lower() in ("content-length", "content-encoding"):
+            continue
+        resp.headers[name] = value
     return resp
 
 

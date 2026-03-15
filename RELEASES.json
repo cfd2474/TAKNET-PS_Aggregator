@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.201",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: decompress gzip/deflate/br before rewriting HTML/JS/CSS and drop Content-Encoding so browser gets plain body; fixes ERR_CONTENT_DECODING_FAILED when feeder sends compressed responses."
+    ]
+  },
+  {
     "version": "1.0.200",
     "date": "2026-03-15",
     "notes": [
