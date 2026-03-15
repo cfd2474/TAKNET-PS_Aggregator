@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.198",
+    "date": "2026-03-15",
+    "notes": [
+      "Active feeder tracking: beast-proxy now closes connections that receive no data for INACTIVE_FEEDER_TIMEOUT (default 120s). Physically offline feeders are marked offline instead of staying active."
+    ]
+  },
+  {
     "version": "1.0.197",
     "date": "2026-03-15",
     "notes": [

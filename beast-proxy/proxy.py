@@ -20,8 +20,9 @@ LISTEN_PORT        = int(os.environ.get("LISTEN_PORT",        "30004"))
 OUTPUT_LISTEN_PORT = int(os.environ.get("OUTPUT_LISTEN_PORT", "30005"))
 READSB_HOST        = os.environ.get("READSB_HOST", "readsb")
 READSB_PORT        = int(os.environ.get("READSB_PORT", "30006"))
-STATS_INTERVAL     = int(os.environ.get("STATS_INTERVAL", "30"))
-MLAT_CLIENTS_PATH  = os.environ.get("MLAT_CLIENTS_PATH", "/mlat-work/clients.json")
+STATS_INTERVAL            = int(os.environ.get("STATS_INTERVAL", "30"))
+INACTIVE_FEEDER_TIMEOUT   = int(os.environ.get("INACTIVE_FEEDER_TIMEOUT", "120"))  # seconds without data → treat as offline
+MLAT_CLIENTS_PATH         = os.environ.get("MLAT_CLIENTS_PATH", "/mlat-work/clients.json")
 
 # Active connections: key = writer id, value = connection info
 active_connections = {}
@@ -166,6 +167,7 @@ async def handle_client(reader, writer):
         "positions": 0,
         "positions_flushed": 0,
         "last_data": time.time(),
+        "writer": writer,
     }
     active_connections[id(writer)] = conn_info
 
@@ -251,6 +253,16 @@ async def stats_flusher():
     while True:
         await asyncio.sleep(STATS_INTERVAL)
         cycles += 1
+
+        # Close connections that haven't sent data in INACTIVE_FEEDER_TIMEOUT (e.g. physically offline)
+        now = time.time()
+        for conn_info in list(active_connections.values()):
+            if (now - conn_info["last_data"]) > INACTIVE_FEEDER_TIMEOUT:
+                w = conn_info.get("writer")
+                if w and not w.is_closing():
+                    display = conn_info.get("hostname") or conn_info.get("ip") or "?"
+                    print(f"[proxy] Feeder idle timeout ({INACTIVE_FEEDER_TIMEOUT}s): closing {display}")
+                    w.close()
 
         # Read MLAT client data (includes coordinates)
         mlat_clients = get_mlat_clients()
@@ -440,6 +452,7 @@ async def main():
     print(f"  Output listener:  {LISTEN_HOST}:{OUTPUT_LISTEN_PORT}")
     print(f"  Forwarding to:    {READSB_HOST}:{READSB_PORT}")
     print(f"  Stats interval:   {STATS_INTERVAL}s")
+    print(f"  Inactive timeout: {INACTIVE_FEEDER_TIMEOUT}s (no data → offline)")
     print(f"  MLAT clients:     {MLAT_CLIENTS_PATH}")
     print(f"  Tailscale: {'enabled' if vpn_resolver.TAILSCALE_ENABLED else 'disabled'}")
     print(f"  NetBird:   {'enabled' if vpn_resolver.NETBIRD_ENABLED else 'disabled'}")
