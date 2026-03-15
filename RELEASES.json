@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.199",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel: keep underscores in tunnel_feeder_id so aggregator URL matches feeder register id (e.g. 92882-test_test_test); fix 'not connected via tunnel' when feeder was connected."
+    ]
+  },
+  {
     "version": "1.0.198",
     "date": "2026-03-15",
     "notes": [

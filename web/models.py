@@ -109,7 +109,8 @@ def parse_mlat_client_name(name):
 
 def tunnel_feeder_id(feeder):
     """Derive tunnel feeder_id (same logic as feeder tunnel client: MLAT_SITE_NAME sanitized or hostname).
-    Used for /feeder/<tunnel_feeder_id>/ URL. Sanitize: lowercase, spaces to dashes, [a-z0-9-] only.
+    Used for /feeder/<tunnel_feeder_id>/ URL. Sanitize: lowercase, spaces to dashes; allow [a-z0-9_-]
+    so we match the feeder's register id (feeder keeps underscores, e.g. 92882-test_test_test).
     """
     import re
     raw = (
@@ -118,7 +119,7 @@ def tunnel_feeder_id(feeder):
         or str(feeder.get("id") or "")
     )
     s = raw.lower().replace(" ", "-")
-    s = re.sub(r"[^a-z0-9\-]", "-", s)
+    s = re.sub(r"[^a-z0-9\-_]", "-", s)
     s = re.sub(r"-+", "-", s).strip("-")
     return s or str(feeder.get("id") or "unknown")
 
