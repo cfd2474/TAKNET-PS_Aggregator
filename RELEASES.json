@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.200",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: rewrite HTML (inject <base>, prefix href/src), JS and CSS so feeder dashboard assets and API calls (style.css, dashboard.js, /api/power-status, etc.) load via /feeder/<id>/ and no longer 404."
+    ]
+  },
+  {
     "version": "1.0.199",
     "date": "2026-03-15",
     "notes": [
