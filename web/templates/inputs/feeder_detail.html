@@ -6,8 +6,7 @@
     <a href="/inputs/feeders" style="font-size:13px;color:var(--text-muted);">&larr; Back to Feeders</a>
     {% if current_user.role in ['admin', 'network_admin'] %}
     <a href="/feeder/{{ feeder.tunnel_feeder_id }}/" class="btn btn-primary" target="_blank" rel="noopener">Connect to feeder</a>
-    <a href="/feeder/{{ feeder.tunnel_feeder_id }}/" class="btn btn-outline-primary" target="_blank" rel="noopener">Map (tar1090)</a>
-    <a href="/feeder/{{ feeder.tunnel_feeder_id }}/graphs1090/?timeframe=24h" class="btn btn-outline-primary" target="_blank" rel="noopener">Stats (graphs1090)</a>
+    <span style="font-size:12px;color:var(--text-muted);">Map and Stats are not available via tunnel; use direct VPN/NetBird connection for tar1090/graphs1090.</span>
     {% endif %}
 </div>
 
