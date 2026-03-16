@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.207",
+    "date": "2026-03-15",
+    "notes": [
+      "Fix 502 on aggregator: correct unterminated f-strings in feeder_tunnel HTML rewrite (href/src/url replacement values) so dashboard app starts."
+    ]
+  },
+  {
     "version": "1.0.206",
     "date": "2026-03-15",
     "notes": [
