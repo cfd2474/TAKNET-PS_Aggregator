@@ -23,6 +23,8 @@ app = FastAPI(title="Feeder Tunnel Service")
 
 # feeder_id -> WebSocket (one active connection per feeder; new replaces old)
 feeder_connections: dict[str, WebSocket] = {}
+# feeder_id -> host (e.g. "100.85.149.249:8080") from register; used by aggregator for Host header
+feeder_hosts: dict[str, str] = {}
 # request_id -> (event, holder_list); holder[0] set to result dict when response received
 pending_requests: dict[str, tuple[asyncio.Event, list[Optional[dict]]]] = {}
 _lock = asyncio.Lock()
@@ -62,6 +64,8 @@ async def tunnel_websocket(websocket: WebSocket):
             await websocket.close(code=4000)
             return
         feeder_id = fid.strip()
+        h = msg.get("host")
+        host = h.strip() if isinstance(h, str) and h else None
         async with _lock:
             old = feeder_connections.get(feeder_id)
             if old and old != websocket:
@@ -70,7 +74,8 @@ async def tunnel_websocket(websocket: WebSocket):
                 except Exception:
                     pass
             feeder_connections[feeder_id] = websocket
-        logger.info("Tunnel registered: feeder_id=%s", feeder_id)
+            feeder_hosts[feeder_id] = host or ""
+        logger.info("Tunnel registered: feeder_id=%s host=%s", feeder_id, host or "(none)")
 
         while True:
             raw = await websocket.receive_text()
@@ -104,10 +109,21 @@ async def tunnel_websocket(websocket: WebSocket):
             async with _lock:
                 if feeder_connections.get(feeder_id) == websocket:
                     feeder_connections.pop(feeder_id, None)
+                    feeder_hosts.pop(feeder_id, None)
             try:
                 await websocket.close()
             except Exception:
                 pass
+
+
+@app.get("/feeder/{feeder_id}/host")
+async def get_feeder_host(feeder_id: str):
+    """Return the host (e.g. '100.85.149.249:8080') the feeder sent at register, for proxy Host header."""
+    async with _lock:
+        host = feeder_hosts.get(feeder_id)
+    if not host:
+        return JSONResponse({"error": "Unknown feeder or no host"}, status_code=404)
+    return {"host": host}
 
 
 @app.post("/proxy")

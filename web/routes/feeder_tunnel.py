@@ -42,10 +42,27 @@ TUNNEL_SERVICE_URL = os.environ.get("TUNNEL_SERVICE_URL", "http://tunnel:5001")
 PROXY_TIMEOUT = 30
 
 
+def _get_feeder_host_for_proxy(feeder_id: str) -> str:
+    """Resolve Host value for proxying to this feeder (host:8080). Prefer host from tunnel register, then DB IP."""
+    base = TUNNEL_SERVICE_URL.rstrip("/")
+    try:
+        r = requests.get(f"{base}/feeder/{feeder_id}/host", timeout=2)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("host"):
+                return data["host"]
+    except Exception:
+        pass
+    feeder = FeederModel.get_by_tunnel_feeder_id(feeder_id)
+    if feeder and feeder.get("ip_address"):
+        return f"{feeder['ip_address']}:8080"
+    return "localhost:8080"
+
+
 def _request_headers_for_proxy(feeder_id: str = ""):
     """Build dict of request headers to send to tunnel (and thus to feeder).
-    If feeder_id is given and we can resolve the feeder's IP, set Host to <ip>:8080
-    so the feeder serves tar1090 at / (same as when browsing http://feeder-ip:8080/).
+    Set Host to the feeder's host:8080 (from tunnel register, else DB ip, else localhost) so the
+    feeder serves tar1090/graphs1090 the same as when browsed directly.
     """
     out = {}
     for key, value in request.headers:
@@ -53,10 +70,7 @@ def _request_headers_for_proxy(feeder_id: str = ""):
             continue
         out[key] = value
     if feeder_id:
-        feeder = FeederModel.get_by_tunnel_feeder_id(feeder_id)
-        if feeder:
-            host_val = feeder.get("ip_address")
-            out["Host"] = f"{host_val}:8080" if host_val else "localhost:8080"
+        out["Host"] = _get_feeder_host_for_proxy(feeder_id)
     return out
 
 

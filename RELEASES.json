@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.213",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel: feeder can send 'host' (e.g. '100.85.149.249:8080') in register; aggregator uses it for Host header so map/stats work. See docs/FEEDER_TUNNEL_REGISTER.md."
+    ]
+  },
+  {
     "version": "1.0.212",
     "date": "2026-03-15",
     "notes": [
