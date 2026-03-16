@@ -1,7 +1,9 @@
 """Database models and query helpers for the TAKNET-PS dashboard."""
 
+import json
 import os
 import sqlite3
+from datetime import datetime, timezone
 
 DB_PATH = os.environ.get("DB_PATH", "/data/aggregator.db")
 
@@ -335,14 +337,85 @@ class UpdateModel:
 
 # ── Background Tasks ─────────────────────────────────────────────────────────
 
-def mark_stale_feeders():
-    """Mark feeders as stale if last_seen > 2 minutes ago."""
-    conn = get_db()
+
+_STALE_WINDOW_SECONDS = 120  # how far back we look for traffic (2 minutes)
+_STALE_MPS_THRESHOLD = 0.01  # messages per second below this -> stale (approx 1 msg every ~100s)
+
+
+def _get_feeder_stale_snapshot(conn, feeder_id: int):
+    """Return (last_messages, ts_utc) snapshot for feeder_id from settings, or None."""
+    key = f"feeder_stale_snapshot_{feeder_id}"
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    if not row or not row["value"]:
+        return None
+    try:
+        data = json.loads(row["value"])
+        return int(data.get("last_messages", 0)), float(data.get("ts", 0.0))
+    except Exception:
+        return None
+
+
+def _set_feeder_stale_snapshot(conn, feeder_id: int, last_messages: int, ts_utc: float):
+    """Persist (last_messages, ts_utc) snapshot for feeder_id into settings."""
+    key = f"feeder_stale_snapshot_{feeder_id}"
+    value = json.dumps({"last_messages": int(last_messages), "ts": float(ts_utc)})
     conn.execute(
-        """UPDATE feeders SET status = 'stale'
-           WHERE last_seen < datetime('now', '-2 minutes')
-           AND status = 'active'"""
+        "INSERT INTO settings(key, value, updated_at) VALUES(?, ?, CURRENT_TIMESTAMP) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+        (key, value),
     )
+
+
+def mark_stale_feeders():
+    """Mark feeders as stale/active based on recent message rate instead of VPN state.
+
+    For each feeder we track a snapshot of (messages_received, timestamp_utc) in the settings table.
+    Every run we:
+      - If we have no snapshot yet: create one and skip (need a baseline).
+      - If enough time has passed (>= _STALE_WINDOW_SECONDS), compute messages-per-second over that
+        window. If it's below _STALE_MPS_THRESHOLD, mark feeder as 'stale'; otherwise 'active'.
+      - Refresh the snapshot to the current counters/time.
+    This way a feeder that remains connected at VPN level but stops sending ADS-B messages will
+    eventually move from active -> stale, and one that resumes traffic will move back to active.
+    """
+    conn = get_db()
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    rows = conn.execute(
+        "SELECT id, messages_received, status FROM feeders"
+    ).fetchall()
+
+    for row in rows:
+        feeder_id = row["id"]
+        current_msgs = int(row.get("messages_received") or 0)
+        current_status = row.get("status") or "active"
+
+        snap = _get_feeder_stale_snapshot(conn, feeder_id)
+        # First time seeing this feeder: record snapshot and move on
+        if not snap:
+            _set_feeder_stale_snapshot(conn, feeder_id, current_msgs, now_ts)
+            continue
+
+        last_msgs, last_ts = snap
+        delta_sec = now_ts - last_ts
+        if delta_sec < _STALE_WINDOW_SECONDS:
+            # Not enough history yet; just refresh snapshot to avoid drift and continue
+            _set_feeder_stale_snapshot(conn, feeder_id, current_msgs, now_ts)
+            continue
+
+        delta_msgs = max(current_msgs - last_msgs, 0)
+        mps = (delta_msgs / delta_sec) if delta_sec > 0 else 0.0
+
+        new_status = "active" if mps > _STALE_MPS_THRESHOLD else "stale"
+        if new_status != current_status:
+            conn.execute(
+                "UPDATE feeders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (new_status, feeder_id),
+            )
+
+        # Refresh snapshot for next window
+        _set_feeder_stale_snapshot(conn, feeder_id, current_msgs, now_ts)
+
     conn.commit()
     conn.close()
 
