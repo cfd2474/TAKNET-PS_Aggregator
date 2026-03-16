@@ -81,12 +81,17 @@ _FEEDER_LOCAL_ORIGINS = (
     "http://localhost:8080",
     "https://localhost:8080",
 )
+# Regex: any http(s)://host:8080 (feeder's tar1090 port — 127.0.0.1, NetBird IP, etc.)
+_RE_FEEDER_ORIGIN_8080 = re.compile(r"https?://[^/]+:8080")
 
 
 def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
-    """Rewrite feeder local URLs (127.0.0.1:8080, localhost:8080) to proxy path so Map/Statistics open in tunnel."""
+    """Rewrite feeder local URLs to proxy path so Map/Statistics open in tunnel.
+    Covers 127.0.0.1:8080, localhost:8080, and any host:8080 (e.g. feeder's NetBird IP).
+    """
     for origin in _FEEDER_LOCAL_ORIGINS:
         text = text.replace(origin, prefix)
+    text = _RE_FEEDER_ORIGIN_8080.sub(prefix, text)
     return text
 
 

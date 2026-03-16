@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.209",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: rewrite any http(s)://host:8080 (e.g. feeder NetBird IP) to proxy path so Map and Statistics links work when feeder uses non-localhost URL."
+    ]
+  },
+  {
     "version": "1.0.208",
     "date": "2026-03-15",
     "notes": [
