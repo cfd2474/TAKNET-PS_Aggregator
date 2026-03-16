@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.218",
+    "date": "2026-03-16",
+    "notes": [
+      "CoT push: default CoT stale seconds to 30 (was 15) for COTProxy config field and pipeline fallback."
+    ]
+  },
+  {
     "version": "1.0.217",
     "date": "2026-03-16",
     "notes": [

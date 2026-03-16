@@ -67,7 +67,7 @@ COT_TYPE_MIL = "a-f-A-M"
 # Unknown air track (e.g. TIS-B); MIL-STD-2525 a-f-A-U
 COT_TYPE_UNKNOWN_AIR = "a-f-A-U"
 # Stale time seconds — how long until position is considered stale (default; use cot_stale_seconds in output config to override)
-COT_STALE_SECONDS = 15
+COT_STALE_SECONDS = 30
 # ft/min per knot (for track slope from baro_rate and gs)
 FT_PER_MIN_PER_KNOT = 101.268
 
