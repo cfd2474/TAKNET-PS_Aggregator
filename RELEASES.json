@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.216",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder detail: remove Map/Stats buttons that do not work reliably over tunnel and add note on Connect to feeder explaining map/stats require direct VPN/NetBird access."
+    ]
+  },
+  {
     "version": "1.0.215",
     "date": "2026-03-15",
     "notes": [
@@ -178,14 +185,14 @@
     "version": "1.0.190",
     "date": "2026-03-13",
     "notes": [
-      "COTProxy: Civil and Military reference sections overhauled — now use icon grids (same layout as PS Air / NATO Icons); clickable to pick icon + CoT type; removed milsymbol dependency."
+      "COTProxy: Civil and Military reference sections overhauled \u2014 now use icon grids (same layout as PS Air / NATO Icons); clickable to pick icon + CoT type; removed milsymbol dependency."
     ]
   },
   {
     "version": "1.0.189",
     "date": "2026-03-13",
     "notes": [
-      "COTProxy: NATO Icons (Friend Air) reference section — grid of 104 icons like PS Air Icons; clickable to pick for transform; added to modal icon picker; iconUrlForPath resolves Friend Air paths."
+      "COTProxy: NATO Icons (Friend Air) reference section \u2014 grid of 104 icons like PS Air Icons; clickable to pick for transform; added to modal icon picker; iconUrlForPath resolves Friend Air paths."
     ]
   },
   {
@@ -206,7 +213,7 @@
     "version": "1.0.186",
     "date": "2026-03-11",
     "notes": [
-      "Feeders: parse MLAT client name on ' | v' — display name (before) and software version (after) shown on feeder list, feeder detail, and NetBird peers table (version by IP match)."
+      "Feeders: parse MLAT client name on ' | v' \u2014 display name (before) and software version (after) shown on feeder list, feeder detail, and NetBird peers table (version by IP match)."
     ]
   },
   {
@@ -220,42 +227,42 @@
     "version": "1.0.184",
     "date": "2026-03-11",
     "notes": [
-      "COTProxy: expandable CoT type reference sections — Civil aircraft and Military aircraft (MIL-STD-2525D), code + name tables matching CoT type dropdown; link to FTS CoT table."
+      "COTProxy: expandable CoT type reference sections \u2014 Civil aircraft and Military aircraft (MIL-STD-2525D), code + name tables matching CoT type dropdown; link to FTS CoT table."
     ]
   },
   {
     "version": "1.0.183",
     "date": "2026-03-11",
     "notes": [
-      "COTProxy: PS Air Icons — remove path-format code text; show icon names as readable (underscores to spaces, no .png); full label visible with wrap."
+      "COTProxy: PS Air Icons \u2014 remove path-format code text; show icon names as readable (underscores to spaces, no .png); full label visible with wrap."
     ]
   },
   {
     "version": "1.0.182",
     "date": "2026-03-11",
     "notes": [
-      "CoT: TIS-B specialized handling — TIS-B aircraft (readsb type tisb_*) get unknown air track (a-f-A-U) and remarks include Squawk: TISB_B."
+      "CoT: TIS-B specialized handling \u2014 TIS-B aircraft (readsb type tisb_*) get unknown air track (a-f-A-U) and remarks include Squawk: TISB_B."
     ]
   },
   {
     "version": "1.0.181",
     "date": "2026-03-11",
     "notes": [
-      "User menu: High contrast view toggle — light theme with dark text for bright conditions/glare; preference stored in localStorage and applied across pages."
+      "User menu: High contrast view toggle \u2014 light theme with dark text for bright conditions/glare; preference stored in localStorage and applied across pages."
     ]
   },
   {
     "version": "1.0.180",
     "date": "2026-03-11",
     "notes": [
-      "Outputs: fix network admin unable to edit/delete own connection — compare created_by to user_id as int so Flask-Login string id matches DB; users can always view, edit, delete their own outputs."
+      "Outputs: fix network admin unable to edit/delete own connection \u2014 compare created_by to user_id as int so Flask-Login string id matches DB; users can always view, edit, delete their own outputs."
     ]
   },
   {
     "version": "1.0.179",
     "date": "2026-03-11",
     "notes": [
-      "COTProxy transform rules table: column filters — freetype (HEX, callsign, reg, model) filter as you type; dropdowns (type, domain, agency, CoT type) filter on selection; facets API for dropdown options; Clear link to reset filters."
+      "COTProxy transform rules table: column filters \u2014 freetype (HEX, callsign, reg, model) filter as you type; dropdowns (type, domain, agency, CoT type) filter on selection; facets API for dropdown options; Clear link to reset filters."
     ]
   },
   {
@@ -276,7 +283,7 @@
     "version": "1.0.176",
     "date": "2026-03-11",
     "notes": [
-      "CoT push: connection reuse (persistent socket per output, reconnect on failure), delta updates (send only aircraft with changed lat/lon/alt/track/gs), configurable interval via COT_PUSH_INTERVAL_SECONDS (default 2), shorter aircraft fetch timeout; goal 1–2s marker update rate."
+      "CoT push: connection reuse (persistent socket per output, reconnect on failure), delta updates (send only aircraft with changed lat/lon/alt/track/gs), configurable interval via COT_PUSH_INTERVAL_SECONDS (default 2), shorter aircraft fetch timeout; goal 1\u20132s marker update rate."
     ]
   },
   {
@@ -290,7 +297,7 @@
     "version": "1.0.174",
     "date": "2026-03-11",
     "notes": [
-      "CoT push: configurable CoT stale time per output (cot_stale_seconds, 5–300s) and default reduced to 15s so TAK markers refresh/expire sooner; add CoT stale (seconds) control on COTProxy config page to reduce slow-update feel in TAK."
+      "CoT push: configurable CoT stale time per output (cot_stale_seconds, 5\u2013300s) and default reduced to 15s so TAK markers refresh/expire sooner; add CoT stale (seconds) control on COTProxy config page to reduce slow-update feel in TAK."
     ]
   },
   {
@@ -318,14 +325,14 @@
     "version": "1.0.170",
     "date": "2026-03-10",
     "notes": [
-      "CoT push: use tar1090/ADS-B Exchange type description when present (t_adsb, type_desc, or desc 3–4 char: L/S/A/T=fixed, H/G=rotor) to set CoT type; falls back to emitter category. See ADS-B Exchange map help and FTS CoT table."
+      "CoT push: use tar1090/ADS-B Exchange type description when present (t_adsb, type_desc, or desc 3\u20134 char: L/S/A/T=fixed, H/G=rotor) to set CoT type; falls back to emitter category. See ADS-B Exchange map help and FTS CoT table."
     ]
   },
   {
     "version": "1.0.169",
     "date": "2026-03-10",
     "notes": [
-      "CoT push: untransformed CoT type derived from ADS-B per FTS CoT table — civil/military from dbFlags (bit 1), fixed/rotor/LTA/UAV from ICAO emitter category (e.g. a-f-A-C-F, a-f-A-M-H)."
+      "CoT push: untransformed CoT type derived from ADS-B per FTS CoT table \u2014 civil/military from dbFlags (bit 1), fixed/rotor/LTA/UAV from ICAO emitter category (e.g. a-f-A-C-F, a-f-A-M-H)."
     ]
   },
   {
@@ -430,14 +437,14 @@
     "version": "1.0.154",
     "date": "2026-03-10",
     "notes": [
-      "CoT sender: interval 3s → 10s, socket timeout 10s → 5s to prevent job overlap and 'maximum instances reached' skips."
+      "CoT sender: interval 3s \u2192 10s, socket timeout 10s \u2192 5s to prevent job overlap and 'maximum instances reached' skips."
     ]
   },
   {
     "version": "1.0.153",
     "date": "2026-03-10",
     "notes": [
-      "Outputs: enable/disable per output — switch in each output's settings (modal) and On/Off button in the outputs list. Disabled outputs stop push/API/CoT until re-enabled."
+      "Outputs: enable/disable per output \u2014 switch in each output's settings (modal) and On/Off button in the outputs list. Disabled outputs stop push/API/CoT until re-enabled."
     ]
   },
   {
@@ -451,14 +458,14 @@
     "version": "1.0.151",
     "date": "2026-03-09",
     "notes": [
-      "CoT push: in-app sender runs every 3s — fetches aircraft, applies COTProxy transforms and pass_all filter, builds CoT XML, pushes over TCP/TLS to TAK Server. No external adsbcot required."
+      "CoT push: in-app sender runs every 3s \u2014 fetches aircraft, applies COTProxy transforms and pass_all filter, builds CoT XML, pushes over TCP/TLS to TAK Server. No external adsbcot required."
     ]
   },
   {
     "version": "1.0.150",
     "date": "2026-03-09",
     "notes": [
-      "P12 upload: handle cryptography ValueError('Invalid password or PKCS12 data') — retry with empty bytes when no password given and show friendly error message."
+      "P12 upload: handle cryptography ValueError('Invalid password or PKCS12 data') \u2014 retry with empty bytes when no password given and show friendly error message."
     ]
   },
   {
@@ -507,7 +514,7 @@
     "version": "1.0.143",
     "date": "2026-03-09",
     "notes": [
-      "Output data filters: Range Limits (lat/lon/radius nm, max 250 nm) and Elevation Filter (min/max ft MSL, 0–40,000) in output setup modal. Apply to JSON, Beast Raw, and CoT. Both off by default; enable checkboxes show/hide sections. Elevation has No Minimum/No Maximum and paired sliders (100 ft steps 0–5000, 1000 ft above)."
+      "Output data filters: Range Limits (lat/lon/radius nm, max 250 nm) and Elevation Filter (min/max ft MSL, 0\u201340,000) in output setup modal. Apply to JSON, Beast Raw, and CoT. Both off by default; enable checkboxes show/hide sections. Elevation has No Minimum/No Maximum and paired sliders (100 ft steps 0\u20135000, 1000 ft above)."
     ]
   },
   {
@@ -625,28 +632,28 @@
     "version": "1.0.127",
     "date": "2026-02-26",
     "notes": [
-      "Fix: Airplanes.live rate limit (429) — default poll interval 5s to stay under 1 req/sec; on 429 back off 60s and keep last data instead of clearing map."
+      "Fix: Airplanes.live rate limit (429) \u2014 default poll interval 5s to stay under 1 req/sec; on 429 back off 60s and keep last data instead of clearing map."
     ]
   },
   {
     "version": "1.0.126",
     "date": "2026-02-26",
     "notes": [
-      "Fix: Airplanes.live — parse API response using \"ac\" key (airplanes.live returns aircraft array as \"ac\", not \"aircraft\"). Receive and map data now connect correctly."
+      "Fix: Airplanes.live \u2014 parse API response using \"ac\" key (airplanes.live returns aircraft array as \"ac\", not \"aircraft\"). Receive and map data now connect correctly."
     ]
   },
   {
     "version": "1.0.125",
     "date": "2026-02-26",
     "notes": [
-      "Feature: Airplanes.live incoming — receive merged aircraft from airplanes.live API (point/radius). Config → Services: toggle Receive from Airplanes.live; dashboard status card; feeder data remains primary when duplicates exist; 10s staleness; data cleared when off."
+      "Feature: Airplanes.live incoming \u2014 receive merged aircraft from airplanes.live API (point/radius). Config \u2192 Services: toggle Receive from Airplanes.live; dashboard status card; feeder data remains primary when duplicates exist; 10s staleness; data cleared when off."
     ]
   },
   {
     "version": "1.0.124",
     "date": "2026-02-26",
     "notes": [
-      "Docs: ADSBHUB_INTEGRATION.md — add Verification section (receive off discards ADSBHub data; 10s staleness for local and ADSBHub; manual checks)."
+      "Docs: ADSBHUB_INTEGRATION.md \u2014 add Verification section (receive off discards ADSBHub data; 10s staleness for local and ADSBHub; manual checks)."
     ]
   },
   {
@@ -660,42 +667,42 @@
     "version": "1.0.122",
     "date": "2026-02-26",
     "notes": [
-      "ADSBHub receive off: map and API clear immediately — dashboard writes receive_enabled to shared volume; merger reads each cycle and drops all ADSBHub aircraft when disabled. Staleness: aircraft not seen in 10s (MERGER_STALE_SECONDS) are purged from merged output so map/API get no stale data. Dashboard adsbhub-status volume rw for receive_enabled file."
+      "ADSBHub receive off: map and API clear immediately \u2014 dashboard writes receive_enabled to shared volume; merger reads each cycle and drops all ADSBHub aircraft when disabled. Staleness: aircraft not seen in 10s (MERGER_STALE_SECONDS) are purged from merged output so map/API get no stale data. Dashboard adsbhub-status volume rw for receive_enabled file."
     ]
   },
   {
     "version": "1.0.121",
     "date": "2026-02-26",
     "notes": [
-      "Dashboard: Aircraft Tracked card shows breakdown — direct (feeders) and network (ADSBHub); API status returns aircraft.direct and aircraft.network from merger source field."
+      "Dashboard: Aircraft Tracked card shows breakdown \u2014 direct (feeders) and network (ADSBHub); API status returns aircraft.direct and aircraft.network from merger source field."
     ]
   },
   {
     "version": "1.0.120",
     "date": "2026-02-26",
     "notes": [
-      "Map: fix aircraft marker click — map click no longer clears sidebar when clicking a dot; larger hit area (radius 8); L.DomEvent.stopPropagation and ev.target for reliable sidebar details. REST API docs: document merger-added fields source and on_ground."
+      "Map: fix aircraft marker click \u2014 map click no longer clears sidebar when clicking a dot; larger hit area (radius 8); L.DomEvent.stopPropagation and ev.target for reliable sidebar details. REST API docs: document merger-added fields source and on_ground."
     ]
   },
   {
     "version": "1.0.119",
     "date": "2026-02-26",
     "notes": [
-      "Map: Merged view is default; tar1090 iframe loads only when you switch to tar1090 (avoids 404s in console). Clear hint: 'Click a blue dot → details in sidebar' and banner on tar1090 view: 'For aircraft detail sidebar, switch to Merged (all) above.'"
+      "Map: Merged view is default; tar1090 iframe loads only when you switch to tar1090 (avoids 404s in console). Clear hint: 'Click a blue dot \u2192 details in sidebar' and banner on tar1090 view: 'For aircraft detail sidebar, switch to Merged (all) above.'"
     ]
   },
   {
     "version": "1.0.118",
     "date": "2026-03-07",
     "notes": [
-      "Fix: Merged map sidebar — stop click propagation on aircraft marker so map click does not clear selection; invalidateSize when showing Merged view; use marker._ac for sidebar"
+      "Fix: Merged map sidebar \u2014 stop click propagation on aircraft marker so map click does not clear selection; invalidateSize when showing Merged view; use marker._ac for sidebar"
     ]
   },
   {
     "version": "1.0.117",
     "date": "2026-03-07",
     "notes": [
-      "Merged map: tar1090-style sidebar — click aircraft for details (ICAO, callsign, altitude, speed, track, vert rate, squawk, position, source, on ground); click map to clear",
+      "Merged map: tar1090-style sidebar \u2014 click aircraft for details (ICAO, callsign, altitude, speed, track, vert rate, squawk, position, source, on ground); click map to clear",
       "ADSBHub merger: parse on_ground from MSG,3; ADSBHUB_INTEGRATION.md documents all fields from feed"
     ]
   },
@@ -710,7 +717,7 @@
     "version": "1.0.115",
     "date": "2026-03-07",
     "notes": [
-      "Map: default view is 'Merged (all)' — Leaflet map fetches /data/aircraft.json so all aircraft (local + ADSBHub) show; toggle to tar1090 for full UI",
+      "Map: default view is 'Merged (all)' \u2014 Leaflet map fetches /data/aircraft.json so all aircraft (local + ADSBHub) show; toggle to tar1090 for full UI",
       "Nginx: /tar1090/data/aircraft.json prefix match, pass query string, no-cache headers"
     ]
   },
@@ -718,7 +725,7 @@
     "version": "1.0.114",
     "date": "2026-03-07",
     "notes": [
-      "Fix: tar1090 map now uses merged aircraft (local + ADSBHub) — nginx routes /tar1090/data/aircraft.json to aircraft-merger so map shows all positions"
+      "Fix: tar1090 map now uses merged aircraft (local + ADSBHub) \u2014 nginx routes /tar1090/data/aircraft.json to aircraft-merger so map shows all positions"
     ]
   },
   {
@@ -732,7 +739,7 @@
     "version": "1.0.112",
     "date": "2026-03-07",
     "notes": [
-      "Fix: dashboard container start failure — mount adsbhub-status at /app/adsbhub-status (not under read-only /app/var); set ADSBHUB_STATUS_PATH for dashboard",
+      "Fix: dashboard container start failure \u2014 mount adsbhub-status at /app/adsbhub-status (not under read-only /app/var); set ADSBHUB_STATUS_PATH for dashboard",
       "Docs: escape $ in ADSBHUB_CLIENT_KEY as $$ in .env when using Docker Compose"
     ]
   },
@@ -740,7 +747,7 @@
     "version": "1.0.111",
     "date": "2026-02-26",
     "notes": [
-      "ADSBHub: Config → Services — Feed/Receive toggles plus CLIENTKEY field; key and toggles persisted to .env and feeder/merger restarted on Save",
+      "ADSBHub: Config \u2192 Services \u2014 Feed/Receive toggles plus CLIENTKEY field; key and toggles persisted to .env and feeder/merger restarted on Save",
       "ADSBHub feed: SBS from readsb:30003, CLIENTKEY sent as first line to data.adsbhub.org:5001 (per Connection Guide); ADSBHUB_CLIENT_KEY in env and compose"
     ]
   },
@@ -755,28 +762,28 @@
     "version": "1.0.109",
     "date": "2026-02-26",
     "notes": [
-      "Health: capacity calculator shows est. more feeders by type — NetBird, Tailscale, Public (VPN ~2×/1.5× CPU per feeder)"
+      "Health: capacity calculator shows est. more feeders by type \u2014 NetBird, Tailscale, Public (VPN ~2\u00d7/1.5\u00d7 CPU per feeder)"
     ]
   },
   {
     "version": "1.0.108",
     "date": "2026-02-26",
     "notes": [
-      "Health: background refresh no longer flashes screen — data updates in place every 5s without showing loading overlay"
+      "Health: background refresh no longer flashes screen \u2014 data updates in place every 5s without showing loading overlay"
     ]
   },
   {
     "version": "1.0.107",
     "date": "2026-02-26",
     "notes": [
-      "Health: Capacity calculator — CPU % per feeder, target %, remaining %, est. more feeders; feeder breakdown by NetBird/Tailscale/Public; conservative estimate when adding VPN feeders"
+      "Health: Capacity calculator \u2014 CPU % per feeder, target %, remaining %, est. more feeders; feeder breakdown by NetBird/Tailscale/Public; conservative estimate when adding VPN feeders"
     ]
   },
   {
     "version": "1.0.106",
     "date": "2026-02-26",
     "notes": [
-      "Health: show active feeder count in Overview and capacity-planning note (baseline/peak CPU vs feeder count; keep peak under ~70–80%); README capacity planning subsection"
+      "Health: show active feeder count in Overview and capacity-planning note (baseline/peak CPU vs feeder count; keep peak under ~70\u201380%); README capacity planning subsection"
     ]
   },
   {
@@ -790,7 +797,7 @@
     "version": "1.0.104",
     "date": "2026-02-26",
     "notes": [
-      "Fix: Host health snapshot now reports real process CPU % — use two samples with 0.2s sleep so psutil returns non-zero values (first call per process was 0)"
+      "Fix: Host health snapshot now reports real process CPU % \u2014 use two samples with 0.2s sleep so psutil returns non-zero values (first call per process was 0)"
     ]
   },
   {
@@ -804,7 +811,7 @@
     "version": "1.0.102",
     "date": "2026-02-26",
     "notes": [
-      "Installer: fix host psutil install — try dnf/yum python3-psutil first, then install gcc and python3-devel before pip; clearer warning with exact fix (dnf install gcc python3-devel && pip3 install psutil)"
+      "Installer: fix host psutil install \u2014 try dnf/yum python3-psutil first, then install gcc and python3-devel before pip; clearer warning with exact fix (dnf install gcc python3-devel && pip3 install psutil)"
     ]
   },
   {
@@ -818,35 +825,35 @@
     "version": "1.0.100",
     "date": "2026-02-26",
     "notes": [
-      "New: Config → Health shows full server view when host snapshot is enabled — overview, history chart and top processes (netbird, readsb, python, etc.) from the host; installer runs scripts/health_snapshot_host.py every 30s via systemd timer and dashboard reads var/health_history.json (mount /opt/taknet-aggregator/var); requires python3 and psutil on host"
+      "New: Config \u2192 Health shows full server view when host snapshot is enabled \u2014 overview, history chart and top processes (netbird, readsb, python, etc.) from the host; installer runs scripts/health_snapshot_host.py every 30s via systemd timer and dashboard reads var/health_history.json (mount /opt/taknet-aggregator/var); requires python3 and psutil on host"
     ]
   },
   {
     "version": "1.0.99",
     "date": "2026-02-26",
     "notes": [
-      "New: Health history on Config → Health — CPU-over-time chart for the last 60 minutes (30s samples); hover over the chart to see top processes at that time to identify what causes CPU spikes (e.g. 30% vs normal 10%)"
+      "New: Health history on Config \u2192 Health \u2014 CPU-over-time chart for the last 60 minutes (30s samples); hover over the chart to see top processes at that time to identify what causes CPU spikes (e.g. 30% vs normal 10%)"
     ]
   },
   {
     "version": "1.0.98",
     "date": "2026-02-26",
     "notes": [
-      "New: System Health page (Config → Health) — detailed CPU per-core, memory breakdown, disk per-mount, and top processes (like top/htop); dashboard System Health card links to it for admins; GET /api/health/detail (admin only)"
+      "New: System Health page (Config \u2192 Health) \u2014 detailed CPU per-core, memory breakdown, disk per-mount, and top processes (like top/htop); dashboard System Health card links to it for admins; GET /api/health/detail (admin only)"
     ]
   },
   {
     "version": "1.0.97",
     "date": "2026-02-26",
     "notes": [
-      "Fix: Update check now bypasses cache — API sends no-store headers and requests GitHub with no-cache so 'Check Now' and page load always see latest; Updates page fetch uses cache: 'no-store' so browser does not reuse cached 'no update available'"
+      "Fix: Update check now bypasses cache \u2014 API sends no-store headers and requests GitHub with no-cache so 'Check Now' and page load always see latest; Updates page fetch uses cache: 'no-store' so browser does not reuse cached 'no update available'"
     ]
   },
   {
     "version": "1.0.96",
     "date": "2026-02-26",
     "notes": [
-      "Change: Outputs table — removed Status column, added Created column showing date/time each output was created"
+      "Change: Outputs table \u2014 removed Status column, added Created column showing date/time each output was created"
     ]
   },
   {
