@@ -54,8 +54,9 @@ def _request_headers_for_proxy(feeder_id: str = ""):
         out[key] = value
     if feeder_id:
         feeder = FeederModel.get_by_tunnel_feeder_id(feeder_id)
-        if feeder and feeder.get("ip_address"):
-            out["Host"] = f"{feeder['ip_address']}:8080"
+        if feeder:
+            host_val = feeder.get("ip_address")
+            out["Host"] = f"{host_val}:8080" if host_val else "localhost:8080"
     return out
 
 
@@ -118,8 +119,10 @@ def _rewrite_location_header(value: str, feeder_id: str) -> str:
     return value
 
 
-def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str) -> bytes:
-    """Inject <base> and rewrite absolute paths in HTML so assets and API calls hit the proxy."""
+def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str, origin_no_slash: str = "") -> bytes:
+    """Inject <base> and rewrite absolute paths in HTML so assets and API calls hit the proxy.
+    origin_no_slash is used for window.location.origin in inline JS (no trailing slash to avoid .../id//path 404s).
+    """
     try:
         text = body.decode("utf-8", errors="replace")
     except Exception:
@@ -146,11 +149,12 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str) -> bytes:
     else:
         text = base_tag + text
     # Rewrite inline <script>...</script> so fetch("/api/...") etc. go through the proxy
+    js_origin = origin_no_slash or base_url.rstrip("/")
     def _rewrite_inline_script(match):
         open_tag, content, close = match.group(1), match.group(2), match.group(3)
         if "src=" in open_tag.lower():
             return match.group(0)
-        return open_tag + _rewrite_js_text(content, feeder_id, base_url) + close
+        return open_tag + _rewrite_js_text(content, feeder_id, js_origin) + close
     text = re.sub(
         r'(<script(?:\s[^>]*)?>)([\s\S]*?)(</script>)',
         _rewrite_inline_script,
@@ -160,18 +164,17 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str) -> bytes:
     return text.encode("utf-8", errors="replace")
 
 
-def _rewrite_js_text(text: str, feeder_id: str, base_url: str = "") -> str:
+def _rewrite_js_text(text: str, feeder_id: str, origin_for_js: str = "") -> str:
     """Rewrite path strings in JS (in quoted strings only) so API/static calls hit the proxy.
     We only replace after \" or ' or ` to avoid corrupting regex literals. Skip '/ when it's
     part of a regex like /'/g (e.g. feeder Settings SSID escaping). See docs/FEEDER_WEB_API_REFERENCE.md.
-    When base_url is set, replace window.location.origin so feeder's map/stats URLs use the proxy base.
+    origin_for_js (no trailing slash) replaces window.location.origin so map/stats URLs don't get double slash.
     """
     prefix = _feeder_prefix(feeder_id)
     if prefix in text:
         return text
-    # So feeder's map/stats URLs (built as window.location.origin + "/" or + "/graphs1090/...") use proxy base
-    if base_url:
-        text = text.replace("window.location.origin", json.dumps(base_url))
+    if origin_for_js:
+        text = text.replace("window.location.origin", json.dumps(origin_for_js.rstrip("/")))
     # Map/Statistics: rewrite feeder local URLs (e.g. window.open('http://127.0.0.1:8080/'))
     text = _rewrite_feeder_local_urls(text, prefix)
     text = text.replace('"/', '"' + prefix + "/")
@@ -185,13 +188,13 @@ def _rewrite_js_text(text: str, feeder_id: str, base_url: str = "") -> str:
     return text
 
 
-def _rewrite_js_body(body: bytes, feeder_id: str, base_url: str = "") -> bytes:
+def _rewrite_js_body(body: bytes, feeder_id: str, origin_for_js: str = "") -> bytes:
     """Rewrite absolute path strings in JS (fetch, etc.) so API calls hit the proxy."""
     try:
         text = body.decode("utf-8", errors="replace")
     except Exception:
         return body
-    return _rewrite_js_text(text, feeder_id, base_url).encode("utf-8", errors="replace")
+    return _rewrite_js_text(text, feeder_id, origin_for_js).encode("utf-8", errors="replace")
 
 
 def _rewrite_css_body(body: bytes, feeder_id: str) -> bytes:
@@ -295,13 +298,14 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
             if content_encoding:
                 body_bytes = _decompress_body(body_bytes, content_encoding)
             base_url = request.url_root.rstrip("/") + _feeder_prefix(feeder_id) + "/"
-            body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url)
+            origin_no_slash = base_url.rstrip("/")
+            body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url, origin_no_slash)
             we_rewrote = True
         elif "javascript" in content_type:
             if content_encoding:
                 body_bytes = _decompress_body(body_bytes, content_encoding)
-            base_url = request.url_root.rstrip("/") + _feeder_prefix(feeder_id) + "/"
-            body_bytes = _rewrite_js_body(body_bytes, feeder_id, base_url)
+            origin_no_slash = request.url_root.rstrip("/") + _feeder_prefix(feeder_id)
+            body_bytes = _rewrite_js_body(body_bytes, feeder_id, origin_no_slash)
             we_rewrote = True
         elif "text/css" in content_type:
             if content_encoding:

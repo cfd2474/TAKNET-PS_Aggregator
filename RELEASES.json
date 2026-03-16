@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.212",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel: use origin without trailing slash in JS so map/stats URLs avoid .../id//graphs1090 (404). Host fallback to localhost:8080 when feeder has no IP."
+    ]
+  },
+  {
     "version": "1.0.211",
     "date": "2026-03-15",
     "notes": [
