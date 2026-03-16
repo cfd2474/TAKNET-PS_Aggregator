@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.202",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: rewrite JS template literals and all \"/api/\" paths so feeder dashboard API calls (power-status, taknet-ps/stats, network-quality, sdr/status, etc.) go through proxy and work."
+    ]
+  },
+  {
     "version": "1.0.201",
     "date": "2026-03-15",
     "notes": [

@@ -120,9 +120,13 @@ def _rewrite_js_body(body: bytes, feeder_id: str) -> bytes:
     prefix = _feeder_prefix(feeder_id)
     if prefix in text:
         return body
-    # Path-only strings: "/api/..." and '/api/...' -> prefix + path
+    # Path-only strings: "/api/..." and '/api/...' (double/single quote and template literal)
     text = text.replace('"/', '"' + prefix + "/")
     text = text.replace("'/", "'" + prefix + "/")
+    text = text.replace('`/', '`' + prefix + "/")
+    # Catch API paths built dynamically (e.g. base + "/api/...", template literals)
+    text = text.replace("/api/", prefix + "/api/")
+    text = text.replace(prefix + prefix, prefix)  # undo any double prefix
     return text.encode("utf-8", errors="replace")
 
 
