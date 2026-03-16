@@ -1,4 +1,9 @@
-"""Feeder tunnel reverse proxy: /feeder/<feeder_id>/... proxies HTTP to feeder over its WebSocket tunnel."""
+"""Feeder tunnel reverse proxy: /feeder/<feeder_id>/... proxies HTTP to feeder over its WebSocket tunnel.
+
+Path rewriting ensures /api/... and /static/... in HTML/JS become /feeder/<id>/api/... and /feeder/<id>/static/...
+so the browser sends requests through the proxy. Forward path to feeder is path minus the /feeder/<id> prefix.
+See docs/FEEDER_WEB_API_REFERENCE.md for the full feeder route list and proxy requirements.
+"""
 
 import base64
 import gzip
@@ -108,7 +113,33 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str) -> bytes:
         text = text.replace("<HEAD>", "<HEAD>" + base_tag, 1)
     else:
         text = base_tag + text
+    # Rewrite inline <script>...</script> so fetch("/api/...") etc. go through the proxy
+    def _rewrite_inline_script(match):
+        open_tag, content, close = match.group(1), match.group(2), match.group(3)
+        if "src=" in open_tag.lower():
+            return match.group(0)
+        return open_tag + _rewrite_js_text(content, feeder_id) + close
+    text = re.sub(
+        r'(<script(?:\s[^>]*)?>)([\s\S]*?)(</script>)',
+        _rewrite_inline_script,
+        text,
+        flags=re.IGNORECASE,
+    )
     return text.encode("utf-8", errors="replace")
+
+
+def _rewrite_js_text(text: str, feeder_id: str) -> str:
+    """Rewrite absolute path strings in JS so API and static asset calls hit the proxy. See docs/FEEDER_WEB_API_REFERENCE.md."""
+    prefix = _feeder_prefix(feeder_id)
+    if prefix in text:
+        return text
+    text = text.replace('"/', '"' + prefix + "/")
+    text = text.replace("'/", "'" + prefix + "/")
+    text = text.replace('`/', '`' + prefix + "/")
+    text = text.replace("/api/", prefix + "/api/")
+    text = text.replace("/static/", prefix + "/static/")
+    text = text.replace(prefix + prefix, prefix)
+    return text
 
 
 def _rewrite_js_body(body: bytes, feeder_id: str) -> bytes:
@@ -117,17 +148,7 @@ def _rewrite_js_body(body: bytes, feeder_id: str) -> bytes:
         text = body.decode("utf-8", errors="replace")
     except Exception:
         return body
-    prefix = _feeder_prefix(feeder_id)
-    if prefix in text:
-        return body
-    # Path-only strings: "/api/..." and '/api/...' (double/single quote and template literal)
-    text = text.replace('"/', '"' + prefix + "/")
-    text = text.replace("'/", "'" + prefix + "/")
-    text = text.replace('`/', '`' + prefix + "/")
-    # Catch API paths built dynamically (e.g. base + "/api/...", template literals)
-    text = text.replace("/api/", prefix + "/api/")
-    text = text.replace(prefix + prefix, prefix)  # undo any double prefix
-    return text.encode("utf-8", errors="replace")
+    return _rewrite_js_text(text, feeder_id).encode("utf-8", errors="replace")
 
 
 def _rewrite_css_body(body: bytes, feeder_id: str) -> bytes:

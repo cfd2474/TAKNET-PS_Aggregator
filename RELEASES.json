@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.203",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: rewrite inline <script> in HTML so fetch(\"/api/...\") in feeder dashboard page goes through proxy; fixes API 404s when calls are in inline scripts."
+    ]
+  },
+  {
     "version": "1.0.202",
     "date": "2026-03-15",
     "notes": [
