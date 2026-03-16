@@ -40,3 +40,10 @@ ws.send(json.dumps(register_msg))
 ```
 
 After the aggregator is updated and the feeder sends `host` in `register`, **Map (tar1090)** and **Stats (graphs1090)** under `/feeder/<feeder_id>/` should load correctly through the tunnel.
+
+## Troubleshooting
+
+- **Map still shows dashboard / stats “no url”**  
+  - Check **tunnel service logs** when the feeder connects. You should see: `Tunnel registered: feeder_id=... host=...`. If `host=(none)`, the feeder is not sending `host` in the register message—fix the feeder client.  
+  - The aggregator normalizes `host`: it strips any `http://` or `https://` and adds `:8080` if no port is present. So sending `"host": "http://100.85.149.249:8080"` or `"host": "100.85.149.249"` is fine.  
+  - If the feeder’s `feeder_id` uses dashes and the aggregator URL uses underscores (or vice versa), the aggregator tries alternate forms when looking up the host; reconnect the feeder and try again.

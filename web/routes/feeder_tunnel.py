@@ -42,17 +42,41 @@ TUNNEL_SERVICE_URL = os.environ.get("TUNNEL_SERVICE_URL", "http://tunnel:5001")
 PROXY_TIMEOUT = 30
 
 
+def _normalize_feeder_host(host: str) -> str:
+    """Return host:port suitable for HTTP Host header. Strip scheme; ensure port 8080 if missing."""
+    if not host or not isinstance(host, str):
+        return ""
+    s = host.strip()
+    if "://" in s:
+        s = s.split("://", 1)[1].split("/")[0]
+    if ":" not in s:
+        s = f"{s}:8080"
+    return s
+
+
 def _get_feeder_host_for_proxy(feeder_id: str) -> str:
     """Resolve Host value for proxying to this feeder (host:8080). Prefer host from tunnel register, then DB IP."""
     base = TUNNEL_SERVICE_URL.rstrip("/")
-    try:
-        r = requests.get(f"{base}/feeder/{feeder_id}/host", timeout=2)
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("host"):
-                return data["host"]
-    except Exception:
-        pass
+    # Try URL feeder_id first; if 404, try alternate forms (feeder may register with dashes vs underscores)
+    ids_to_try = [feeder_id]
+    alt = feeder_id.replace("_", "-")
+    if alt != feeder_id and alt not in ids_to_try:
+        ids_to_try.append(alt)
+    alt2 = feeder_id.replace("-", "_")
+    if alt2 != feeder_id and alt2 not in ids_to_try:
+        ids_to_try.append(alt2)
+    for fid in ids_to_try:
+        try:
+            r = requests.get(f"{base}/feeder/{fid}/host", timeout=2)
+            if r.status_code == 200:
+                data = r.json()
+                raw = data.get("host")
+                if raw:
+                    normalized = _normalize_feeder_host(raw)
+                    if normalized:
+                        return normalized
+        except Exception:
+            continue
     feeder = FeederModel.get_by_tunnel_feeder_id(feeder_id)
     if feeder and feeder.get("ip_address"):
         return f"{feeder['ip_address']}:8080"

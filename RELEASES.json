@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.214",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel: try alternate feeder_id forms (dashes/underscores) when resolving host from tunnel; normalize host (strip scheme, add :8080 if no port) so map/stats work when feeder registers with different id or URL-style host."
+    ]
+  },
+  {
     "version": "1.0.213",
     "date": "2026-03-15",
     "notes": [
