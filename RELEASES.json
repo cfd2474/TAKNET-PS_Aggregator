@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.210",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: replace window.location.origin in JS (inline and external) with proxy base URL so feeder map/stats links (built from origin) resolve under /feeder/<id>/ and no longer show 'no url' or wrong page."
+    ]
+  },
+  {
     "version": "1.0.209",
     "date": "2026-03-15",
     "notes": [
