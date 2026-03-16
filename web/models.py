@@ -170,6 +170,17 @@ class FeederModel:
         return dict_row(row)
 
     @staticmethod
+    def get_by_tunnel_feeder_id(tunnel_id):
+        """Return feeder dict whose tunnel_feeder_id matches (for URL /feeder/<tunnel_id>/)."""
+        if not tunnel_id:
+            return None
+        for f in FeederModel.get_all():
+            enriched = enrich_feeder_mlat_display(f)
+            if (enriched.get("tunnel_feeder_id") or "").lower() == str(tunnel_id).lower():
+                return enriched
+        return None
+
+    @staticmethod
     def get_stats():
         conn = get_db()
         total = conn.execute("SELECT COUNT(*) as c FROM feeders").fetchone()["c"]

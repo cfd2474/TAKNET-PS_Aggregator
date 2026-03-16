@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.211",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel: set Host to feeder IP:8080 when proxying so feeder serves tar1090 at / (fixes Map loading dashboard instead of map). Add Map (tar1090) and Stats (graphs1090) links on feeder detail page."
+    ]
+  },
+  {
     "version": "1.0.210",
     "date": "2026-03-15",
     "notes": [

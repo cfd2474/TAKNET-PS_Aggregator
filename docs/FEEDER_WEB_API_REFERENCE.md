@@ -1,6 +1,8 @@
 # Feeder Web API Reference (for Aggregator Tunnel Proxy)
 
-When the aggregator proxies the feeder UI through the tunnel (e.g. `https://aggregator/feeder/<feeder_id>/...`), **all requests must be forwarded to the feeder with the same path**. The feeder Flask app serves everything under `/` and `/api/...`. The aggregator must **not** assume or rewrite paths; it should forward the request path as-is (minus the `/feeder/<feeder_id>` prefix) to the feeder.
+When the aggregator proxies the feeder UI through the tunnel (e.g. `https://aggregator/feeder/<feeder_id>/...`), **all requests must be forwarded to the feeder with the same path**.
+
+**Host header:** The aggregator sets `Host: <feeder_ip>:8080` when the feeder's IP is known (from the inputs DB). That makes the feeder serve the same content as when browsed directly (e.g. tar1090 at `/`, graphs1090 at `/graphs1090/`). Without this, some feeders would serve a default site at `/` that redirects to `/dashboard` instead of the map. The feeder Flask app serves everything under `/` and `/api/...`. The aggregator must **not** assume or rewrite paths; it should forward the request path as-is (minus the `/feeder/<feeder_id>` prefix) to the feeder.
 
 **Critical:** The browser will send requests **relative to the current page**. If the user is at `https://aggregator/feeder/92882-test/` then a fetch to `/api/network-quality` will go to `https://aggregator/api/network-quality` (origin + path), **not** to `https://aggregator/feeder/92882-test/api/network-quality`. So the aggregator must either:
 1. **Rewrite HTML/JS** so that API calls use a relative base (e.g. `./api/...` or a prefix like `/feeder/92882-test/api/...`), or

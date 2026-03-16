@@ -15,6 +15,7 @@ import zlib
 import requests
 from flask import Blueprint, Response, request
 
+from models import FeederModel
 from routes.auth_utils import login_required_any
 
 bp = Blueprint("feeder_tunnel", __name__, url_prefix="/feeder")
@@ -41,13 +42,20 @@ TUNNEL_SERVICE_URL = os.environ.get("TUNNEL_SERVICE_URL", "http://tunnel:5001")
 PROXY_TIMEOUT = 30
 
 
-def _request_headers_for_proxy():
-    """Build dict of request headers to send to tunnel (and thus to feeder)."""
+def _request_headers_for_proxy(feeder_id: str = ""):
+    """Build dict of request headers to send to tunnel (and thus to feeder).
+    If feeder_id is given and we can resolve the feeder's IP, set Host to <ip>:8080
+    so the feeder serves tar1090 at / (same as when browsing http://feeder-ip:8080/).
+    """
     out = {}
     for key, value in request.headers:
         if key.lower() in SKIP_HEADERS or value is None:
             continue
         out[key] = value
+    if feeder_id:
+        feeder = FeederModel.get_by_tunnel_feeder_id(feeder_id)
+        if feeder and feeder.get("ip_address"):
+            out["Host"] = f"{feeder['ip_address']}:8080"
     return out
 
 
@@ -248,11 +256,12 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     body_bytes = request.get_data()
     body_b64 = base64.b64encode(body_bytes).decode("ascii") if body_bytes else ""
 
+    headers = _request_headers_for_proxy(feeder_id)
     status, resp_headers, body_bytes = _proxy_to_feeder(
         feeder_id,
         local_path,
         request.method,
-        _request_headers_for_proxy(),
+        headers,
         body_b64,
     )
 
