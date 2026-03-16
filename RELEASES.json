@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.217",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeders: change stale detection to use recent messages-per-second (via snapshots in settings) so active list reflects real ADS-B traffic rather than VPN/NetBird state."
+    ]
+  },
+  {
     "version": "1.0.216",
     "date": "2026-03-16",
     "notes": [
