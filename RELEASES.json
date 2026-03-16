@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.205",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: skip rewriting \"'/\" when it's part of a regex literal (e.g. /'/g for Settings WiFi SSID escaping) so Update/NetBird sections load; defensive fix before feeder removes path-like regex."
+    ]
+  },
+  {
     "version": "1.0.204",
     "date": "2026-03-15",
     "notes": [

@@ -130,14 +130,15 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str) -> bytes:
 
 def _rewrite_js_text(text: str, feeder_id: str) -> str:
     """Rewrite path strings in JS (in quoted strings only) so API/static calls hit the proxy.
-    We only replace after \" or ' or ` to avoid corrupting regex literals (e.g. /api/version/g).
-    See docs/FEEDER_WEB_API_REFERENCE.md.
+    We only replace after \" or ' or ` to avoid corrupting regex literals. Skip '/ when it's
+    part of a regex like /'/g (e.g. feeder Settings SSID escaping). See docs/FEEDER_WEB_API_REFERENCE.md.
     """
     prefix = _feeder_prefix(feeder_id)
     if prefix in text:
         return text
     text = text.replace('"/', '"' + prefix + "/")
-    text = text.replace("'/", "'" + prefix + "/")
+    # Don't replace '/ when followed by regex flags (e.g. .replace(/'/g, ...) for SSID escaping)
+    text = re.sub(r"'/(?![gimsuy][,\)\s\"'])", "'" + prefix + "/", text)
     text = text.replace('`/', '`' + prefix + "/")
     # Catch concatenation like base + "/api/..." or url + '/static/...' (quote after +)
     text = text.replace('+ "/', '+ "' + prefix + "/")
