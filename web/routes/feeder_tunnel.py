@@ -114,13 +114,13 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str) -> bytes:
     # Avoid double-rewriting
     if prefix + "/" in text and text.count(prefix) > 2:
         return body
-    # Absolute path references that must go through the proxy
-    text = text.replace('href="/', f'href="{prefix}/"')
-    text = text.replace("href='/", f"href='{prefix}/'")
-    text = text.replace('src="/', f'src="{prefix}/"')
-    text = text.replace("src='/", f"src='{prefix}/'")
-    text = text.replace('url("/', f'url("{prefix}/"')
-    text = text.replace("url('/", f"url('{prefix}/'")
+    # Absolute path references: replace only path start so attribute stays valid (e.g. href="/api/foo" -> href="/feeder/id/api/foo")
+    text = text.replace('href="/', 'href="' + prefix + '/')
+    text = text.replace("href='/", "href='" + prefix + "/")
+    text = text.replace('src="/', 'src="' + prefix + '/')
+    text = text.replace("src='/", "src='" + prefix + "/")
+    text = text.replace('url("/', 'url("' + prefix + '/')
+    text = text.replace("url('/", "url='" + prefix + "/")
     # Map/Statistics links: rewrite feeder local URLs so they open through the proxy
     text = _rewrite_feeder_local_urls(text, prefix)
     # Inject <base> so relative URLs (e.g. style.css, api/...) resolve under the feeder path

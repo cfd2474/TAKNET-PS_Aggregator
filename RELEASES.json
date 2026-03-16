@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.208",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: fix HTML rewrite so href/src/url replacements do not inject extra quote (use path-only replacement); fixes Unexpected token '<' and partial page load."
+    ]
+  },
+  {
     "version": "1.0.207",
     "date": "2026-03-15",
     "notes": [
