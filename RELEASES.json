@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.215",
+    "date": "2026-03-15",
+    "notes": [
+      "Tunnel: add GET /feeders to list registered feeder_id and host for debugging (see docs/FEEDER_TUNNEL_REGISTER.md)."
+    ]
+  },
+  {
     "version": "1.0.214",
     "date": "2026-03-15",
     "notes": [

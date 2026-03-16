@@ -116,6 +116,18 @@ async def tunnel_websocket(websocket: WebSocket):
                 pass
 
 
+@app.get("/feeders")
+async def list_feeders():
+    """List registered feeder_id and host (for debugging: see what the tunnel has stored)."""
+    async with _lock:
+        return {
+            "feeders": [
+                {"feeder_id": fid, "host": feeder_hosts.get(fid, "") or "(none)"}
+                for fid in feeder_connections
+            ]
+        }
+
+
 @app.get("/feeder/{feeder_id}/host")
 async def get_feeder_host(feeder_id: str):
     """Return the host (e.g. '100.85.149.249:8080') the feeder sent at register, for proxy Host header."""

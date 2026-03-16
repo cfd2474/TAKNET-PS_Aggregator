@@ -45,5 +45,9 @@ After the aggregator is updated and the feeder sends `host` in `register`, **Map
 
 - **Map still shows dashboard / stats “no url”**  
   - Check **tunnel service logs** when the feeder connects. You should see: `Tunnel registered: feeder_id=... host=...`. If `host=(none)`, the feeder is not sending `host` in the register message—fix the feeder client.  
+  - **See what the tunnel has stored:** from the aggregator host run  
+    `docker exec <tunnel-container-name> curl -s http://localhost:5001/feeders`  
+    (e.g. `docker exec taknet-tunnel curl -s http://localhost:5001/feeders`).  
+    The response lists each connected feeder’s `feeder_id` and `host`. If `host` is `(none)`, the feeder didn’t send `host`. If the listed `feeder_id` doesn’t match the one in the aggregator URL (e.g. aggregator uses `92882-test_test_test` but feeder registered as `92882-test`), fix the feeder to send the same id the aggregator expects.  
   - The aggregator normalizes `host`: it strips any `http://` or `https://` and adds `:8080` if no port is present. So sending `"host": "http://100.85.149.249:8080"` or `"host": "100.85.149.249"` is fine.  
   - If the feeder’s `feeder_id` uses dashes and the aggregator URL uses underscores (or vice versa), the aggregator tries alternate forms when looking up the host; reconnect the feeder and try again.
