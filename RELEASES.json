@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.206",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: rewrite feeder local URLs (127.0.0.1:8080, localhost:8080) to proxy path so Map and Statistics links open through tunnel instead of failing."
+    ]
+  },
+  {
     "version": "1.0.205",
     "date": "2026-03-15",
     "notes": [

@@ -74,6 +74,22 @@ def _decompress_body(body: bytes, content_encoding: str) -> bytes:
     return body
 
 
+# Feeder's local origins (map/stats links); rewrite to proxy path so they open through tunnel
+_FEEDER_LOCAL_ORIGINS = (
+    "http://127.0.0.1:8080",
+    "https://127.0.0.1:8080",
+    "http://localhost:8080",
+    "https://localhost:8080",
+)
+
+
+def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
+    """Rewrite feeder local URLs (127.0.0.1:8080, localhost:8080) to proxy path so Map/Statistics open in tunnel."""
+    for origin in _FEEDER_LOCAL_ORIGINS:
+        text = text.replace(origin, prefix)
+    return text
+
+
 def _rewrite_location_header(value: str, feeder_id: str) -> str:
     """Rewrite Location/Content-Location so they stay under /feeder/<feeder_id>/."""
     if not value or not value.strip():
@@ -102,9 +118,11 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str) -> bytes:
     text = text.replace('href="/', f'href="{prefix}/')
     text = text.replace("href='/", f"href='{prefix}/")
     text = text.replace('src="/', f'src="{prefix}/')
-    text = text.replace("src='/", f"src='{prefix}/")
+    text = text.replace("src='/", f"src='{prefix}/')
     text = text.replace('url("/', f'url("{prefix}/')
     text = text.replace("url('/", f"url('{prefix}/")
+    # Map/Statistics links: rewrite feeder local URLs so they open through the proxy
+    text = _rewrite_feeder_local_urls(text, prefix)
     # Inject <base> so relative URLs (e.g. style.css, api/...) resolve under the feeder path
     base_tag = f'<base href="{base_url}">'
     if "<head>" in text:
@@ -136,6 +154,8 @@ def _rewrite_js_text(text: str, feeder_id: str) -> str:
     prefix = _feeder_prefix(feeder_id)
     if prefix in text:
         return text
+    # Map/Statistics: rewrite feeder local URLs (e.g. window.open('http://127.0.0.1:8080/'))
+    text = _rewrite_feeder_local_urls(text, prefix)
     text = text.replace('"/', '"' + prefix + "/")
     # Don't replace '/ when followed by regex flags (e.g. .replace(/'/g, ...) for SSID escaping)
     text = re.sub(r"'/(?![gimsuy][,\)\s\"'])", "'" + prefix + "/", text)
