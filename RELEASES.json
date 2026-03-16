@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.204",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel proxy: stop rewriting inside regex literals; only rewrite paths in quoted strings and after + to fix 'Invalid regular expression flags' and restore Update/NetBird sections on feeder Settings."
+    ]
+  },
+  {
     "version": "1.0.203",
     "date": "2026-03-15",
     "notes": [
