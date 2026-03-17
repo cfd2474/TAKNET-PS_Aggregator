@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.231",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel JS rewrite fix: remove early return when bundle already contains /feeder/<id> so remaining absolute /api paths (including /api/dashboard/bootstrap) are still rewritten under feeder prefix."
+    ]
+  },
+  {
     "version": "1.0.230",
     "date": "2026-03-16",
     "notes": [
