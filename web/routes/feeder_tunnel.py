@@ -252,6 +252,22 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str, origin_no_sla
     return text.encode("utf-8", errors="replace")
 
 
+def _inject_base_only_html(body: bytes, base_url: str) -> bytes:
+    """Inject only <base href> into HTML (no JS/path rewrites)."""
+    try:
+        text = body.decode("utf-8", errors="replace")
+    except Exception:
+        return body
+    base_tag = f'<base href="{base_url}">'
+    if "<head>" in text:
+        text = text.replace("<head>", "<head>" + base_tag, 1)
+    elif "<HEAD>" in text:
+        text = text.replace("<HEAD>", "<HEAD>" + base_tag, 1)
+    else:
+        text = base_tag + text
+    return text.encode("utf-8", errors="replace")
+
+
 def _rewrite_js_text(text: str, feeder_id: str, origin_for_js: str = "") -> str:
     """Rewrite path strings in JS (in quoted strings only) so API/static calls hit the proxy.
     We only replace after \" or ' or ` to avoid corrupting regex literals. Skip '/ when it's
@@ -379,9 +395,11 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
             value = _rewrite_location_header(value, feeder_id)
         headers_out.append((name, value))
 
-    # Rewrite response body so assets and API calls go through the proxy (fix 404s and broken page).
+    # Rewrite response body so assets and API calls go through the proxy.
+    # For tar1090/graphs paths we avoid JS/CSS rewrites (can corrupt minified JS/regex); only inject base in HTML.
     # For HTML/JS/CSS: if feeder sent gzip etc., decompress first so we have plain text; then rewrite; then drop Content-Encoding.
     we_rewrote = False
+    target = _infer_tunnel_target(path_only)
     if body_bytes and content_type:
         if "text/html" in content_type:
             if content_encoding:
@@ -394,19 +412,24 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
                 base_suffix = _feeder_prefix(feeder_id) + path_only.rstrip("/") + "/"
             base_url = request.url_root.rstrip("/") + base_suffix
             origin_no_slash = base_url.rstrip("/")
-            body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url, origin_no_slash)
+            if target == "tar1090":
+                body_bytes = _inject_base_only_html(body_bytes, base_url)
+            else:
+                body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url, origin_no_slash)
             we_rewrote = True
         elif "javascript" in content_type:
-            if content_encoding:
-                body_bytes = _decompress_body(body_bytes, content_encoding)
-            origin_no_slash = request.url_root.rstrip("/") + _feeder_prefix(feeder_id)
-            body_bytes = _rewrite_js_body(body_bytes, feeder_id, origin_no_slash)
-            we_rewrote = True
+            if target != "tar1090":
+                if content_encoding:
+                    body_bytes = _decompress_body(body_bytes, content_encoding)
+                origin_no_slash = request.url_root.rstrip("/") + _feeder_prefix(feeder_id)
+                body_bytes = _rewrite_js_body(body_bytes, feeder_id, origin_no_slash)
+                we_rewrote = True
         elif "text/css" in content_type:
-            if content_encoding:
-                body_bytes = _decompress_body(body_bytes, content_encoding)
-            body_bytes = _rewrite_css_body(body_bytes, feeder_id)
-            we_rewrote = True
+            if target != "tar1090":
+                if content_encoding:
+                    body_bytes = _decompress_body(body_bytes, content_encoding)
+                body_bytes = _rewrite_css_body(body_bytes, feeder_id)
+                we_rewrote = True
 
     # When we rewrote, body is uncompressed — drop content-encoding and content-length so browser decodes correctly
     resp = Response(body_bytes, status=status)
