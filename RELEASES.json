@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.226",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel map fallback: change missing upintheair.json response to empty JSON array [] (instead of object) to match tar1090 drawUpintheair expectations."
+    ]
+  },
+  {
     "version": "1.0.225",
     "date": "2026-03-16",
     "notes": [
