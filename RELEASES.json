@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.229",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel latency optimization: reuse pooled HTTP session for tunnel calls and cache feeder host lookup for 60s to reduce per-request overhead on dashboard/map/stats asset loads."
+    ]
+  },
+  {
     "version": "1.0.228",
     "date": "2026-03-16",
     "notes": [
