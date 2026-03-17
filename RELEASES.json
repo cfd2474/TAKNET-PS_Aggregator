@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.233",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder tunnel: if proxy returns feeder offline (503), retry with dash/underscore variants of feeder_id so aggregator URLs (e.g. tn_hcso_adsb) match tunnel register ids (e.g. tn-hcso-adsb)."
+    ]
+  },
+  {
     "version": "1.0.232",
     "date": "2026-03-16",
     "notes": [

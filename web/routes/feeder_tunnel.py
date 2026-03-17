@@ -84,6 +84,18 @@ def _cache_control_for_path(path_only: str) -> str:
     return "public, max-age=86400"
 
 
+def _tunnel_feeder_ids_to_try(feeder_id: str) -> list[str]:
+    """Tunnel WebSocket keys feeder_id exactly; try dash/underscore variants so URL id matches register id."""
+    ids = [feeder_id]
+    alt = feeder_id.replace("_", "-")
+    if alt != feeder_id and alt not in ids:
+        ids.append(alt)
+    alt2 = feeder_id.replace("-", "_")
+    if alt2 != feeder_id and alt2 not in ids:
+        ids.append(alt2)
+    return ids
+
+
 def _get_feeder_host_for_proxy(feeder_id: str) -> str:
     """Resolve Host value for proxying to this feeder (host:8080). Prefer host from tunnel register, then DB IP."""
     now = time.monotonic()
@@ -93,15 +105,7 @@ def _get_feeder_host_for_proxy(feeder_id: str) -> str:
         return cached[0]
 
     base = TUNNEL_SERVICE_URL.rstrip("/")
-    # Try URL feeder_id first; if 404, try alternate forms (feeder may register with dashes vs underscores)
-    ids_to_try = [feeder_id]
-    alt = feeder_id.replace("_", "-")
-    if alt != feeder_id and alt not in ids_to_try:
-        ids_to_try.append(alt)
-    alt2 = feeder_id.replace("-", "_")
-    if alt2 != feeder_id and alt2 not in ids_to_try:
-        ids_to_try.append(alt2)
-    for fid in ids_to_try:
+    for fid in _tunnel_feeder_ids_to_try(feeder_id):
         try:
             r = _TUNNEL_HTTP.get(f"{base}/feeder/{fid}/host", timeout=2)
             if r.status_code == 200:
@@ -436,13 +440,17 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     body_b64 = base64.b64encode(body_bytes).decode("ascii") if body_bytes else ""
 
     headers = _request_headers_for_proxy(feeder_id, local_path)
-    status, resp_headers, body_bytes = _proxy_to_feeder(
-        feeder_id,
-        local_path,
-        request.method,
-        headers,
-        body_b64,
-    )
+    status, resp_headers, body_bytes = 503, {}, None
+    for tunnel_fid in _tunnel_feeder_ids_to_try(feeder_id):
+        status, resp_headers, body_bytes = _proxy_to_feeder(
+            tunnel_fid,
+            local_path,
+            request.method,
+            headers,
+            body_b64,
+        )
+        if status != 503:
+            break
 
     if status == 503:
         return (
