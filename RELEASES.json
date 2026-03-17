@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.223",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel tar1090/graphs follow-up: map /upintheair.json to /data/upintheair.json and map /graphs/* requests from graphs1090 pages to /graphs1090/graphs/* to resolve remaining image/data 404s."
+    ]
+  },
+  {
     "version": "1.0.222",
     "date": "2026-03-16",
     "notes": [
