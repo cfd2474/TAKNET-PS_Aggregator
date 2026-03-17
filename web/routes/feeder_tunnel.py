@@ -83,7 +83,28 @@ def _get_feeder_host_for_proxy(feeder_id: str) -> str:
     return "localhost:8080"
 
 
-def _request_headers_for_proxy(feeder_id: str = ""):
+def _infer_tunnel_target(path: str) -> str:
+    """Infer feeder-side backend target from request path.
+
+    - tar1090/graphs1090 traffic should be handled by feeder's web stack on :8080
+    - dashboard/api/static traffic should be handled by feeder app backend
+    """
+    p = (path or "/").split("?", 1)[0]
+    tar_prefixes = (
+        "/graphs1090/",
+        "/data/",
+        "/db2/",
+        "/tar1090/",
+        "/tracks/",
+    )
+    if p == "/" or p.startswith("/graphs1090"):
+        return "tar1090"
+    if any(p.startswith(pref) for pref in tar_prefixes):
+        return "tar1090"
+    return "dashboard"
+
+
+def _request_headers_for_proxy(feeder_id: str = "", path: str = "/"):
     """Build dict of request headers to send to tunnel (and thus to feeder).
     Set Host to the feeder's host:8080 (from tunnel register, else DB ip, else localhost) so the
     feeder serves tar1090/graphs1090 the same as when browsed directly.
@@ -93,6 +114,9 @@ def _request_headers_for_proxy(feeder_id: str = ""):
         if key.lower() in SKIP_HEADERS or value is None:
             continue
         out[key] = value
+    # Hint feeder tunnel client which local backend should receive this request.
+    # Feeder can use this to route map/stats paths to :8080 tar1090 web stack.
+    out["X-Tunnel-Target"] = _infer_tunnel_target(path)
     if feeder_id:
         out["Host"] = _get_feeder_host_for_proxy(feeder_id)
     return out
@@ -297,7 +321,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     body_bytes = request.get_data()
     body_b64 = base64.b64encode(body_bytes).decode("ascii") if body_bytes else ""
 
-    headers = _request_headers_for_proxy(feeder_id)
+    headers = _request_headers_for_proxy(feeder_id, local_path)
     status, resp_headers, body_bytes = _proxy_to_feeder(
         feeder_id,
         local_path,

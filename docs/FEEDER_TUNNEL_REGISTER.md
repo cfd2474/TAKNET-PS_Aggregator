@@ -26,6 +26,20 @@ Use the same address you use when on VPN or LAN to open the feeder’s map/stats
 
 The feeder can obtain this from its own network config (e.g. NetBird status, primary interface, or the same value it would use for a “map URL” in its UI). No trailing slash; just `host:port`.
 
+## Request routing hint (`X-Tunnel-Target`)
+
+When the aggregator proxies requests, it now includes a header:
+
+- `X-Tunnel-Target: dashboard` for feeder app pages/APIs (`/dashboard`, `/api/...`, `/settings`, etc.)
+- `X-Tunnel-Target: tar1090` for map/stats paths (`/`, `/graphs1090/...`, `/data/...`, `/db2/...`, `/tracks/...`)
+
+Feeder tunnel client should use this hint to route requests to the correct local backend:
+
+- `dashboard` -> feeder app backend
+- `tar1090` -> local `:8080` web stack that serves tar1090/graphs1090
+
+This avoids relying on fragile URL rewrites and keeps feeder links unchanged.
+
 ## Example (pseudo-code on feeder)
 
 ```python
@@ -39,7 +53,7 @@ register_msg = {
 ws.send(json.dumps(register_msg))
 ```
 
-After the aggregator is updated and the feeder sends `host` in `register`, **Map (tar1090)** and **Stats (graphs1090)** under `/feeder/<feeder_id>/` should load correctly through the tunnel.
+After the aggregator is updated and the feeder sends `host` in `register` and routes by `X-Tunnel-Target`, **Map (tar1090)** and **Stats (graphs1090)** under `/feeder/<feeder_id>/` should load correctly through the tunnel.
 
 ## Troubleshooting
 

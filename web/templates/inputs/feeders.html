@@ -137,7 +137,7 @@ function renderTable() {
         html += '<td>' + fmtAgo(f.last_seen) + '</td>';
         html += '<td>' + statusBadge(f.status) + '</td>';
         if (canConnect && f.tunnel_feeder_id) {
-            html += '<td onclick="event.stopPropagation();"><a href="/feeder/' + escapeHtml(f.tunnel_feeder_id) + '/" class="btn" style="font-size:12px;padding:4px 10px;" target="_blank" rel="noopener">Connect</a></td>';
+            html += '<td onclick="event.stopPropagation();"><a href="/feeder/' + escapeHtml(f.tunnel_feeder_id) + '/dashboard" class="btn" style="font-size:12px;padding:4px 10px;" target="_blank" rel="noopener">Connect</a></td>';
         } else if (canConnect) {
             html += '<td></td>';
         }

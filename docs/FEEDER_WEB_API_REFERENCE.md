@@ -4,6 +4,10 @@ When the aggregator proxies the feeder UI through the tunnel (e.g. `https://aggr
 
 **Host header:** The aggregator sets `Host: <feeder_ip>:8080` when the feeder's IP is known (from the inputs DB). That makes the feeder serve the same content as when browsed directly (e.g. tar1090 at `/`, graphs1090 at `/graphs1090/`). Without this, some feeders would serve a default site at `/` that redirects to `/dashboard` instead of the map. The feeder Flask app serves everything under `/` and `/api/...`. The aggregator must **not** assume or rewrite paths; it should forward the request path as-is (minus the `/feeder/<feeder_id>` prefix) to the feeder.
 
+**Routing hint header:** The aggregator adds `X-Tunnel-Target` on proxied requests so feeder tunnel client can choose the correct local backend:
+- `dashboard` for feeder app pages/API
+- `tar1090` for map/stats paths (`/`, `/graphs1090/...`, `/data/...`, `/db2/...`, `/tracks/...`)
+
 **Critical:** The browser will send requests **relative to the current page**. If the user is at `https://aggregator/feeder/92882-test/` then a fetch to `/api/network-quality` will go to `https://aggregator/api/network-quality` (origin + path), **not** to `https://aggregator/feeder/92882-test/api/network-quality`. So the aggregator must either:
 1. **Rewrite HTML/JS** so that API calls use a relative base (e.g. `./api/...` or a prefix like `/feeder/92882-test/api/...`), or
 2. **Route by path** so that requests to `https://aggregator/api/...` when the user came from a feeder page are forwarded to the correct feeder's tunnel (e.g. by session or referer). The usual approach is (1): rewrite the document so that every `/api/...` and `/static/...` becomes `/feeder/<feeder_id>/api/...` and `/feeder/<feeder_id>/static/...`.

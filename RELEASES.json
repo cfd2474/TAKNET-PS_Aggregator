@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.219",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel: open Connect at /dashboard (so / can map to tar1090), add X-Tunnel-Target header hints (dashboard/tar1090) for feeder-side backend dispatch, and document routing hints for map/stats."
+    ]
+  },
+  {
     "version": "1.0.218",
     "date": "2026-03-16",
     "notes": [
