@@ -474,7 +474,10 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     # For tar1090/graphs HTML, inject base only; for dashboard HTML/JS/CSS, apply existing rewrites.
     we_rewrote = False
     target = _infer_tunnel_target(path_only)
-    if body_bytes and content_type and not is_static_asset:
+    # Only force static passthrough for tar1090 target. Dashboard static JS/CSS still needs
+    # path-prefix rewriting (/api -> /feeder/<id>/api) when served through tunnel.
+    skip_body_rewrite = is_static_asset and target == "tar1090"
+    if body_bytes and content_type and not skip_body_rewrite:
         if "text/html" in content_type:
             if content_encoding:
                 body_bytes = _decompress_body(body_bytes, content_encoding)
