@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.228",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel performance: passthrough static tar1090/graphs assets without rewrite/decompression, add cache-control for tunnel static assets, and keep rewrites scoped to non-static pages."
+    ]
+  },
+  {
     "version": "1.0.227",
     "date": "2026-03-16",
     "notes": [
