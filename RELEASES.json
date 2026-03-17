@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.222",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel graphs fix: when referer is /graphs1090/, rewrite root-level asset paths (/portal.css, /graphs.js, etc.) to /graphs1090/<asset> before proxying to feeder."
+    ]
+  },
+  {
     "version": "1.0.221",
     "date": "2026-03-16",
     "notes": [
