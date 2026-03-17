@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.224",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel map polish: return empty JSON for missing upintheair.json endpoints to avoid non-fatal tar1090 console 404 noise."
+    ]
+  },
+  {
     "version": "1.0.223",
     "date": "2026-03-16",
     "notes": [
