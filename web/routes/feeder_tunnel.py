@@ -207,6 +207,26 @@ def _rewrite_location_header(value: str, feeder_id: str) -> str:
     return value
 
 
+def _normalize_tar1090_path_for_proxy(path_only: str) -> str:
+    """Fix graphs1090 root-relative asset requests to feeder path expected by graphs stack.
+
+    Some graphs1090 pages request assets like /portal.css or /graphs.js while rendered from
+    /graphs1090/. When referer indicates /graphs1090/, map those root-level file requests to
+    /graphs1090/<file> before proxying to feeder.
+    """
+    p = path_only or "/"
+    referer = (request.headers.get("Referer") or "").lower()
+    if "/graphs1090/" not in referer:
+        return p
+    # Keep explicit/known paths unchanged
+    if p.startswith(("/graphs1090/", "/data/", "/db2/", "/tracks/", "/libs/", "/images/", "/tar1090/")):
+        return p
+    # Root-level single-file assets -> graphs1090 asset path
+    if re.match(r"^/[^/]+\.(css|js|png|jpg|jpeg|gif|svg|ico|map|json|woff2?|ttf|eot)$", p, re.IGNORECASE):
+        return "/graphs1090" + p
+    return p
+
+
 def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str, origin_no_slash: str = "") -> bytes:
     """Inject <base> and rewrite absolute paths in HTML so assets and API calls hit the proxy.
     origin_no_slash is used for window.location.origin in inline JS (no trailing slash to avoid .../id//path 404s).
@@ -356,6 +376,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     """Proxy request to feeder over its tunnel WebSocket; return response with path rewriting."""
     # Build path including query string (per wire protocol: path includes query)
     path_only = "/" + subpath if subpath else "/"
+    path_only = _normalize_tar1090_path_for_proxy(path_only)
     local_path = path_only
     if request.query_string:
         local_path = f"{path_only}?{request.query_string.decode('utf-8', errors='replace')}"
