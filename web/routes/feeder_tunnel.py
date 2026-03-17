@@ -217,7 +217,13 @@ def _normalize_tar1090_path_for_proxy(path_only: str) -> str:
     p = path_only or "/"
     referer = (request.headers.get("Referer") or "").lower()
     if "/graphs1090/" not in referer:
+        # tar1090 root often requests this JSON from /upintheair.json, while feeder serves it under /data/.
+        if p == "/upintheair.json":
+            return "/data/upintheair.json"
         return p
+    # Graphs pages request images under /graphs/*.png; feeder serves them under /graphs1090/graphs/*.
+    if p.startswith("/graphs/"):
+        return "/graphs1090" + p
     # Keep explicit/known paths unchanged
     if p.startswith(("/graphs1090/", "/data/", "/db2/", "/tracks/", "/libs/", "/images/", "/tar1090/")):
         return p
