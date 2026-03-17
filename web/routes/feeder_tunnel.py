@@ -343,8 +343,9 @@ def _rewrite_js_text(text: str, feeder_id: str, origin_for_js: str = "") -> str:
     origin_for_js (no trailing slash) replaces window.location.origin so map/stats URLs don't get double slash.
     """
     prefix = _feeder_prefix(feeder_id)
-    if prefix in text:
-        return text
+    # Don't short-circuit just because prefix appears somewhere in file:
+    # mixed JS bundles can contain both already-prefixed and absolute root paths.
+    # We still need to rewrite remaining "/api/..." etc. occurrences.
     if origin_for_js:
         text = text.replace("window.location.origin", json.dumps(origin_for_js.rstrip("/")))
     # Map/Statistics: rewrite feeder local URLs (e.g. window.open('http://127.0.0.1:8080/'))
