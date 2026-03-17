@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.227",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel map fallback correction: missing upintheair.json now returns {\"rings\":[]} to match tar1090 drawUpintheair() expectations."
+    ]
+  },
+  {
     "version": "1.0.226",
     "date": "2026-03-16",
     "notes": [
