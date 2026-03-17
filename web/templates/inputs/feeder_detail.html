@@ -6,7 +6,7 @@
     <a href="/inputs/feeders" style="font-size:13px;color:var(--text-muted);">&larr; Back to Feeders</a>
     {% if current_user.role in ['admin', 'network_admin'] %}
     <a href="/feeder/{{ feeder.tunnel_feeder_id }}/dashboard" class="btn btn-primary" target="_blank" rel="noopener">Connect to feeder</a>
-    <span style="font-size:12px;color:var(--text-muted);">Connect opens feeder dashboard. Use Maps/Statistics inside feeder to open tar1090/graphs1090.</span>
+    <span style="font-size:12px;color:var(--text-muted);">Opens the feeder web interface in a new window.</span>
     {% endif %}
 </div>
 

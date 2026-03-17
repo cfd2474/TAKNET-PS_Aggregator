@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.232",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder detail: replace Connect helper text with note that feeder web interface opens in a new window."
+    ]
+  },
+  {
     "version": "1.0.231",
     "date": "2026-03-16",
     "notes": [
