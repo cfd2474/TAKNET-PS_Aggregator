@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.220",
+    "date": "2026-03-16",
+    "notes": [
+      "Feeder tunnel map/stats fix: resolve relative assets under current subpath (base href uses /graphs1090/ when applicable) and route tar1090 asset paths (libs/images/root CSS/JS) to tar1090 backend via X-Tunnel-Target hints."
+    ]
+  },
+  {
     "version": "1.0.219",
     "date": "2026-03-16",
     "notes": [

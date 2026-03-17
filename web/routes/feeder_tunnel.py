@@ -90,16 +90,42 @@ def _infer_tunnel_target(path: str) -> str:
     - dashboard/api/static traffic should be handled by feeder app backend
     """
     p = (path or "/").split("?", 1)[0]
+    referer = (request.headers.get("Referer") or "").lower()
     tar_prefixes = (
         "/graphs1090/",
         "/data/",
         "/db2/",
         "/tar1090/",
         "/tracks/",
+        "/libs/",
+        "/images/",
     )
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
     if any(p.startswith(pref) for pref in tar_prefixes):
+        return "tar1090"
+    # Root-level tar1090/graphs assets (hashed css/js, jquery, bootstrap, etc.)
+    # commonly appear as /style_xxx.css, /script_xxx.js, /jquery-*.js, /portal.css...
+    # Route these to tar1090 unless they clearly belong to feeder dashboard/app paths.
+    if re.search(r"\.(css|js|png|jpg|jpeg|gif|svg|ico|map|json|woff2?|ttf|eot)$", p, re.IGNORECASE):
+        dashboard_roots = (
+            "/api/",
+            "/static/",
+            "/dashboard",
+            "/settings",
+            "/feeds",
+            "/logs",
+            "/about",
+            "/taknet-ps-status",
+            "/setup",
+            "/loading",
+        )
+        if not any(p.startswith(r) for r in dashboard_roots):
+            return "tar1090"
+    # If referer is map/stats path, prefer tar1090 for ambiguous relative assets.
+    if "/graphs1090/" in referer:
+        return "tar1090"
+    if re.search(r"/feeder/[^/]+/$", referer):
         return "tar1090"
     return "dashboard"
 
@@ -313,9 +339,10 @@ def _proxy_to_feeder(feeder_id: str, path: str, method: str, headers: dict, body
 def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     """Proxy request to feeder over its tunnel WebSocket; return response with path rewriting."""
     # Build path including query string (per wire protocol: path includes query)
-    local_path = "/" + subpath if subpath else "/"
+    path_only = "/" + subpath if subpath else "/"
+    local_path = path_only
     if request.query_string:
-        local_path = f"{local_path}?{request.query_string.decode('utf-8', errors='replace')}"
+        local_path = f"{path_only}?{request.query_string.decode('utf-8', errors='replace')}"
 
     # Request body (base64)
     body_bytes = request.get_data()
@@ -359,7 +386,13 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
         if "text/html" in content_type:
             if content_encoding:
                 body_bytes = _decompress_body(body_bytes, content_encoding)
-            base_url = request.url_root.rstrip("/") + _feeder_prefix(feeder_id) + "/"
+            # Base URL must reflect current subpath directory so relative assets resolve correctly.
+            # Example: /feeder/<id>/graphs1090/?... must use base /feeder/<id>/graphs1090/
+            if path_only == "/":
+                base_suffix = _feeder_prefix(feeder_id) + "/"
+            else:
+                base_suffix = _feeder_prefix(feeder_id) + path_only.rstrip("/") + "/"
+            base_url = request.url_root.rstrip("/") + base_suffix
             origin_no_slash = base_url.rstrip("/")
             body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url, origin_no_slash)
             we_rewrote = True
