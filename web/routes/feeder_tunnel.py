@@ -54,6 +54,23 @@ def _normalize_feeder_host(host: str) -> str:
     return s
 
 
+def _is_static_asset_path(path_only: str) -> bool:
+    """Return True when request path is a static asset suitable for passthrough/cache."""
+    p = (path_only or "/").split("?", 1)[0]
+    if p.startswith(("/libs/", "/images/", "/graphs1090/graphs/", "/data/", "/db2/", "/tracks/", "/tar1090/")):
+        return True
+    return bool(re.search(r"\.(css|js|png|jpg|jpeg|gif|svg|ico|map|json|woff2?|ttf|eot|wasm)$", p, re.IGNORECASE))
+
+
+def _cache_control_for_path(path_only: str) -> str:
+    """Choose cache-control policy for static assets under tunnel paths."""
+    p = (path_only or "/").split("?", 1)[0]
+    # hashed tar1090 assets like script_<hash>.js / style_<hash>.css can be cached longer
+    if re.search(r"_(?:[a-f0-9]{16,})\.(css|js|png|jpg|jpeg|gif|svg|map)$", p, re.IGNORECASE):
+        return "public, max-age=604800, immutable"
+    return "public, max-age=86400"
+
+
 def _get_feeder_host_for_proxy(feeder_id: str) -> str:
     """Resolve Host value for proxying to this feeder (host:8080). Prefer host from tunnel register, then DB IP."""
     base = TUNNEL_SERVICE_URL.rstrip("/")
@@ -383,6 +400,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     # Build path including query string (per wire protocol: path includes query)
     path_only = "/" + subpath if subpath else "/"
     path_only = _normalize_tar1090_path_for_proxy(path_only)
+    is_static_asset = _is_static_asset_path(path_only)
     local_path = path_only
     if request.query_string:
         local_path = f"{path_only}?{request.query_string.decode('utf-8', errors='replace')}"
@@ -427,11 +445,11 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
         headers_out.append((name, value))
 
     # Rewrite response body so assets and API calls go through the proxy.
-    # For tar1090/graphs paths we avoid JS/CSS rewrites (can corrupt minified JS/regex); only inject base in HTML.
-    # For HTML/JS/CSS: if feeder sent gzip etc., decompress first so we have plain text; then rewrite; then drop Content-Encoding.
+    # For static assets, always passthrough (no decompress/rewrite) for speed and to avoid JS corruption.
+    # For tar1090/graphs HTML, inject base only; for dashboard HTML/JS/CSS, apply existing rewrites.
     we_rewrote = False
     target = _infer_tunnel_target(path_only)
-    if body_bytes and content_type:
+    if body_bytes and content_type and not is_static_asset:
         if "text/html" in content_type:
             if content_encoding:
                 body_bytes = _decompress_body(body_bytes, content_encoding)
@@ -468,6 +486,9 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
         if we_rewrote and name.lower() in ("content-length", "content-encoding"):
             continue
         resp.headers[name] = value
+    # Cache static assets under feeder tunnel paths to reduce repeated fetch latency.
+    if is_static_asset and status == 200 and not resp.headers.get("Cache-Control"):
+        resp.headers["Cache-Control"] = _cache_control_for_path(path_only)
     return resp
 
 
