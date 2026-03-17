@@ -409,9 +409,9 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     if status == 504:
         return "Feeder response timeout", 504
     # tar1090 optional endpoint: some builds request /upintheair.json but feeder may not provide it.
-    # Return an empty array fallback (expected by drawUpintheair()) instead of 404.
+    # drawUpintheair() expects object with .rings; provide empty rings to avoid runtime errors.
     if status == 404 and path_only in ("/upintheair.json", "/data/upintheair.json"):
-        return Response(b"[]", status=200, headers={"Content-Type": "application/json; charset=utf-8"})
+        return Response(b'{"rings":[]}', status=200, headers={"Content-Type": "application/json; charset=utf-8"})
 
     # Collect content-type and content-encoding; rewrite Location; build headers (we'll drop encoding/length when we rewrite)
     headers_out = []
