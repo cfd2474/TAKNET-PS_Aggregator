@@ -10,9 +10,12 @@ import gzip
 import json
 import os
 import re
+import threading
+import time
 import zlib
 
 import requests
+from requests.adapters import HTTPAdapter
 from flask import Blueprint, Response, request
 
 from models import FeederModel
@@ -40,6 +43,16 @@ SKIP_HEADERS = {
 
 TUNNEL_SERVICE_URL = os.environ.get("TUNNEL_SERVICE_URL", "http://tunnel:5001")
 PROXY_TIMEOUT = 30
+
+# Reuse HTTP connections to tunnel service (significant win under many asset/API requests).
+_TUNNEL_HTTP = requests.Session()
+_TUNNEL_HTTP.mount("http://", HTTPAdapter(pool_connections=64, pool_maxsize=128))
+_TUNNEL_HTTP.mount("https://", HTTPAdapter(pool_connections=64, pool_maxsize=128))
+
+# Cache feeder host lookups to avoid GET /feeder/<id>/host on every proxied request.
+_HOST_CACHE_TTL_SEC = 60.0
+_host_cache_lock = threading.Lock()
+_host_cache: dict[str, tuple[str, float]] = {}
 
 
 def _normalize_feeder_host(host: str) -> str:
@@ -73,6 +86,12 @@ def _cache_control_for_path(path_only: str) -> str:
 
 def _get_feeder_host_for_proxy(feeder_id: str) -> str:
     """Resolve Host value for proxying to this feeder (host:8080). Prefer host from tunnel register, then DB IP."""
+    now = time.monotonic()
+    with _host_cache_lock:
+        cached = _host_cache.get(feeder_id)
+    if cached and cached[1] > now:
+        return cached[0]
+
     base = TUNNEL_SERVICE_URL.rstrip("/")
     # Try URL feeder_id first; if 404, try alternate forms (feeder may register with dashes vs underscores)
     ids_to_try = [feeder_id]
@@ -84,20 +103,26 @@ def _get_feeder_host_for_proxy(feeder_id: str) -> str:
         ids_to_try.append(alt2)
     for fid in ids_to_try:
         try:
-            r = requests.get(f"{base}/feeder/{fid}/host", timeout=2)
+            r = _TUNNEL_HTTP.get(f"{base}/feeder/{fid}/host", timeout=2)
             if r.status_code == 200:
                 data = r.json()
                 raw = data.get("host")
                 if raw:
                     normalized = _normalize_feeder_host(raw)
                     if normalized:
+                        with _host_cache_lock:
+                            _host_cache[feeder_id] = (normalized, now + _HOST_CACHE_TTL_SEC)
                         return normalized
         except Exception:
             continue
     feeder = FeederModel.get_by_tunnel_feeder_id(feeder_id)
     if feeder and feeder.get("ip_address"):
-        return f"{feeder['ip_address']}:8080"
-    return "localhost:8080"
+        fallback = f"{feeder['ip_address']}:8080"
+    else:
+        fallback = "localhost:8080"
+    with _host_cache_lock:
+        _host_cache[feeder_id] = (fallback, now + _HOST_CACHE_TTL_SEC)
+    return fallback
 
 
 def _infer_tunnel_target(path: str) -> str:
@@ -369,7 +394,7 @@ def _proxy_to_feeder(feeder_id: str, path: str, method: str, headers: dict, body
         "body": body_b64,
     }
     try:
-        r = requests.post(url, json=payload, timeout=PROXY_TIMEOUT)
+        r = _TUNNEL_HTTP.post(url, json=payload, timeout=PROXY_TIMEOUT)
     except requests.RequestException:
         return 503, {}, None
     if r.status_code == 503:
