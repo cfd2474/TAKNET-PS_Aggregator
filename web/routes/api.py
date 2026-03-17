@@ -13,12 +13,14 @@ from flask import Blueprint, jsonify, request, Response, stream_with_context
 
 from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel, OutputCotCertModel
 from models import enrich_feeder_mlat_display
+from models import filter_feeders_for_user, feeder_stats_from_rows, user_can_access_feeder
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client)
 from services.vpn_service import get_combined_status
 from services.health_snapshot import get_health_history, get_host_snapshot
 from routes.auth_utils import login_required_any, network_admin_required, admin_required
+from flask_login import current_user
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -181,7 +183,15 @@ def _get_adsbhub_connection_status():
 @login_required_any
 def status():
     """Dashboard overview data."""
-    feeder_stats = FeederModel.get_stats()
+    if current_user.role == "admin":
+        feeder_stats = FeederModel.get_stats()
+    elif current_user.role == "network_admin":
+        visible = filter_feeders_for_user(
+            FeederModel.get_all(), current_user.username, current_user.role
+        )
+        feeder_stats = feeder_stats_from_rows(visible)
+    else:
+        feeder_stats = FeederModel.get_stats()
     aircraft = _get_aircraft_data()
     system = _get_system_info()
     activity = ActivityModel.get_recent(10)
@@ -207,9 +217,33 @@ def feeders_list():
     status_filter = request.args.get("status", "all")
     conn_type = request.args.get("conn_type", "all")
     feeders = FeederModel.get_all(status_filter=status_filter, conn_type_filter=conn_type)
-    feeders = [enrich_feeder_mlat_display(f) for f in feeders]
-    stats = FeederModel.get_stats()
-    return jsonify({"feeders": feeders, "stats": stats})
+    feeders = filter_feeders_for_user(
+        feeders, current_user.username, current_user.role
+    )
+    stats = (
+        FeederModel.get_stats()
+        if current_user.role == "admin"
+        else feeder_stats_from_rows(feeders)
+    )
+    out = []
+    for f in feeders:
+        e = enrich_feeder_mlat_display(f)
+        e["can_tunnel"] = user_can_access_feeder(f, current_user.username, current_user.role)
+        out.append(e)
+    return jsonify({"feeders": out, "stats": stats})
+
+
+@bp.route("/users/usernames")
+@admin_required
+def users_usernames_for_feeders():
+    """Active usernames for assigning feeder owners (admin only)."""
+    users = UserModel.get_all()
+    names = [
+        u["username"]
+        for u in users
+        if (u.get("status") or "active") == "active" and u.get("username")
+    ]
+    return jsonify({"usernames": sorted(set(names))})
 
 
 @bp.route("/feeders/<int:feeder_id>")
@@ -218,6 +252,8 @@ def feeder_detail(feeder_id):
     """Single feeder with full details."""
     feeder = FeederModel.get_by_id(feeder_id)
     if not feeder:
+        return jsonify({"error": "Feeder not found"}), 404
+    if not user_can_access_feeder(feeder, current_user.username, current_user.role):
         return jsonify({"error": "Feeder not found"}), 404
     feeder = enrich_feeder_mlat_display(feeder)
     connections = ConnectionModel.get_history(feeder_id, limit=20)
@@ -228,10 +264,18 @@ def feeder_detail(feeder_id):
 @network_admin_required
 def feeder_update(feeder_id):
     """Update feeder metadata."""
+    row = FeederModel.get_by_id(feeder_id)
+    if not row:
+        return jsonify({"error": "Feeder not found"}), 404
+    if not user_can_access_feeder(row, current_user.username, current_user.role):
+        return jsonify({"error": "Feeder not found"}), 404
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data"}), 400
-    ok = FeederModel.update(feeder_id, data)
+    if current_user.role != "admin":
+        data.pop("owners", None)
+    allow_owners = current_user.role == "admin"
+    ok = FeederModel.update(feeder_id, data, allow_owners=allow_owners)
     if ok:
         return jsonify({"success": True})
     return jsonify({"error": "Update failed"}), 400
@@ -245,6 +289,8 @@ def feeder_suggest_name(feeder_id):
     """
     feeder = FeederModel.get_by_id(feeder_id)
     if not feeder:
+        return jsonify({"error": "Feeder not found"}), 404
+    if not user_can_access_feeder(feeder, current_user.username, current_user.role):
         return jsonify({"error": "Feeder not found"}), 404
 
     lat  = feeder.get("latitude")
@@ -387,6 +433,9 @@ def feeders_purge_old():
 @network_admin_required
 def feeder_connections(feeder_id):
     """Connection history for a feeder."""
+    row = FeederModel.get_by_id(feeder_id)
+    if not row or not user_can_access_feeder(row, current_user.username, current_user.role):
+        return jsonify({"error": "Feeder not found"}), 404
     limit = request.args.get("limit", 50, type=int)
     connections = ConnectionModel.get_history(feeder_id, limit=limit)
     return jsonify({"connections": connections})
@@ -1576,6 +1625,8 @@ def feeder_proxy(feeder_id, view_type):
     feeder = FeederModel.get_by_id(feeder_id)
     if not feeder:
         return "Feeder not found", 404
+    if not user_can_access_feeder(feeder, current_user.username, current_user.role):
+        return "Not authorized", 403
 
     proxy_url = _feeder_proxy_url(feeder, view_type)
     if not proxy_url:

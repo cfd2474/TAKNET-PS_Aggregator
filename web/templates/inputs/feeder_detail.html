@@ -4,7 +4,7 @@
 {% block content %}
 <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <a href="/inputs/feeders" style="font-size:13px;color:var(--text-muted);">&larr; Back to Feeders</a>
-    {% if current_user.role in ['admin', 'network_admin'] %}
+    {% if feeder.tunnel_feeder_id %}
     <a href="/feeder/{{ feeder.tunnel_feeder_id }}/dashboard" class="btn btn-primary" target="_blank" rel="noopener">Connect to feeder</a>
     <span style="font-size:12px;color:var(--text-muted);">Opens the feeder web interface in a new window.</span>
     {% endif %}
@@ -118,10 +118,33 @@
             <label>Notes</label>
             <textarea class="form-control" name="notes">{{ feeder.notes or '' }}</textarea>
         </div>
-        <div style="display:flex;gap:8px;">
+        {% if is_admin %}
+        <div class="form-group">
+            <label>Owners</label>
+            <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px 0;">User accounts that may see this feeder, use Connect, and tunnel. Empty = <strong>admin only</strong>.</p>
+            <div id="owners-picker" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;">
+                {% for u in owner_usernames %}
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                    <input type="checkbox" name="owner_cb" value="{{ u }}" {% if u in (feeder.owners or []) %}checked{% endif %}>
+                    <span>{{ u }}</span>
+                </label>
+                {% else %}
+                <span style="color:var(--text-muted);">No active users</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% elif feeder.owners %}
+        <div class="form-group">
+            <label>Owners</label>
+            <div style="font-size:13px;">{{ feeder.owners | join(', ') }}</div>
+        </div>
+        {% endif %}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button type="submit" class="btn btn-primary">Save Changes</button>
+            {% if is_admin %}
             <button type="button" class="btn btn-danger" onclick="deleteFeeder()">Delete Feeder</button>
             <button type="button" class="btn" style="margin-left:auto;font-size:12px;" onclick="showMergeModal()">Merge Duplicate…</button>
+            {% endif %}
         </div>
     </form>
 </div>
@@ -234,6 +257,11 @@ async function saveFeeder(e) {
     const form = new FormData(e.target);
     const data = {};
     form.forEach((v,k) => { data[k] = v; });
+    {% if is_admin %}
+    const ow = [];
+    document.querySelectorAll('#owners-picker input[name=owner_cb]:checked').forEach(function(cb) { ow.push(cb.value); });
+    data.owners = ow;
+    {% endif %}
 
     try {
         const r = await fetch('/api/feeders/' + feederId, {

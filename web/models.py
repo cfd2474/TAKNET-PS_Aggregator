@@ -66,6 +66,13 @@ def get_db():
             conn.commit()
         except Exception:
             pass
+        try:
+            conn.execute(
+                "ALTER TABLE feeders ADD COLUMN owners TEXT NOT NULL DEFAULT '[]'"
+            )
+            conn.commit()
+        except Exception:
+            pass
         # Migration: CoT push TLS certs (encrypted at rest)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS output_cot_certs (
@@ -109,6 +116,64 @@ def parse_mlat_client_name(name):
     return (name.strip(), "")
 
 
+def parse_feeder_owners(raw):
+    """Parse feeders.owners (JSON array string or list) into a list of usernames."""
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    try:
+        d = json.loads(raw) if isinstance(raw, str) else raw
+        if isinstance(d, list):
+            return [str(x).strip() for x in d if str(x).strip()]
+    except Exception:
+        pass
+    return []
+
+
+def user_can_access_feeder(feeder, username, role):
+    """Admin: all feeders. Others: only if username is in owners (non-empty). Unassigned feeders: admin only."""
+    if not feeder:
+        return False
+    if role == "admin":
+        return True
+    owners = parse_feeder_owners(feeder.get("owners"))
+    if not owners:
+        return False
+    u = (username or "").strip().lower()
+    return any(u == (o or "").strip().lower() for o in owners)
+
+
+def filter_feeders_for_user(feeders, username, role):
+    if role == "admin":
+        return list(feeders)
+    return [f for f in feeders if user_can_access_feeder(f, username, role)]
+
+
+def feeder_stats_from_rows(rows):
+    """Same shape as FeederModel.get_stats() but for a subset of feeder rows."""
+    rows = list(rows)
+    total = len(rows)
+    active = sum(1 for f in rows if f.get("status") == "active")
+    stale = sum(1 for f in rows if f.get("status") == "stale")
+    offline = sum(1 for f in rows if f.get("status") == "offline")
+    by_ct = {}
+    for f in rows:
+        ct = f.get("conn_type") or "unknown"
+        if ct not in by_ct:
+            by_ct[ct] = {"conn_type": ct, "count": 0, "active_count": 0}
+        by_ct[ct]["count"] += 1
+        if f.get("status") == "active":
+            by_ct[ct]["active_count"] += 1
+    return {
+        "total": total,
+        "active": active,
+        "stale": stale,
+        "offline": offline,
+        "breakdown": list(by_ct.values()),
+    }
+
+
 def tunnel_feeder_id(feeder):
     """Derive tunnel feeder_id (same logic as feeder tunnel client: MLAT_SITE_NAME sanitized or hostname).
     Used for /feeder/<tunnel_feeder_id>/ URL. Sanitize: lowercase, spaces to dashes; allow [a-z0-9_-]
@@ -136,6 +201,7 @@ def enrich_feeder_mlat_display(feeder):
     feeder["display_name"] = display_name or name
     feeder["software_version"] = software_version  # blank when no " | v"
     feeder["tunnel_feeder_id"] = tunnel_feeder_id(feeder)
+    feeder["owners"] = parse_feeder_owners(feeder.get("owners"))
     return feeder
 
 
@@ -206,15 +272,27 @@ class FeederModel:
         }
 
     @staticmethod
-    def update(feeder_id, data):
+    def update(feeder_id, data, *, allow_owners=False):
         conn = get_db()
         allowed = {"name", "tar1090_url", "graphs1090_url", "notes", "mlat_enabled"}
+        if allow_owners:
+            allowed.add("owners")
         fields = []
         values = []
         for key, val in data.items():
-            if key in allowed:
-                fields.append(f"{key} = ?")
-                values.append(val)
+            if key not in allowed:
+                continue
+            if key == "owners":
+                if isinstance(val, list):
+                    val = json.dumps([str(x).strip() for x in val if str(x).strip()])
+                elif val is None:
+                    val = "[]"
+                elif isinstance(val, str) and not val.strip().startswith("["):
+                    # comma-separated usernames
+                    parts = [p.strip() for p in val.replace(",", " ").split() if p.strip()]
+                    val = json.dumps(parts)
+            fields.append(f"{key} = ?")
+            values.append(val)
         if not fields:
             conn.close()
             return False

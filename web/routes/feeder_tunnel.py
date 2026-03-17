@@ -17,9 +17,25 @@ import zlib
 import requests
 from requests.adapters import HTTPAdapter
 from flask import Blueprint, Response, request
+from flask_login import current_user
 
-from models import FeederModel
+from models import FeederModel, user_can_access_feeder
 from routes.auth_utils import login_required_any
+
+# Cache tunnel URL segment -> enriched feeder row (avoids full-table scan every proxied asset)
+_tunnel_feeder_row_cache: dict[str, tuple[dict | None, float]] = {}
+_TUNNEL_FEEDER_CACHE_TTL = 30.0
+
+
+def _cached_feeder_for_tunnel(tunnel_id: str) -> dict | None:
+    k = (tunnel_id or "").strip().lower()
+    now = time.monotonic()
+    ent = _tunnel_feeder_row_cache.get(k)
+    if ent and now - ent[1] < _TUNNEL_FEEDER_CACHE_TTL:
+        return ent[0]
+    f = FeederModel.get_by_tunnel_feeder_id(tunnel_id)
+    _tunnel_feeder_row_cache[k] = (f, now)
+    return f
 
 bp = Blueprint("feeder_tunnel", __name__, url_prefix="/feeder")
 
@@ -427,6 +443,25 @@ def _proxy_to_feeder(feeder_id: str, path: str, method: str, headers: dict, body
 @login_required_any
 def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     """Proxy request to feeder over its tunnel WebSocket; return response with path rewriting."""
+    fdb = _cached_feeder_for_tunnel(feeder_id)
+    if current_user.role != "admin":
+        if fdb is None:
+            return Response(
+                "<!DOCTYPE html><html><head><meta charset=utf-8><title>Forbidden</title></head>"
+                "<body style=\"font-family:sans-serif;padding:2rem;\"><h1>Not authorized</h1>"
+                "<p>This tunnel URL does not match a feeder in the dashboard, or you are not listed as an <strong>Owner</strong>. "
+                "Ask an admin to assign owners and ensure the feeder name matches the tunnel register id.</p></body></html>",
+                status=403,
+                mimetype="text/html; charset=utf-8",
+            )
+        if not user_can_access_feeder(fdb, current_user.username, current_user.role):
+            return Response(
+                "<!DOCTYPE html><html><head><meta charset=utf-8><title>Forbidden</title></head>"
+                "<body style=\"font-family:sans-serif;padding:2rem;\"><h1>Not authorized</h1>"
+                "<p>You do not have access to this feeder tunnel. Ask an admin to add your account under <strong>Owners</strong> for this feeder.</p></body></html>",
+                status=403,
+                mimetype="text/html; charset=utf-8",
+            )
     # Build path including query string (per wire protocol: path includes query)
     path_only = "/" + subpath if subpath else "/"
     path_only = _normalize_tar1090_path_for_proxy(path_only)

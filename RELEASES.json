@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.234",
+    "date": "2026-03-15",
+    "notes": [
+      "Feeder owners: JSON list of usernames per feeder (admin-only edit). Non-admins only see/list/tunnel feeders they own; empty owners = admin-only. Tunnel /feeder/<id>/ requires a matching dashboard feeder + owner (except admin). See docs/FEEDER_OWNERS.md."
+    ]
+  },
+  {
     "version": "1.0.233",
     "date": "2026-03-15",
     "notes": [

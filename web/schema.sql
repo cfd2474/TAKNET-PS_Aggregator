@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     positions_received INTEGER DEFAULT 0,
     mlat_enabled BOOLEAN DEFAULT 0,
     notes TEXT,
+    owners TEXT NOT NULL DEFAULT '[]',   -- JSON array of usernames; admin-only edit; empty = admin-only access
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
