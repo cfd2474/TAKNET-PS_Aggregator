@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.246",
+    "date": "2026-03-18",
+    "notes": [
+      "Users: show permission group as read-only for non-admins on their User Details page."
+    ]
+  },
+  {
+    "version": "1.0.245",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: new access requests no longer ask users to pick a permission group; admin sets role during approval."
+    ]
+  },
+  {
     "version": "1.0.244",
     "date": "2026-03-18",
     "notes": [

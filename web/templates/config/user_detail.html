@@ -79,7 +79,7 @@
                                 {% endfor %}
                             </select>
                         {% else %}
-                            {{ user.role }}
+                            {{ user.role }} <span style="font-size:12px;color:var(--text-muted);">(read-only)</span>
                         {% endif %}
                     </td>
                 </tr>

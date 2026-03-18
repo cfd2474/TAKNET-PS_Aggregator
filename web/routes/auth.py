@@ -51,7 +51,6 @@ def register():
         email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
         agency = request.form.get("agency", "").strip()
-        requested_role = request.form.get("requested_role", "viewer").strip()
 
         if not username or len(username) < 3:
             error = "Username must be at least 3 characters."
@@ -67,15 +66,12 @@ def register():
             error = "Phone is required."
         elif not agency:
             error = "Agency is required."
-        elif requested_role not in UserModel.ROLES:
-            error = "Invalid requested permission group."
         elif password != confirm:
             error = "Passwords do not match."
         else:
             ok, msg = UserModel.register(
                 username,
                 password,
-                requested_role,
                 {
                     "first_name": first_name,
                     "last_name": last_name,

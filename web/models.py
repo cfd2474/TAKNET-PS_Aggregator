@@ -570,9 +570,9 @@ class UserModel:
         return count
 
     @staticmethod
-    def register(username, password, role, profile: dict):
+    def register(username, password, profile: dict):
         """Create a pending user from a self-registration request."""
-        role = role if role in UserModel.ROLES else "viewer"
+        role = "viewer"  # Permission group is set by the approving admin later.
 
         def _clean(v):
             if v is None:
