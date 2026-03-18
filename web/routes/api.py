@@ -528,6 +528,102 @@ def diagnostics_aircraft():
     })
 
 
+@bp.route("/diagnostics/output", methods=["GET"])
+@admin_required
+def diagnostics_output():
+    """Preview CoT output XML for a given aircraft `q` (hex or callsign)."""
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify({"error": "Missing query `q` (hex or callsign)"}), 400
+
+    aircraft_q = q.upper()
+    is_hex = len(aircraft_q) == 6 and all(c in "0123456789ABCDEF" for c in aircraft_q)
+    callsign_q = q.lower()
+
+    try:
+        data = _get_aircraft_json_cached_for_diag()
+        aircraft_list = data.get("aircraft") or []
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch aircraft.json: {e}"}), 502
+
+    matches = []
+    for a in aircraft_list:
+        if not isinstance(a, dict):
+            continue
+        if is_hex:
+            if str(a.get("hex") or "").strip().upper() == aircraft_q:
+                matches.append(a)
+        else:
+            flight = (a.get("flight") or "").strip().lower()
+            callsign = (a.get("callsign") or "").strip().lower()
+            if flight == callsign_q or callsign == callsign_q:
+                matches.append(a)
+
+    if not matches:
+        return jsonify({"error": "No aircraft match found", "query": q, "matches": 0}), 404
+
+    aircraft = matches[0]
+    hex_code = (aircraft.get("hex") or "").strip().upper()
+    if not hex_code:
+        return jsonify({"error": "Matched aircraft has no `hex` field", "query": q}), 400
+
+    # Build a preview for each active outbound CoT output configured in the system.
+    from cot_pipeline import build_cot_xml, get_transform_for_aircraft
+    import xml.etree.ElementTree as ET
+
+    outputs = OutputModel.get_for_user(current_user.id, current_user.role)
+    cot_outputs = [
+        o
+        for o in outputs
+        if (o.get("output_type") == "cot" and o.get("mode") == "push" and o.get("status") == "active")
+    ]
+
+    results = []
+    for o in cot_outputs:
+        output_id = o.get("id")
+        config_raw = o.get("config") or "{}"
+        try:
+            config = json.loads(config_raw) if isinstance(config_raw, str) else (config_raw or {})
+        except Exception:
+            config = {}
+        include_icon_in_cot = bool(config.get("include_icon_in_cot", True))
+
+        transform = None
+        if bool(o.get("use_cotproxy")):
+            try:
+                transform = get_transform_for_aircraft(int(output_id), hex_code)
+            except Exception:
+                transform = None
+
+        try:
+            cot_xml = build_cot_xml(aircraft, transform=transform, include_icon_in_cot=include_icon_in_cot)
+            cot_type = None
+            if cot_xml:
+                root = ET.fromstring(cot_xml)
+                cot_type = root.attrib.get("type")
+            results.append({
+                "output_id": output_id,
+                "output_name": o.get("name"),
+                "cot_type": cot_type,
+                "use_cotproxy": bool(o.get("use_cotproxy")),
+                "transform": transform,
+                "cot_xml": cot_xml,
+            })
+        except Exception as e:
+            results.append({
+                "output_id": output_id,
+                "output_name": o.get("name"),
+                "error": f"Failed to build CoT: {e}",
+            })
+
+    return jsonify({
+        "query": q,
+        "matches": len(matches),
+        "aircraft": aircraft,
+        "outputs": results,
+    })
+
+
 # ── VPN Status ───────────────────────────────────────────────────────────────
 
 @bp.route("/vpn/status")

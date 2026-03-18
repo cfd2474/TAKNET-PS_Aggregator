@@ -39,11 +39,36 @@
         <pre id="diag-result" style="margin-top:10px;background:var(--bg-secondary);border:1px solid var(--border);padding:12px;border-radius:8px;max-height:520px;overflow:auto;font-size:12px;line-height:1.35;"></pre>
     </div>
 </div>
+
+<div class="card" style="margin-top:16px;">
+    <div class="card-header">
+        <h3>Output Inspector</h3>
+        <span style="font-size:12px;color:var(--text-muted);">CoT preview (admin-only)</span>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn" style="font-size:12px;" onclick="runOutputLookup()">Inspect Output</button>
+        <span id="diag-out-status" style="font-size:12px;color:var(--text-muted);"></span>
+    </div>
+
+    <div id="diag-out-error" style="display:none;margin-top:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);border-radius:8px;padding:12px;color:var(--red);font-size:13px;"></div>
+
+    <div id="diag-out-result-wrap" style="margin-top:16px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div style="font-size:12px;color:var(--text-muted);">
+                Match: <span id="diag-out-match-info">—</span>
+            </div>
+            <button class="btn" style="font-size:12px;" onclick="copyOutputResult()" id="diag-out-copy-btn">Copy JSON</button>
+        </div>
+        <pre id="diag-out-result" style="margin-top:10px;background:var(--bg-secondary);border:1px solid var(--border);padding:12px;border-radius:8px;max-height:520px;overflow:auto;font-size:12px;line-height:1.35;"></pre>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
 let diagAbort = null;
+let diagOutAbort = null;
 let diagDebounce = null;
 
 function normalizeQuery(q) {
@@ -64,6 +89,22 @@ function setError(msg) {
 
 function setStatus(msg) {
     const el = document.getElementById('diag-status');
+    el.textContent = msg || '';
+}
+
+function setOutError(msg) {
+    const err = document.getElementById('diag-out-error');
+    if (!msg) {
+        err.style.display = 'none';
+        err.textContent = '';
+        return;
+    }
+    err.style.display = 'block';
+    err.textContent = msg;
+}
+
+function setOutStatus(msg) {
+    const el = document.getElementById('diag-out-status');
     el.textContent = msg || '';
 }
 
@@ -107,6 +148,46 @@ async function runLookup() {
     }
 }
 
+async function runOutputLookup() {
+    const q = normalizeQuery(document.getElementById('diag-query').value);
+    if (!q) {
+        setOutError('');
+        document.getElementById('diag-out-result-wrap').style.display = 'none';
+        document.getElementById('diag-out-result').textContent = '';
+        setOutStatus('Enter a hex like A1B2C3.');
+        return;
+    }
+
+    if (diagOutAbort) diagOutAbort.abort();
+    diagOutAbort = new AbortController();
+
+    setOutError('');
+    setOutStatus('Looking up output…');
+    document.getElementById('diag-out-result-wrap').style.display = 'none';
+    document.getElementById('diag-out-result').textContent = '';
+
+    try {
+        const url = '/api/diagnostics/output?q=' + encodeURIComponent(q);
+        const r = await fetch(url, { signal: diagOutAbort.signal });
+        if (!r.ok) {
+            let txt = '';
+            try { txt = (await r.json()).error || ''; } catch(e) {}
+            setOutStatus('');
+            setOutError(txt ? txt : ('Request failed: ' + r.status));
+            return;
+        }
+        const d = await r.json();
+        setOutStatus('');
+        document.getElementById('diag-out-result-wrap').style.display = 'block';
+        document.getElementById('diag-out-match-info').textContent = (d.matches || 0) + ' match(es)';
+        document.getElementById('diag-out-result').textContent = JSON.stringify(d.outputs || [], null, 2);
+    } catch(e) {
+        if (e && e.name === 'AbortError') return;
+        setOutStatus('');
+        setOutError('Output lookup failed: ' + e);
+    }
+}
+
 function copyResult() {
     const pre = document.getElementById('diag-result');
     const text = pre.textContent || '';
@@ -114,6 +195,15 @@ function copyResult() {
         setStatus('Copied.');
         setTimeout(() => setStatus(''), 1500);
     }).catch(() => setStatus('Copy failed (clipboard blocked).'));
+}
+
+function copyOutputResult() {
+    const pre = document.getElementById('diag-out-result');
+    const text = pre.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+        setOutStatus('Copied.');
+        setTimeout(() => setOutStatus(''), 1500);
+    }).catch(() => setOutStatus('Copy failed (clipboard blocked).'));
 }
 
 document.getElementById('diag-query').addEventListener('input', function() {

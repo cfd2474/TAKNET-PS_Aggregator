@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.240",
+    "date": "2026-03-18",
+    "notes": [
+      "Diagnostics: add Output Inspector to preview CoT XML/transform output for a searched aircraft hex/callsign."
+    ]
+  },
+  {
     "version": "1.0.237",
     "date": "2026-03-18",
     "notes": [
