@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, jsonify, abort
 from flask_login import current_user
 from models import UserModel
-from routes.auth_utils import admin_required, network_admin_required
+from routes.auth_utils import admin_required, network_admin_required, login_required_any
 
 bp = Blueprint("config", __name__, url_prefix="/config")
 
@@ -42,6 +42,36 @@ def users():
     all_users = UserModel.get_all()
     pending_users = UserModel.get_pending()
     return render_template("config/users.html", users=all_users, pending_users=pending_users, roles=UserModel.ROLES)
+
+
+@bp.route("/users/<int:user_id>")
+@login_required_any
+def user_detail(user_id):
+    """Admin view for any user; non-admins can only view their own details."""
+    if int(user_id) != int(current_user.id) and current_user.role != "admin":
+        abort(403)
+
+    user = UserModel.get_by_id(int(user_id))
+    if not user:
+        abort(404)
+
+    return render_template(
+        "config/user_detail.html",
+        user=user,
+        can_reset_password=(current_user.role == "admin"),
+        is_self=(int(user_id) == int(current_user.id)),
+        roles=UserModel.ROLES,
+    )
+
+
+@bp.route("/users/<int:user_id>/profile", methods=["POST"])
+@admin_required
+def users_update_profile(user_id):
+    data = request.get_json() or {}
+    ok, msg = UserModel.update_profile(user_id, data)
+    if ok:
+        return jsonify({"success": True})
+    return jsonify({"error": msg}), 400
 
 
 # ── User management API (admin only) ─────────────────────────────────────────

@@ -505,6 +505,9 @@
                         <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">
                             {{ current_user.role if current_user.is_authenticated else '' }}
                         </div>
+                        {% if current_user.is_authenticated %}
+                        <a href="/config/users/{{ current_user.id }}" style="display:block;padding:10px 12px;font-size:13px;color:var(--text-secondary);text-decoration:none;" onmouseenter="this.style.background='var(--bg-input)'" onmouseleave="this.style.background='none'">Account Details</a>
+                        {% endif %}
                         <a href="/profile" style="display:block;padding:10px 12px;font-size:13px;color:var(--text-secondary);text-decoration:none;" onmouseenter="this.style.background='var(--bg-input)'" onmouseleave="this.style.background='none'">Change Password</a>
                         <button type="button" id="high-contrast-toggle" style="display:block;width:100%;padding:10px 12px;font-size:13px;color:var(--text-secondary);text-decoration:none;border:none;background:none;text-align:left;cursor:pointer;border-top:1px solid var(--border);" onmouseenter="this.style.background='var(--bg-input)'" onmouseleave="this.style.background='none'">High contrast view</button>
                         <a href="/logout" style="display:block;padding:10px 12px;font-size:13px;color:var(--red);text-decoration:none;border-top:1px solid var(--border);" onmouseenter="this.style.background='rgba(239,68,68,0.08)'" onmouseleave="this.style.background='none'">Sign Out</a>

@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.243",
+    "date": "2026-03-18",
+    "notes": [
+      "Users: admin can edit profile fields and permission group from the User Details screen; user menu links to self details."
+    ]
+  },
+  {
+    "version": "1.0.242",
+    "date": "2026-03-18",
+    "notes": [
+      "Users: add per-user details view (username, profile fields) and admin reset-password action; user list links to details and the top-right user menu opens details for the current account."
+    ]
+  },
+  {
     "version": "1.0.241",
     "date": "2026-03-18",
     "notes": [

@@ -30,6 +30,13 @@ def get_db():
             conn.commit()
         except Exception:
             pass  # Column already exists
+        # Migration: add user profile fields (optional metadata)
+        for col in ["first_name", "last_name", "email", "phone", "agency"]:
+            try:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
+                conn.commit()
+            except Exception:
+                pass
         # Migration: output_format and use_cotproxy for CoT/COTProxy support
         for col, defn in [
             ("output_format", "TEXT NOT NULL DEFAULT 'as_is'"),
@@ -650,6 +657,49 @@ class UserModel:
         conn.commit()
         conn.close()
         return True, "Role updated"
+
+    @staticmethod
+    def update_profile(user_id, data: dict):
+        """Admin-only: update optional profile metadata fields."""
+        def _clean(v):
+            if v is None:
+                return None
+            s = str(v).strip()
+            return s if s else None
+
+        fields = {
+            "first_name": _clean(data.get("first_name")),
+            "last_name": _clean(data.get("last_name")),
+            "email": _clean(data.get("email")),
+            "phone": _clean(data.get("phone")),
+            "agency": _clean(data.get("agency")),
+        }
+
+        conn = get_db()
+        conn.execute(
+            """
+            UPDATE users
+               SET first_name = ?,
+                   last_name  = ?,
+                   email      = ?,
+                   phone      = ?,
+                   agency     = ?,
+                   updated_at = datetime('now')
+             WHERE id = ?
+            """,
+            (
+                fields["first_name"],
+                fields["last_name"],
+                fields["email"],
+                fields["phone"],
+                fields["agency"],
+                user_id,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        return True, "Profile updated"
 
     @staticmethod
     def delete(user_id):

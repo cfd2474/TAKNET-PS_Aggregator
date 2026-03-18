@@ -6,6 +6,11 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'viewer',         -- 'admin', 'network_admin', 'viewer'
+    first_name TEXT,
+    last_name TEXT,
+    email TEXT,
+    phone TEXT,
+    agency TEXT,
     status TEXT NOT NULL DEFAULT 'active',       -- 'active', 'pending', 'denied'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
