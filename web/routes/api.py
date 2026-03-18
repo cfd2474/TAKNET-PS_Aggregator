@@ -487,7 +487,7 @@ def _get_aircraft_json_cached_for_diag():
 
 
 @bp.route("/diagnostics/aircraft", methods=["GET"])
-@admin_required
+@network_admin_required
 def diagnostics_aircraft():
     """Return the raw aircraft entry from aircraft.json for a given `q` (hex or callsign)."""
     q = (request.args.get("q") or "").strip()
@@ -529,7 +529,7 @@ def diagnostics_aircraft():
 
 
 @bp.route("/diagnostics/output", methods=["GET"])
-@admin_required
+@network_admin_required
 def diagnostics_output():
     """Preview CoT output XML for a given aircraft `q` (hex or callsign)."""
     q = (request.args.get("q") or "").strip()

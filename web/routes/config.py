@@ -32,7 +32,7 @@ def health():
     return render_template("config/health.html")
 
 @bp.route("/diagnostics")
-@admin_required
+@network_admin_required
 def diagnostics():
     return render_template("config/diagnostics.html")
 

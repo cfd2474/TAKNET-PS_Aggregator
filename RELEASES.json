@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.241",
+    "date": "2026-03-18",
+    "notes": [
+      "RBAC: Diagnostics pages and API endpoints are available to network administrators as well as admins."
+    ]
+  },
+  {
     "version": "1.0.240",
     "date": "2026-03-18",
     "notes": [
