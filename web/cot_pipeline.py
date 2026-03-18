@@ -459,7 +459,7 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True, now=None, 
             ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
     # Remarks: always include source (taknet-ps, feed type), CoT-Proxy when transformed, TIS-B squawk when TIS-B, then transform text or ADS-B info
     feed_type = "ADSBHub" if (aircraft.get("source") or "").strip().lower() == "adsbhub" else "direct feed"
-    rem_parts = ["taknet-ps", feed_type]
+    rem_parts = ["taknet-ps", feed_type, f"Hex: {hex_code}"]
     if transform:
         rem_parts.append("CoT-Proxy")
     if _is_tisb(aircraft):

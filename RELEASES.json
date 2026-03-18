@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.236",
+    "date": "2026-03-18",
+    "notes": [
+      "CoT remarks: include aircraft `hex` in the <detail><remarks> text for easier debugging and transform validation."
+    ]
+  },
+  {
     "version": "1.0.235",
     "date": "2026-03-18",
     "notes": [
