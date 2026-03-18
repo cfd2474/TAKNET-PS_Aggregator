@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block page_title %}User Details{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <h2 style="font-size:18px;font-weight:600;margin:0;">User Details</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:6px 0 0;">
+            Username: <span style="font-family:monospace;color:var(--text-primary);">{{ user.username }}</span>
+        </p>
+    </div>
+    {% if not is_self and can_reset_password %}
+        <a class="btn" style="font-size:12px;" href="/config/users">← Back to Users</a>
+    {% endif %}
+</div>
+
+<div class="card" style="max-width:760px;">
+    <div class="card-header">
+        <h3 style="margin:0;">Profile</h3>
+        <span style="font-size:12px;color:var(--text-muted);">Permission group: {{ user.role }}</span>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <tbody>
+                <tr><th style="width:190px;">First name</th>
+                    <td style="font-size:13px;color:var(--text-primary);">
+                        {% if can_reset_password %}
+                            <input class="form-control" type="text" id="ud-first-name" value="{{ user.first_name or '' }}" style="max-width:420px;">
+                        {% else %}
+                            {{ user.first_name or '—' }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Last name</th>
+                    <td style="font-size:13px;color:var(--text-primary);">
+                        {% if can_reset_password %}
+                            <input class="form-control" type="text" id="ud-last-name" value="{{ user.last_name or '' }}" style="max-width:420px;">
+                        {% else %}
+                            {{ user.last_name or '—' }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Email</th>
+                    <td style="font-size:13px;color:var(--text-primary);">
+                        {% if can_reset_password %}
+                            <input class="form-control" type="email" id="ud-email" value="{{ user.email or '' }}" style="max-width:420px;">
+                        {% else %}
+                            {{ user.email or '—' }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Phone</th>
+                    <td style="font-size:13px;color:var(--text-primary);">
+                        {% if can_reset_password %}
+                            <input class="form-control" type="text" id="ud-phone" value="{{ user.phone or '' }}" style="max-width:420px;">
+                        {% else %}
+                            {{ user.phone or '—' }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Agency</th>
+                    <td style="font-size:13px;color:var(--text-primary);">
+                        {% if can_reset_password %}
+                            <input class="form-control" type="text" id="ud-agency" value="{{ user.agency or '' }}" style="max-width:420px;">
+                        {% else %}
+                            {{ user.agency or '—' }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr><th>Permission group</th>
+                    <td style="font-size:13px;color:var(--text-primary);">
+                        {% if can_reset_password %}
+                            <select class="form-control" id="ud-role" style="max-width:260px;"
+                                    {% if is_self %}disabled{% endif %}
+                                    onchange="updateRoleFromDetails()">
+                                {% for r in roles %}
+                                    <option value="{{ r }}" {% if r == user.role %}selected{% endif %}>{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                        {% else %}
+                            {{ user.role }}
+                        {% endif %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% if can_reset_password %}
+    <div style="padding:14px 16px 18px;">
+        <button class="btn btn-primary" style="font-size:12px;" onclick="saveUserProfile()">Save Profile</button>
+        <div id="ud-profile-error" style="display:none;margin-top:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);border-radius:8px;padding:12px;color:var(--red);font-size:13px;"></div>
+    </div>
+    {% endif %}
+</div>
+
+{% if can_reset_password %}
+<div class="card" style="max-width:760px;margin-top:16px;border-color:rgba(239,68,68,0.35);">
+    <div class="card-header" style="background:rgba(239,68,68,0.06);">
+        <h3 style="margin:0;">Reset Password</h3>
+        <span style="font-size:12px;color:var(--text-muted);">Admin-only action</span>
+    </div>
+
+    <div style="padding:16px;">
+        <button class="btn" style="font-size:12px;" onclick="showResetModal()">Reset Password</button>
+        <div id="user-detail-reset-error" style="display:none;margin-top:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);border-radius:8px;padding:12px;color:var(--red);font-size:13px;"></div>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal-overlay" id="reset-user-detail-modal">
+    <div class="modal" style="max-width:380px;">
+        <div class="modal-header">
+            <h3>Reset Password</h3>
+            <button class="modal-close" onclick="closeUserDetailModal()" type="button">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                Set new password for <strong>{{ user.username }}</strong>
+            </div>
+            <div class="form-group">
+                <label>New Password</label>
+                <input class="form-control" type="password" id="reset-user-detail-password" autocomplete="new-password">
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                <button class="btn" onclick="closeUserDetailModal()" type="button">Cancel</button>
+                <button class="btn btn-primary" onclick="resetUserDetailPassword()" type="button">Reset Password</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let resetUserDetailId = {{ user.id }};
+
+async function updateRoleFromDetails() {
+    const sel = document.getElementById('ud-role');
+    if (!sel) return;
+    const role = sel.value;
+    try {
+        const r = await fetch('/config/users/' + resetUserDetailId + '/role', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({role})
+        });
+        const d = await r.json();
+        if (!d.success) {
+            alert('Error updating role: ' + (d.error || 'unknown'));
+            location.reload();
+        } else {
+            location.reload();
+        }
+    } catch (e) {
+        alert('Error updating role');
+    }
+}
+
+async function saveUserProfile() {
+    const errEl = document.getElementById('ud-profile-error');
+    if (errEl) {
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+    }
+
+    const body = {
+        first_name: document.getElementById('ud-first-name')?.value ?? '',
+        last_name: document.getElementById('ud-last-name')?.value ?? '',
+        email: document.getElementById('ud-email')?.value ?? '',
+        phone: document.getElementById('ud-phone')?.value ?? '',
+        agency: document.getElementById('ud-agency')?.value ?? '',
+    };
+
+    try {
+        const r = await fetch('/config/users/' + resetUserDetailId + '/profile', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (d.success) {
+            location.reload();
+        } else {
+            if (errEl) {
+                errEl.textContent = d.error || 'Error saving profile';
+                errEl.style.display = 'block';
+            } else {
+                alert('Error saving profile');
+            }
+        }
+    } catch (e) {
+        if (errEl) {
+            errEl.textContent = 'Error saving profile';
+            errEl.style.display = 'block';
+        }
+    }
+}
+
+function closeUserDetailModal() {
+    document.getElementById('reset-user-detail-modal').classList.remove('show');
+    const errEl = document.getElementById('user-detail-reset-error');
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+}
+
+function showResetModal() {
+    const pw = document.getElementById('reset-user-detail-password');
+    if (pw) pw.value = '';
+    closeUserDetailModal(); // ensure err reset state
+    document.getElementById('reset-user-detail-modal').classList.add('show');
+}
+
+async function resetUserDetailPassword() {
+    const password = document.getElementById('reset-user-detail-password').value;
+    const errEl = document.getElementById('user-detail-reset-error');
+
+    if (!password || password.length < 6) {
+        errEl.textContent = 'Password must be at least 6 characters.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    try {
+        const r = await fetch('/config/users/' + resetUserDetailId + '/reset-password', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({password})
+        });
+        const d = await r.json();
+        if (d.success) {
+            closeUserDetailModal();
+        } else {
+            errEl.textContent = d.error || 'Error resetting password';
+            errEl.style.display = 'block';
+        }
+    } catch (e) {
+        errEl.textContent = 'Error resetting password';
+        errEl.style.display = 'block';
+    }
+}
+</script>
+{% endblock %}
+
