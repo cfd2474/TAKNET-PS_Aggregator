@@ -1,4 +1,4 @@
-"""Config routes — VPN, services, updates, users pages."""
+"""Config routes — VPN, services, updates, diagnostics, users pages."""
 from flask import Blueprint, render_template, request, jsonify, abort
 from flask_login import current_user
 from models import UserModel
@@ -30,6 +30,11 @@ def updates():
 @admin_required
 def health():
     return render_template("config/health.html")
+
+@bp.route("/diagnostics")
+@admin_required
+def diagnostics():
+    return render_template("config/diagnostics.html")
 
 @bp.route("/users")
 @admin_required

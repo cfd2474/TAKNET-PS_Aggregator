@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.237",
+    "date": "2026-03-18",
+    "notes": [
+      "Diagnostics: add an admin Input Feed Inspector page to fetch and display the raw `aircraft.json` record for a specific hex/callsign."
+    ]
+  },
+  {
     "version": "1.0.236",
     "date": "2026-03-18",
     "notes": [

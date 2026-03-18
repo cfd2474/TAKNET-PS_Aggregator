@@ -464,6 +464,70 @@ def aircraft_json():
     return jsonify({"aircraft": [], "now": 0, "messages": 0})
 
 
+# ── Diagnostics ─────────────────────────────────────────────────────────
+
+_AIRCRAFT_JSON_CACHE = {"ts": 0.0, "data": None}
+_AIRCRAFT_JSON_CACHE_TTL_SEC = 1.0
+
+
+def _get_aircraft_json_cached_for_diag():
+    """Fetch and cache merger aircraft.json for short time windows (helps inspector typing)."""
+    import time as _time
+    now = _time.monotonic()
+    ent = _AIRCRAFT_JSON_CACHE
+    if ent.get("data") is not None and (now - float(ent.get("ts") or 0.0)) < _AIRCRAFT_JSON_CACHE_TTL_SEC:
+        return ent["data"]
+
+    resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
+    resp.raise_for_status()
+    data = resp.json()
+    _AIRCRAFT_JSON_CACHE["ts"] = now
+    _AIRCRAFT_JSON_CACHE["data"] = data
+    return data
+
+
+@bp.route("/diagnostics/aircraft", methods=["GET"])
+@admin_required
+def diagnostics_aircraft():
+    """Return the raw aircraft entry from aircraft.json for a given `q` (hex or callsign)."""
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify({"error": "Missing query `q` (hex or callsign)"}), 400
+
+    aircraft_q = q.upper()
+    is_hex = len(aircraft_q) == 6 and all(c in "0123456789ABCDEF" for c in aircraft_q)
+    callsign_q = q.strip().lower()
+
+    try:
+        data = _get_aircraft_json_cached_for_diag()
+        aircraft_list = data.get("aircraft") or []
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch aircraft.json: {e}"}), 502
+
+    matches = []
+    for a in aircraft_list:
+        if not isinstance(a, dict):
+            continue
+        if is_hex:
+            if str(a.get("hex") or "").strip().upper() == aircraft_q:
+                matches.append(a)
+        else:
+            # callsign match (aircraft.json uses `flight` in many feeds)
+            flight = (a.get("flight") or "").strip().lower()
+            callsign = (a.get("callsign") or "").strip().lower()
+            if flight == callsign_q or callsign == callsign_q:
+                matches.append(a)
+
+    if not matches:
+        return jsonify({"error": "No aircraft match found", "query": q, "matches": 0}), 404
+
+    return jsonify({
+        "query": q,
+        "matches": len(matches),
+        "aircraft": matches[0],
+    })
+
+
 # ── VPN Status ───────────────────────────────────────────────────────────────
 
 @bp.route("/vpn/status")
