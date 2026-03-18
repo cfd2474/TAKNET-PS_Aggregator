@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block page_title %}Diagnostics{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <h2 style="font-size:18px;font-weight:600;margin:0;">Input Feed Inspector</h2>
+        <p style="font-size:13px;color:var(--text-muted);margin:6px 0 0;">
+            Search for an aircraft by `hex` and view the raw ADS-B JSON object as provided by the input feed (`aircraft.json`).
+        </p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <h3>Aircraft lookup</h3>
+        <span style="font-size:12px;color:var(--text-muted);">Admin-only</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input
+            type="text"
+            id="diag-query"
+            class="form-control"
+            style="min-width:260px;"
+            placeholder="Hex (e.g. A1B2C3) or callsign"
+            autocomplete="off"
+        />
+        <button class="btn" style="font-size:12px;" onclick="runLookup()">Inspect</button>
+        <span id="diag-status" style="font-size:12px;color:var(--text-muted);"></span>
+    </div>
+    <div id="diag-error" style="display:none;margin-top:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);border-radius:8px;padding:12px;color:var(--red);font-size:13px;"></div>
+    <div id="diag-result-wrap" style="margin-top:16px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div style="font-size:12px;color:var(--text-muted);">
+                Match: <span id="diag-match-info">—</span>
+            </div>
+            <button class="btn" style="font-size:12px;" onclick="copyResult()" id="diag-copy-btn">Copy JSON</button>
+        </div>
+        <pre id="diag-result" style="margin-top:10px;background:var(--bg-secondary);border:1px solid var(--border);padding:12px;border-radius:8px;max-height:520px;overflow:auto;font-size:12px;line-height:1.35;"></pre>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let diagAbort = null;
+let diagDebounce = null;
+
+function normalizeQuery(q) {
+    if (q == null) return "";
+    return String(q).trim();
+}
+
+function setError(msg) {
+    const err = document.getElementById('diag-error');
+    if (!msg) {
+        err.style.display = 'none';
+        err.textContent = '';
+        return;
+    }
+    err.style.display = 'block';
+    err.textContent = msg;
+}
+
+function setStatus(msg) {
+    const el = document.getElementById('diag-status');
+    el.textContent = msg || '';
+}
+
+async function runLookup() {
+    const q = normalizeQuery(document.getElementById('diag-query').value);
+    if (!q) {
+        setError('');
+        document.getElementById('diag-result-wrap').style.display = 'none';
+        document.getElementById('diag-result').textContent = '';
+        setStatus('Enter a hex like A1B2C3.');
+        return;
+    }
+
+    if (diagAbort) diagAbort.abort();
+    diagAbort = new AbortController();
+
+    setError('');
+    setStatus('Looking up…');
+    document.getElementById('diag-result-wrap').style.display = 'none';
+    document.getElementById('diag-result').textContent = '';
+
+    try {
+        const url = '/api/diagnostics/aircraft?q=' + encodeURIComponent(q);
+        const r = await fetch(url, { signal: diagAbort.signal });
+        if (!r.ok) {
+            let txt = '';
+            try { txt = (await r.json()).error || ''; } catch(e) {}
+            setStatus('');
+            setError(txt ? txt : ('Request failed: ' + r.status));
+            return;
+        }
+        const d = await r.json();
+        setStatus('');
+        document.getElementById('diag-result-wrap').style.display = 'block';
+        document.getElementById('diag-match-info').textContent = (d.matches || 0) + ' match(es)';
+        document.getElementById('diag-result').textContent = JSON.stringify(d.aircraft || null, null, 2);
+    } catch(e) {
+        if (e && e.name === 'AbortError') return;
+        setStatus('');
+        setError('Lookup failed: ' + e);
+    }
+}
+
+function copyResult() {
+    const pre = document.getElementById('diag-result');
+    const text = pre.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+        setStatus('Copied.');
+        setTimeout(() => setStatus(''), 1500);
+    }).catch(() => setStatus('Copy failed (clipboard blocked).'));
+}
+
+document.getElementById('diag-query').addEventListener('input', function() {
+    const q = normalizeQuery(this.value);
+    if (diagDebounce) clearTimeout(diagDebounce);
+    setStatus('');
+    if (!q) return;
+    diagDebounce = setTimeout(runLookup, 650);
+});
+</script>
+{% endblock %}
+
