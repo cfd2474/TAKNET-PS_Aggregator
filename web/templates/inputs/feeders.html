@@ -49,20 +49,21 @@
         <table>
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Software version</th>
-                    <th>Type</th>
-                    <th>IP Address</th>
+                    <th onclick="setSort('name')" style="cursor:pointer;white-space:nowrap;">Name <span id="sort-indicator-name" style="color:var(--text-muted);"></span></th>
+                    <th onclick="setSort('software_version')" style="cursor:pointer;white-space:nowrap;">Software version <span id="sort-indicator-software_version" style="color:var(--text-muted);"></span></th>
+                    <th onclick="setSort('conn_type')" style="cursor:pointer;white-space:nowrap;">Type <span id="sort-indicator-conn_type" style="color:var(--text-muted);"></span></th>
+                    <th onclick="setSort('ip_address')" style="cursor:pointer;white-space:nowrap;">IP Address <span id="sort-indicator-ip_address" style="color:var(--text-muted);"></span></th>
                     <th>Location</th>
                     <th>Messages</th>
-                    <th>MLAT</th>
+                    <th onclick="setSort('mlat_enabled')" style="cursor:pointer;white-space:nowrap;">MLAT <span id="sort-indicator-mlat_enabled" style="color:var(--text-muted);"></span></th>
                     <th>Last Seen</th>
                     <th>Status</th>
+                    <th onclick="setSort('owner')" style="cursor:pointer;white-space:nowrap;">Owner <span id="sort-indicator-owner" style="color:var(--text-muted);"></span></th>
                     <th style="width:1%;white-space:nowrap;">Connect</th>
                 </tr>
             </thead>
             <tbody id="feeder-table">
-                <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
+                <tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -76,6 +77,46 @@ function escapeHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 let allFeeders = [];
+let sortKey = null;  // set by header clicks
+let sortDir = 'asc'; // 'asc' | 'desc'
+
+function setSort(key) {
+    if (sortKey === key) {
+        sortDir = (sortDir === 'asc') ? 'desc' : 'asc';
+    } else {
+        sortKey = key;
+        sortDir = 'asc';
+    }
+    renderTable();
+    const keys = ['name', 'software_version', 'conn_type', 'ip_address', 'mlat_enabled', 'owner'];
+    keys.forEach(k => {
+        const el = document.getElementById('sort-indicator-' + k);
+        if (!el) return;
+        if (sortKey === k) {
+            el.textContent = (sortDir === 'asc') ? ' ▲' : ' ▼';
+        } else {
+            el.textContent = '';
+        }
+    });
+}
+
+function feederOwnerDisplay(f) {
+    if (f.owners && Array.isArray(f.owners) && f.owners.length) return f.owners.join(', ');
+    return '—';
+}
+
+function feederSortValue(f, key) {
+    if (key === 'name') return (f.display_name !== undefined ? f.display_name : f.name) || '';
+    if (key === 'software_version') return (f.software_version !== undefined && f.software_version) ? f.software_version : '';
+    if (key === 'conn_type') return f.conn_type || '';
+    if (key === 'ip_address') return f.ip_address || '';
+    if (key === 'mlat_enabled') return f.mlat_enabled ? 1 : 0;
+    if (key === 'owner') {
+        if (f.owners && Array.isArray(f.owners) && f.owners.length) return f.owners.join(', ') || '';
+        return '';
+    }
+    return '';
+}
 
 async function loadFeeders() {
     try {
@@ -108,8 +149,20 @@ function renderTable() {
 
     const tbody = document.getElementById('feeder-table');
         if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:40px;">No feeders found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:40px;">No feeders found</td></tr>';
         return;
+    }
+
+    if (sortKey) {
+        const dirMul = (sortDir === 'asc') ? 1 : -1;
+        filtered.sort((a, b) => {
+            const va = feederSortValue(a, sortKey);
+            const vb = feederSortValue(b, sortKey);
+            if (va === vb) return 0;
+            // Numeric compare for MLAT, otherwise locale compare for strings.
+            if (sortKey === 'mlat_enabled') return (va - vb) * dirMul;
+            return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * dirMul;
+        });
     }
 
     let html = '';
@@ -134,6 +187,7 @@ function renderTable() {
         html += '<td>' + mlat + '</td>';
         html += '<td>' + fmtAgo(f.last_seen) + '</td>';
         html += '<td>' + statusBadge(f.status) + '</td>';
+        html += '<td style="font-size:12px;">' + escapeHtml(feederOwnerDisplay(f)) + '</td>';
         if (f.can_tunnel && f.tunnel_feeder_id) {
             html += '<td onclick="event.stopPropagation();"><a href="/feeder/' + escapeHtml(f.tunnel_feeder_id) + '/dashboard" class="btn" style="font-size:12px;padding:4px 10px;" target="_blank" rel="noopener">Connect</a></td>';
         } else {
