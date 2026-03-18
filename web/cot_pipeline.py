@@ -174,7 +174,14 @@ def _parse_float(v, default=None):
 
 
 def _parse_category_int(category):
-    """Return ADS-B emitter category as int, or None. Handles hex strings (e.g. 'A1' -> 161) or decimal."""
+    """Return ADS-B emitter category as int, or None.
+
+    Handles:
+    - ints (already parsed)
+    - decimal strings (e.g. "10")
+    - hex strings with/without prefix (e.g. "0x0A" or "0A")
+    - float-like strings that represent integers (e.g. "10.0")
+    """
     if category is None:
         return None
     if isinstance(category, int):
@@ -184,8 +191,26 @@ def _parse_category_int(category):
         return None
     try:
         if s.startswith("0x") or s.startswith("0X"):
-            return int(s, 16)
-        return int(s, 10)
+            v = int(s, 16)
+            return v if 0 <= v <= 255 else None
+
+        # Some aircraft/feeds emit small categories as hex without 0x (e.g. "0A").
+        # Only attempt this when the value is short and contains hex letters.
+        if len(s) <= 2 and any(c in "abcdefABCDEF" for c in s):
+            if all(c in "0123456789abcdefABCDEF" for c in s):
+                v = int(s, 16)
+                return v if 0 <= v <= 255 else None
+
+        # Float-like strings occasionally show up (e.g. "10.0") — treat as integer.
+        if "." in s:
+            f = float(s)
+            v = int(f)
+            if f == float(v) and 0 <= v <= 255:
+                return v
+            return v if 0 <= v <= 255 else None
+
+        v = int(s, 10)
+        return v if 0 <= v <= 255 else None
     except (TypeError, ValueError):
         return None
 

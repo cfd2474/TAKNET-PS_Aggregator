@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.235",
+    "date": "2026-03-18",
+    "notes": [
+      "CoT classification: improve ADS-B emitter category parsing (handle float-like and short hex strings) so lighter-than-air aircraft classify as civ/mil LTA instead of civil generic."
+    ]
+  },
+  {
     "version": "1.0.234",
     "date": "2026-03-15",
     "notes": [
