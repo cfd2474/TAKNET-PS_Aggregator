@@ -570,13 +570,43 @@ class UserModel:
         return count
 
     @staticmethod
-    def register(username, password):
+    def register(username, password, role, profile: dict):
         """Create a pending user from a self-registration request."""
+        role = role if role in UserModel.ROLES else "viewer"
+
+        def _clean(v):
+            if v is None:
+                return None
+            s = str(v).strip()
+            return s if s else None
+
+        profile_fields = {
+            "first_name": _clean(profile.get("first_name")),
+            "last_name": _clean(profile.get("last_name")),
+            "email": _clean(profile.get("email")),
+            "phone": _clean(profile.get("phone")),
+            "agency": _clean(profile.get("agency")),
+        }
+
         conn = get_db()
         try:
             conn.execute(
-                "INSERT INTO users (username, password_hash, role, status) VALUES (?, ?, 'viewer', 'pending')",
-                (username, generate_password_hash(password)),
+                """
+                INSERT INTO users
+                    (username, password_hash, role, status, first_name, last_name, email, phone, agency)
+                VALUES
+                    (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+                """,
+                (
+                    username,
+                    generate_password_hash(password),
+                    role,
+                    profile_fields["first_name"],
+                    profile_fields["last_name"],
+                    profile_fields["email"],
+                    profile_fields["phone"],
+                    profile_fields["agency"],
+                ),
             )
             conn.commit()
             conn.close()

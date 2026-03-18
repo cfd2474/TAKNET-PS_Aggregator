@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.244",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: access requests now require user profile fields (name, email, phone, agency) and a requested permission group."
+    ]
+  },
+  {
     "version": "1.0.243",
     "date": "2026-03-18",
     "notes": [

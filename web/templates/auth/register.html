@@ -63,6 +63,34 @@
             <label>Confirm Password</label>
             <input type="password" name="confirm_password" autocomplete="new-password" required>
         </div>
+        <div class="form-group">
+            <label>First Name</label>
+            <input type="text" name="first_name" autocomplete="given-name" required minlength="1">
+        </div>
+        <div class="form-group">
+            <label>Last Name</label>
+            <input type="text" name="last_name" autocomplete="family-name" required minlength="1">
+        </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" autocomplete="email" required>
+        </div>
+        <div class="form-group">
+            <label>Phone</label>
+            <input type="text" name="phone" autocomplete="tel" required>
+        </div>
+        <div class="form-group">
+            <label>Agency</label>
+            <input type="text" name="agency" autocomplete="organization" required>
+        </div>
+        <div class="form-group">
+            <label>Requested Permission Group</label>
+            <select name="requested_role" required style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text-primary);font-size:14px;outline:none;">
+                <option value="viewer">viewer</option>
+                <option value="network_admin">network_admin</option>
+                <option value="admin">admin</option>
+            </select>
+        </div>
         <button class="btn btn-primary" type="submit">Submit Request</button>
     </form>
     {% endif %}

@@ -46,15 +46,44 @@ def register():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         confirm  = request.form.get("confirm_password", "")
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
+        email = request.form.get("email", "").strip()
+        phone = request.form.get("phone", "").strip()
+        agency = request.form.get("agency", "").strip()
+        requested_role = request.form.get("requested_role", "viewer").strip()
 
         if not username or len(username) < 3:
             error = "Username must be at least 3 characters."
         elif len(password) < 6:
             error = "Password must be at least 6 characters."
+        elif not first_name:
+            error = "First name is required."
+        elif not last_name:
+            error = "Last name is required."
+        elif not email:
+            error = "Email is required."
+        elif not phone:
+            error = "Phone is required."
+        elif not agency:
+            error = "Agency is required."
+        elif requested_role not in UserModel.ROLES:
+            error = "Invalid requested permission group."
         elif password != confirm:
             error = "Passwords do not match."
         else:
-            ok, msg = UserModel.register(username, password)
+            ok, msg = UserModel.register(
+                username,
+                password,
+                requested_role,
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "phone": phone,
+                    "agency": agency,
+                },
+            )
             if ok:
                 success = True
             else:
