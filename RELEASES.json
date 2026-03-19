@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.260",
+    "date": "2026-03-18",
+    "notes": [
+      "CoTProxy: add Distress -> Hostile toggle (emergency status or squawk 7700 forces hostile CoT variant)."
+    ]
+  },
+  {
     "version": "1.0.259",
     "date": "2026-03-18",
     "notes": [

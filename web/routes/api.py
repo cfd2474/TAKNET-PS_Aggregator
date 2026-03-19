@@ -587,6 +587,7 @@ def diagnostics_output():
         except Exception:
             config = {}
         include_icon_in_cot = bool(config.get("include_icon_in_cot", True))
+        distress_hostile = bool(config.get("distress_hostile"))
 
         transform = None
         # CoT outputs always use COTProxy transforms.
@@ -596,7 +597,12 @@ def diagnostics_output():
             transform = None
 
         try:
-            cot_xml = build_cot_xml(aircraft, transform=transform, include_icon_in_cot=include_icon_in_cot)
+            cot_xml = build_cot_xml(
+                aircraft,
+                transform=transform,
+                include_icon_in_cot=include_icon_in_cot,
+                distress_hostile=distress_hostile,
+            )
             cot_type = None
             if cot_xml:
                 root = ET.fromstring(cot_xml)

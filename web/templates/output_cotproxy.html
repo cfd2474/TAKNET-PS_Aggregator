@@ -54,6 +54,15 @@ th.sortable:hover { color: var(--accent); }
             </div>
         </label>
         <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+            <input type="checkbox" id="distress-hostile-toggle" style="margin-top:3px;">
+            <div>
+                <span style="font-weight:600;font-size:13px;">Distress -> Hostile CoT</span>
+                <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">
+                    When enabled, any aircraft with emergency status OR squawk <strong>7700</strong> will be sent using the hostile CoT variant for the same class (instead of friendly).
+                </p>
+            </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
             <input type="checkbox" id="include-icon-in-cot-toggle" style="margin-top:3px;">
             <div>
                 <span style="font-weight:600;font-size:13px;">Include transform icon in CoT</span>
@@ -515,6 +524,37 @@ document.getElementById('pass-all-toggle').addEventListener('change', function()
     updatePassAllDescription();
     savePassAll();
 });
+
+function updateDistressHostileToggle() {
+    const el = document.getElementById('distress-hostile-toggle');
+    if (!el) return;
+    el.checked = outputConfig.distress_hostile === true;
+}
+
+async function saveDistressHostile() {
+    const el = document.getElementById('distress-hostile-toggle');
+    if (!el) return;
+    const on = el.checked;
+    outputConfig.distress_hostile = on;
+    try {
+        const r = await fetch('/api/outputs/' + outputId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: outputConfig })
+        });
+        if (!r.ok) throw new Error((await r.json()).error || 'Save failed');
+    } catch (e) {
+        console.error('Failed to save distress_hostile', e);
+        el.checked = !on;
+        outputConfig.distress_hostile = !on;
+    }
+}
+
+updateDistressHostileToggle();
+const distressEl = document.getElementById('distress-hostile-toggle');
+if (distressEl) {
+    distressEl.addEventListener('change', function() { saveDistressHostile(); });
+}
 
 document.getElementById('include-icon-in-cot-toggle').checked = outputConfig.include_icon_in_cot !== false;
 const cotStaleEl = document.getElementById('cot-stale-seconds');

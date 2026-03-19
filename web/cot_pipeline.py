@@ -66,6 +66,60 @@ COT_TYPE_MIL_UAV = "a-f-A-M-F-Q"
 COT_TYPE_MIL = "a-f-A-M"
 # Unknown air track (e.g. TIS-B); MIL-STD-2525 a-f-A-U
 COT_TYPE_UNKNOWN_AIR = "a-f-A-U"
+
+
+def _cot_type_hostile_variant(cot_type: str) -> str:
+    """
+    Convert a-f-A... (friendly) CoT type into the matching hostile variant (a-h-A...).
+    Keeps the same class (civil/military/fixed/rotor/LTA/UAV/unknown) by only switching f->h.
+    """
+    if not isinstance(cot_type, str):
+        return cot_type
+    parts = cot_type.split("-")
+    # Expected shape: a-f-A-...
+    if len(parts) >= 2 and parts[0] == "a" and parts[1] in ("f", "h"):
+        parts[1] = "h"
+        return "-".join(parts)
+    return cot_type.replace("-f-", "-h-")
+
+
+def _aircraft_is_distress(aircraft: dict) -> bool:
+    """True if aircraft indicates emergency/distress (status emergency or squawk 7700)."""
+    if not isinstance(aircraft, dict):
+        return False
+
+    # Squawk 7700 (often string or int; sometimes partially provided).
+    squawk = aircraft.get("squawk")
+    if squawk is None:
+        squawk = aircraft.get("squawk_code")
+    if squawk is not None:
+        try:
+            s = str(squawk).strip()
+            if s:
+                if s.zfill(4)[:4] == "7700":
+                    return True
+        except Exception:
+            pass
+
+    # Emergency status (field names vary by feed; be defensive).
+    status = (
+        aircraft.get("status")
+        or aircraft.get("emergency")
+        or aircraft.get("emergency_status")
+        or aircraft.get("emerg")
+    )
+    if isinstance(status, bool):
+        return status is True
+    if status is not None:
+        try:
+            st = str(status).strip().lower()
+            if st:
+                if "emerg" in st:
+                    return True
+        except Exception:
+            pass
+
+    return False
 # Stale time seconds — how long until position is considered stale (default; use cot_stale_seconds in output config to override)
 COT_STALE_SECONDS = 30
 # ft/min per knot (for track slope from baro_rate and gs)
@@ -390,7 +444,15 @@ def _xml_escape(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True, now=None, stale=None):
+def build_cot_xml(
+    aircraft,
+    transform=None,
+    include_icon_in_cot=True,
+    now=None,
+    stale=None,
+    *,
+    distress_hostile: bool = False,
+):
     """
     Build a single CoT <event> XML string for one aircraft.
     aircraft: dict with hex, lat, lon, optional alt_baro/altitude, optional flight (callsign).
@@ -416,6 +478,10 @@ def build_cot_xml(aircraft, transform=None, include_icon_in_cot=True, now=None, 
     # TIS-B: force unknown air track and add TISB_B squawk in remarks
     if _is_tisb(aircraft):
         cot_type = COT_TYPE_UNKNOWN_AIR
+
+    # Optional distress override: emergency / squawk 7700 => use hostile CoT variant for the same class.
+    if distress_hostile and _aircraft_is_distress(aircraft):
+        cot_type = _cot_type_hostile_variant(cot_type)
 
     if now is None:
         now = _cot_time()
@@ -643,7 +709,15 @@ def _run_cot_sender_cycle_impl(requests):
             if last_sent.get(hex_code) == state:
                 continue
             try:
-                xml_str = build_cot_xml(ac, transform, include_icon_in_cot=include_icon_in_cot, now=now, stale=stale)
+                distress_hostile = bool(config.get("distress_hostile"))
+                xml_str = build_cot_xml(
+                    ac,
+                    transform,
+                    include_icon_in_cot=include_icon_in_cot,
+                    now=now,
+                    stale=stale,
+                    distress_hostile=distress_hostile,
+                )
             except Exception as e:
                 log.warning("CoT sender: %s — skip aircraft %s (build_cot_xml failed): %s", name, hex_code, e)
                 continue
