@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.252",
+    "date": "2026-03-18",
+    "notes": [
+      "Config: add Clean user database button to purge denied/rejected users (free usernames)."
+    ]
+  },
+  {
+    "version": "1.0.251",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: purge rejected users (delete row) so their usernames can be re-registered."
+    ]
+  },
+  {
     "version": "1.0.250",
     "date": "2026-03-18",
     "notes": [

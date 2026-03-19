@@ -143,3 +143,11 @@ def users_approve(user_id):
 def users_deny(user_id):
     ok, msg = UserModel.deny(user_id)
     return jsonify({"success": ok, "message": msg})
+
+
+@bp.route("/users/clean", methods=["POST"])
+@admin_required
+def users_clean_database():
+    """Purge denied/rejected users so their usernames can be reused."""
+    deleted = UserModel.purge_denied_users()
+    return jsonify({"success": True, "deleted": deleted})

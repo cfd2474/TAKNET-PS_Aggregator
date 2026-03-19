@@ -46,6 +46,7 @@
     <div class="card-header">
         <h3>Users</h3>
         <button class="btn btn-primary" onclick="showAddModal()" style="font-size:12px;">+ Add User</button>
+        <button class="btn btn-danger" onclick="cleanUserDatabase()" style="font-size:12px;">Clean user database</button>
     </div>
     <div class="table-wrap">
         <table>
@@ -187,6 +188,25 @@ async function deleteUser(id, name) {
     const d = await r.json();
     if (d.success) { document.getElementById('user-row-' + id).remove(); }
     else { alert('Error: ' + d.error); }
+}
+
+async function cleanUserDatabase() {
+    if (!confirm('Clean user database? This will delete all denied/rejected users (purging usernames).')) return;
+    const btns = document.querySelectorAll('button[onclick="cleanUserDatabase()"]');
+    btns.forEach(b => b.disabled = true);
+    try {
+        const r = await fetch('/config/users/clean', { method:'POST' });
+        const d = await r.json();
+        if (d.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (d.error || 'clean failed'));
+        }
+    } catch(e) {
+        alert('Error cleaning user database');
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
 }
 </script>
 {% endblock %}

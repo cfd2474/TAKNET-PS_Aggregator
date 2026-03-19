@@ -668,14 +668,22 @@ class UserModel:
 
     @staticmethod
     def deny(user_id):
+        # Purge the rejected user's username so they can re-register.
         conn = get_db()
-        conn.execute(
-            "UPDATE users SET status = 'denied', updated_at = datetime('now') WHERE id = ?",
-            (user_id,),
-        )
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         conn.close()
-        return True, "User denied"
+        return True, "User rejected (purged)"
+
+    @staticmethod
+    def purge_denied_users() -> int:
+        """Delete all denied/rejected users from the database (purges usernames)."""
+        conn = get_db()
+        cur = conn.execute("DELETE FROM users WHERE status = 'denied'")
+        deleted = cur.rowcount if cur.rowcount is not None else 0
+        conn.commit()
+        conn.close()
+        return int(deleted)
 
     @staticmethod
     def verify_password(username, password):
