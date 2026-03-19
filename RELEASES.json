@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.274",
+    "date": "2026-03-19",
+    "notes": [
+      "Map: tar1090 map key modal restyled (teal/cream palette, Open Sans) and bundled map-help figures under static/img/tar1090-key/ (header strip, filter screenshot, toolbar icons, layers radar, altitude bar, body texture)."
+    ]
+  },
+  {
+    "version": "1.0.273",
+    "date": "2026-03-19",
+    "notes": [
+      "Map: tar1090 map key is a modal on /map (removed /map/tar1090-help page); no external map-help references in the UI."
+    ]
+  },
+  {
     "version": "1.0.272",
     "date": "2026-03-19",
     "notes": [
