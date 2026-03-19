@@ -1,2 +1,5 @@
 # Release tarballs — do not commit (GitHub 100 MB limit). Build locally and upload to GitHub Releases (or elsewhere) yourself.
 ARCHIVE/*.tar.gz
+
+# Public release copy/paste doc (shareable; keep out of git)
+PUBLIC_RELEASE_INFO.md

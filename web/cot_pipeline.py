@@ -411,11 +411,28 @@ def _get_type_desc_from_aircraft(aircraft):
 
 
 def _is_tisb(aircraft):
-    """True if aircraft is TIS-B (readsb type is tisb_icao, tisb_trackfile, or tisb_other)."""
+    """True if aircraft appears to be TIS-B.
+
+    readsb/tar1090 typically marks this via aircraft["type"] prefixes like tisb_icao/tisb_trackfile/tisb_other.
+    Some feeds also expose a text squawk marker (e.g. "TIS-B") instead of numeric transponder codes.
+    """
     if not isinstance(aircraft, dict):
         return False
     t = (aircraft.get("type") or "").strip().lower()
-    return t.startswith("tisb_")
+    if t.startswith("tisb_"):
+        return True
+
+    # Fallback: some integrations provide a text squawk marker.
+    squawk = aircraft.get("squawk")
+    if squawk is None:
+        squawk = aircraft.get("squawk_code")
+    if isinstance(squawk, str):
+        s = squawk.strip().lower()
+        # Normalize common punctuation variants.
+        s_norm = s.replace("_", "-").replace(" ", "-")
+        if s_norm in ("tis-b", "tisb", "tis-b-b") or s_norm.startswith("tisb-") or s_norm.startswith("tisb"):
+            return True
+    return False
 
 
 def _cot_type_from_aircraft(aircraft):
@@ -546,13 +563,14 @@ def build_cot_xml(
     callsign = (aircraft.get("flight") or "").strip() or hex_code
     distress_desc = _distress_descriptor(aircraft) if bool(distress_hostile) else None
     distress = distress_desc is not None
+    is_tisb = _is_tisb(aircraft)
     if transform:
         if transform.get("cot"):
             cot_type = (transform["cot"] or "").strip() or _cot_type_from_aircraft(aircraft)
         if transform.get("callsign"):
             callsign = (transform["callsign"] or "").strip() or callsign
-    # TIS-B: force unknown air track and add TISB_B squawk in remarks
-    if _is_tisb(aircraft):
+    # TIS-B: force unknown air track (MIL-STD-2525: a-f-A-U)
+    if is_tisb:
         cot_type = COT_TYPE_UNKNOWN_AIR
 
     # Optional distress override: emergency / squawk 7700 => use hostile CoT variant.
@@ -615,7 +633,7 @@ def build_cot_xml(
         rem_parts.append(distress_desc)
     if transform:
         rem_parts.append("CoT-Proxy")
-    if _is_tisb(aircraft):
+    if is_tisb:
         rem_parts.append("Squawk: TISB_B")
     transform_remarks = (transform or {}).get("remarks") if transform else None
     if transform_remarks is not None and isinstance(transform_remarks, str) and transform_remarks.strip():
@@ -623,7 +641,7 @@ def build_cot_xml(
     elif not transform or not (transform.get("remarks") and str(transform.get("remarks", "")).strip()):
         adsb_parts = []
         raw_squawk = aircraft.get("squawk")
-        if raw_squawk is not None and (raw_squawk != "" or raw_squawk == 0) and isinstance(raw_squawk, (str, int)):
+        if not is_tisb and raw_squawk is not None and (raw_squawk != "" or raw_squawk == 0) and isinstance(raw_squawk, (str, int)):
             adsb_parts.append("Squawk: %s" % str(raw_squawk).zfill(4)[:4])
         category = aircraft.get("category") or aircraft.get("category_adsb")
         if category is not None and str(category).strip():

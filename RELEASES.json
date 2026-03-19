@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.268",
+    "date": "2026-03-19",
+    "notes": [
+      "CoT: detect TIS-B via text squawk (e.g. \"TIS-B\") and force MIL-STD-2525 unknown air type; suppress numeric squawk remark duplication."
+    ]
+  },
+  {
     "version": "1.0.267",
     "date": "2026-03-18",
     "notes": [
