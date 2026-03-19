@@ -131,20 +131,8 @@
     color: var(--tk-text);
     line-height: 1.6;
 }
-#tar1090-key-modal .tar1090-key-hero {
-    margin: 0 0 14px 0;
-    line-height: 0;
-    border-bottom: 2px solid var(--tk-teal);
-}
-#tar1090-key-modal .tar1090-key-hero img {
-    width: 100%;
-    max-height: 100px;
-    object-fit: cover;
-    object-position: center 35%;
-    display: block;
-}
 #tar1090-key-modal .tar1090-key-inner {
-    padding: 0 18px;
+    padding: 14px 18px 0;
 }
 #tar1090-key-modal .tar1090-key-section {
     margin-bottom: 16px;
@@ -226,9 +214,6 @@
             <button type="button" class="tar1090-key-close-btn tar1090-key-close" aria-label="Close">Close</button>
         </div>
         <div class="tar1090-key-modal-body">
-            <div class="tar1090-key-hero">
-                <img src="{{ url_for('static', filename='img/tar1090-key/ADSBx_Header_MOD-scaled-4.jpg') }}" alt="" width="1200" height="200" loading="lazy">
-            </div>
             <div class="tar1090-key-inner">
             <p style="margin:0 0 14px 0;">How to use the <strong>tar1090</strong> map: search, filters, keyboard shortcuts, and URL parameters.</p>
 
@@ -296,10 +281,7 @@
 
             <div class="tar1090-key-section">
                 <h3>Map layers</h3>
-                <p style="margin:0 0 8px 0;">Basemaps, charts, overlays (e.g. weather), your location dot, and range rings.</p>
-                <div class="tar1090-key-figure">
-                    <img src="{{ url_for('static', filename='img/tar1090-key/1448946181_Radar1.png') }}" alt="Map layers control" width="250" height="250" loading="lazy">
-                </div>
+                <p style="margin:0;">Basemaps, charts, overlays (e.g. weather), your location dot, and range rings.</p>
             </div>
 
             <div class="tar1090-key-section">

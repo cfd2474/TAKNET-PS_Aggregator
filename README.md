@@ -222,7 +222,7 @@ Sortable, filterable table of all registered feeders. Filter by status and conne
 Full detail: connection info, statistics, edit form (name, tar1090 URL, notes), and connection history.
 
 ### Map (`/map`)
-Full-page tar1090 UI (default) with live aircraft count in the toolbar. Also lets you switch to the merged map view with the detail sidebar. **tar1090 map key** opens an in-page modal (filters, shortcuts, URL parameters) with bundled help artwork under `web/static/img/tar1090-key/` (see folder README for attribution).
+Full-page tar1090 UI (default) with live aircraft count in the toolbar. Also lets you switch to the merged map view with the detail sidebar. **tar1090 map key** opens an in-page modal (filters, shortcuts, URL parameters) with bundled help artwork under `web/static/img/tar1090-key/` (filters screenshot, toolbar icons, altitude bar, body texture; see folder README for attribution).
 
 ### Statistics (`/stats`)
 Full-page graphs1090 embed showing message rate, aircraft count, range, and CPU over time.
