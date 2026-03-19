@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.247",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: add password reset email flow via Resend (forgot/reset token routes + templates)."
+    ]
+  },
+  {
     "version": "1.0.246",
     "date": "2026-03-18",
     "notes": [
