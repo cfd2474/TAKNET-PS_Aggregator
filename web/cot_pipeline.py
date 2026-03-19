@@ -89,6 +89,71 @@ _DISTRESS_SQUAWK_LABELS = {
     "7500": "Unlawful Interference/Hijacking.",
 }
 
+_EMERGENCY_CODE_LABELS = {
+    "none": None,
+    "general": "Transponder code 7700 or general emergency",
+    "medical": "Medical emergency",
+    "nordo": "Radio communication failure",
+    "downed": "Aircraft downed (hard-coded TCAS/ADS-B code)",
+    "emergency": "Generic emergency status (older decoders)",
+    "reserved": "Code value not assigned",
+}
+
+
+def _emergency_code_descriptor(aircraft: dict) -> tuple[str, str] | None:
+    """
+    Decode aircraft emergency field into (code, meaning) for remarks.
+    Returns None when emergency indicates no distress.
+    """
+    if not isinstance(aircraft, dict):
+        return None
+
+    # Primary decoded field: 'emergency' (string). Also accept common variants.
+    val = aircraft.get("emergency")
+    if val is None:
+        val = aircraft.get("emergency_status")
+    if val is None:
+        val = aircraft.get("emergencyCode")
+
+    # Some feeds may provide a dict (e.g. {code: 'general'}).
+    if isinstance(val, dict):
+        for k in ("code", "type", "emergency", "status"):
+            if val.get(k) is not None:
+                val = val.get(k)
+                break
+
+    # If only a boolean is provided, treat True as generic emergency.
+    if isinstance(val, bool):
+        if val is True:
+            meaning = _EMERGENCY_CODE_LABELS.get("emergency")
+            return ("emergency", meaning) if meaning else None
+        return None
+
+    if val is None:
+        return None
+
+    try:
+        s = str(val).strip().lower()
+    except Exception:
+        return None
+
+    if not s:
+        return None
+
+    # Exact code match.
+    if s in _EMERGENCY_CODE_LABELS:
+        meaning = _EMERGENCY_CODE_LABELS.get(s)
+        if meaning is None:
+            return None
+        return (s, meaning)
+
+    # Legacy decoders may emit values containing 'emerg'.
+    if "emerg" in s:
+        meaning = _EMERGENCY_CODE_LABELS.get("emergency")
+        return ("emergency", meaning) if meaning else None
+
+    return None
+
 
 def _distress_descriptor(aircraft: dict) -> str | None:
     """
@@ -98,6 +163,7 @@ def _distress_descriptor(aircraft: dict) -> str | None:
     if not isinstance(aircraft, dict):
         return None
 
+    squawk_desc = None
     # Squawk codes (often string or int; sometimes partially provided).
     squawk = aircraft.get("squawk")
     if squawk is None:
@@ -109,29 +175,20 @@ def _distress_descriptor(aircraft: dict) -> str | None:
                 code = s.zfill(4)[:4]
                 label = _DISTRESS_SQUAWK_LABELS.get(code)
                 if label:
-                    return f"Distress: {label} (squawk {code})"
+                    squawk_desc = f"Distress: {label} (squawk {code})"
         except Exception:
             pass
 
-    # Emergency status (field names vary by feed; be defensive).
-    status = (
-        aircraft.get("status")
-        or aircraft.get("emergency")
-        or aircraft.get("emergency_status")
-        or aircraft.get("emerg")
-    )
-    if isinstance(status, bool):
-        if status is True:
-            return "Distress: Emergency status."
-    if status is not None:
-        try:
-            st = str(status).strip().lower()
-            if st and "emerg" in st:
-                return "Distress: Emergency status."
-        except Exception:
-            pass
+    # Emergency status via decoded emergency codes.
+    emergency_desc = None
+    emergency_info = _emergency_code_descriptor(aircraft)
+    if emergency_info:
+        code, meaning = emergency_info
+        emergency_desc = f"Emergency: {code} — {meaning}."
 
-    return None
+    if squawk_desc and emergency_desc:
+        return squawk_desc + " | " + emergency_desc
+    return squawk_desc or emergency_desc
 
 
 def _aircraft_is_distress(aircraft: dict) -> bool:

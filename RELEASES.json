@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.266",
+    "date": "2026-03-18",
+    "notes": [
+      "CoT: distress emergency decoding now distinguishes emergency codes (none/general/medical/nordo/downed/emergency/reserved) and adds emergency type into remarks."
+    ]
+  },
+  {
     "version": "1.0.265",
     "date": "2026-03-18",
     "notes": [
