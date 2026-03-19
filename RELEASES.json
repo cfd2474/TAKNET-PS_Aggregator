@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.256",
+    "date": "2026-03-18",
+    "notes": [
+      "UI: show Pending Access Requests section even when there are zero pending users."
+    ]
+  },
+  {
     "version": "1.0.255",
     "date": "2026-03-18",
     "notes": [
