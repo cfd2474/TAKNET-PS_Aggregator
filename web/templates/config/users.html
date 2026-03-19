@@ -52,22 +52,46 @@
                 <tr>
                     <th style="min-width:220px;">
                         <div style="display:flex;flex-direction:column;gap:8px;">
-                            <button type="button" class="btn btn-sm" onclick="sortActiveUsersBy('username')" style="width:auto;">
+                            <button type="button" class="btn btn-sm" onclick="setSort('username')" style="width:auto;">
                                 Username <span id="sort-indicator-username" style="font-weight:400;color:var(--text-muted);font-size:11px;"></span>
                             </button>
-                            <input id="filter-username" type="text" placeholder="Filter name..." class="form-control"
+                            <input id="filter-username" type="text" placeholder="Filter username..." class="form-control"
                                    style="padding:4px 8px;font-size:12px;width:100%;"
-                                   oninput="applyActiveUsersFilters()">
+                                   oninput="renderActiveUsersTable()">
+                        </div>
+                    </th>
+                    <th style="min-width:180px;">
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <button type="button" class="btn btn-sm" onclick="setSort('first_name')" style="width:auto;">
+                                First name <span id="sort-indicator-first_name" style="font-weight:400;color:var(--text-muted);font-size:11px;"></span>
+                            </button>
+                            <input id="filter-first_name" type="text" placeholder="Filter first name..." class="form-control"
+                                   style="padding:4px 8px;font-size:12px;width:100%;"
+                                   oninput="renderActiveUsersTable()">
+                        </div>
+                    </th>
+                    <th style="min-width:180px;">
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <button type="button" class="btn btn-sm" onclick="setSort('last_name')" style="width:auto;">
+                                Last name <span id="sort-indicator-last_name" style="font-weight:400;color:var(--text-muted);font-size:11px;"></span>
+                            </button>
+                            <input id="filter-last_name" type="text" placeholder="Filter last name..." class="form-control"
+                                   style="padding:4px 8px;font-size:12px;width:100%;"
+                                   oninput="renderActiveUsersTable()">
                         </div>
                     </th>
                     <th style="min-width:160px;">
                         <div style="display:flex;flex-direction:column;gap:8px;">
-                            <button type="button" class="btn btn-sm" onclick="sortActiveUsersBy('role')" style="width:auto;">
+                            <button type="button" class="btn btn-sm" onclick="setSort('role')" style="width:auto;">
                                 Role <span id="sort-indicator-role" style="font-weight:400;color:var(--text-muted);font-size:11px;"></span>
                             </button>
-                            <input id="filter-role" type="text" placeholder="Filter role..." class="form-control"
-                                   style="padding:4px 8px;font-size:12px;width:100%;"
-                                   oninput="applyActiveUsersFilters()">
+                            <select id="filter-role" class="form-control" style="padding:4px 8px;font-size:12px;width:100%;"
+                                    onchange="renderActiveUsersTable()">
+                                <option value="all" selected>All roles</option>
+                                {% for r in roles %}
+                                <option value="{{ r }}">{{ r }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </th>
                     <th>Created</th>
@@ -76,9 +100,19 @@
             </thead>
             <tbody id="active-users-tbody">
             {% for u in users %}
-            <tr id="user-row-{{ u.id }}" data-username="{{ u.username }}" data-role="{{ u.role }}">
+            <tr id="user-row-{{ u.id }}"
+                data-username="{{ u.username|default('') }}"
+                data-first-name="{{ u.first_name|default('') }}"
+                data-last-name="{{ u.last_name|default('') }}"
+                data-role="{{ u.role|default('') }}">
                 <td style="font-weight:500;color:var(--text-primary);font-family:monospace;">
                     <a href="/config/users/{{ u.id }}" style="color:inherit;text-decoration:none;">{{ u.username }}</a>
+                </td>
+                <td style="font-size:12px;color:var(--text-secondary);">
+                    {{ u.first_name|default('—') }}
+                </td>
+                <td style="font-size:12px;color:var(--text-secondary);">
+                    {{ u.last_name|default('—') }}
                 </td>
                 <td>
                     <select class="form-control" style="padding:4px 8px;font-size:12px;width:auto;"
@@ -192,7 +226,14 @@ async function createUser() {
 async function changeRole(id, role) {
     const r = await fetch('/config/users/' + id + '/role', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({role}) });
     const d = await r.json();
-    if (!d.success) { alert('Error: ' + (d.error || 'Could not update role')); location.reload(); }
+    if (!d.success) {
+        alert('Error: ' + (d.error || 'Could not update role'));
+        location.reload();
+        return;
+    }
+    const row = document.getElementById('user-row-' + id);
+    if (row) row.dataset.role = (role || '').toLowerCase();
+    renderActiveUsersTable();
 }
 
 async function resetPassword() {
@@ -232,83 +273,101 @@ async function cleanUserDatabase() {
     }
 }
 
-let activeUsersSortKey = 'username';
-let activeUsersSortDir = 'asc';
+let sortKey = null;  // set by header clicks
+let sortDir = 'asc'; // 'asc' | 'desc'
 
-function _getRowDataset(row) {
+function _getActiveUserRowDataset(row) {
     return {
         username: (row.dataset.username || '').toLowerCase(),
+        firstName: (row.dataset.firstName || '').toLowerCase(),
+        lastName: (row.dataset.lastName || '').toLowerCase(),
         role: (row.dataset.role || '').toLowerCase(),
     };
 }
 
-function getActiveUserRows() {
-    const tbody = document.getElementById('active-users-tbody');
-    if (!tbody) return [];
-    return Array.from(tbody.querySelectorAll('tr'));
-}
-
-function applyActiveUsersFilters() {
-    const fNameEl = document.getElementById('filter-username');
-    const fRoleEl = document.getElementById('filter-role');
-    const fName = (fNameEl?.value || '').trim().toLowerCase();
-    const fRole = (fRoleEl?.value || '').trim().toLowerCase();
-
-    const rows = getActiveUserRows();
-    for (const row of rows) {
-        const ds = _getRowDataset(row);
-        const okName = !fName || ds.username.includes(fName);
-        const okRole = !fRole || ds.role.includes(fRole);
-        row.style.display = (okName && okRole) ? '' : 'none';
+function setSort(key) {
+    const keys = ['username', 'first_name', 'last_name', 'role'];
+    if (sortKey === key) {
+        sortDir = (sortDir === 'asc') ? 'desc' : 'asc';
+    } else {
+        sortKey = key;
+        sortDir = 'asc';
     }
+
+    renderActiveUsersTable();
+
+    keys.forEach(k => {
+        const el = document.getElementById('sort-indicator-' + k);
+        if (!el) return;
+        if (sortKey === k) {
+            el.textContent = (sortDir === 'asc') ? ' ▲' : ' ▼';
+        } else {
+            el.textContent = '';
+        }
+    });
 }
 
-function _compareStrings(a, b) {
-    // localeCompare gives case-aware, human-friendly sorting.
-    return a.localeCompare(b, undefined, { sensitivity: 'base' });
+function userSortValue(row, key) {
+    const ds = _getActiveUserRowDataset(row);
+    if (key === 'username') return ds.username;
+    if (key === 'first_name') return ds.firstName;
+    if (key === 'last_name') return ds.lastName;
+    if (key === 'role') return ds.role;
+    return '';
 }
 
-function sortActiveUsersBy(key) {
+function renderActiveUsersTable() {
     const tbody = document.getElementById('active-users-tbody');
     if (!tbody) return;
 
-    if (activeUsersSortKey === key) {
-        activeUsersSortDir = activeUsersSortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-        activeUsersSortKey = key;
-        activeUsersSortDir = 'asc';
-    }
+    // Collect rows fresh (handles delete without breaking the list).
+    const rows = Array.from(tbody.querySelectorAll('tr[id^="user-row-"]'));
 
-    const rows = getActiveUserRows();
-    rows.sort((ra, rb) => {
-        const da = _getRowDataset(ra);
-        const db = _getRowDataset(rb);
-        const va = key === 'role' ? da.role : da.username;
-        const vb = key === 'role' ? db.role : db.username;
-        const cmp = _compareStrings(va, vb);
-        return activeUsersSortDir === 'asc' ? cmp : -cmp;
+    const fUsername = (document.getElementById('filter-username')?.value || '').trim().toLowerCase();
+    const fFirst = (document.getElementById('filter-first_name')?.value || '').trim().toLowerCase();
+    const fLast = (document.getElementById('filter-last_name')?.value || '').trim().toLowerCase();
+    const fRole = (document.getElementById('filter-role')?.value || 'all').trim().toLowerCase();
+
+    const emptyRow = document.getElementById('active-users-empty');
+    if (emptyRow) emptyRow.remove();
+
+    const filtered = rows.filter(row => {
+        const ds = _getActiveUserRowDataset(row);
+        const okUsername = !fUsername || ds.username.includes(fUsername);
+        const okFirst = !fFirst || ds.firstName.includes(fFirst);
+        const okLast = !fLast || ds.lastName.includes(fLast);
+        const okRole = fRole === 'all' || ds.role === fRole;
+        return okUsername && okFirst && okLast && okRole;
     });
 
-    for (const row of rows) tbody.appendChild(row);
+    // Hide all rows, then show sorted filtered ones.
+    rows.forEach(r => { r.style.display = filtered.includes(r) ? '' : 'none'; });
 
-    // Update sort indicators
-    const nameInd = document.getElementById('sort-indicator-username');
-    const roleInd = document.getElementById('sort-indicator-role');
-    if (nameInd) nameInd.textContent = (activeUsersSortKey === 'username') ? (activeUsersSortDir.toUpperCase()) : '';
-    if (roleInd) roleInd.textContent = (activeUsersSortKey === 'role') ? (activeUsersSortDir.toUpperCase()) : '';
+    if (filtered.length === 0) {
+        const tr = document.createElement('tr');
+        tr.id = 'active-users-empty';
+        tr.innerHTML = '<td colspan="6" style="text-align:center;color:var(--text-muted);padding:40px;">No users found</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+
+    if (sortKey) {
+        const dirMul = (sortDir === 'asc') ? 1 : -1;
+        filtered.sort((a, b) => {
+            const va = userSortValue(a, sortKey);
+            const vb = userSortValue(b, sortKey);
+            if (va === vb) return 0;
+            return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * dirMul;
+        });
+    }
+
+    // Append in sorted order (reorders only the visible rows).
+    filtered.forEach(row => tbody.appendChild(row));
 }
 
-function applyActiveUsersFiltersAndSort() {
-    applyActiveUsersFilters();
-    sortActiveUsersBy(activeUsersSortKey);
-}
-
-// Initialize once the table is on the page.
+// Wire filters.
 window.addEventListener('load', function () {
-    applyActiveUsersFilters();
-    // Ensure initial sort indicator is set.
-    const nameInd = document.getElementById('sort-indicator-username');
-    if (nameInd) nameInd.textContent = 'ASC';
+    renderActiveUsersTable();
 });
 </script>
 {% endblock %}

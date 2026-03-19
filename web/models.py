@@ -561,7 +561,7 @@ class UserModel:
     def get_all():
         conn = get_db()
         rows = conn.execute(
-            "SELECT id, username, role, status, created_at, updated_at FROM users WHERE status != 'pending' ORDER BY username"
+            "SELECT id, username, first_name, last_name, role, status, created_at, updated_at FROM users WHERE status != 'pending' ORDER BY username"
         ).fetchall()
         conn.close()
         return dict_rows(rows)
