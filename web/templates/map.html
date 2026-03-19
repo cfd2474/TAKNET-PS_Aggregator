@@ -201,7 +201,8 @@ function refreshMergedAircraft() {
 document.getElementById('btn-merged').onclick = showMerged;
 document.getElementById('btn-tar1090').onclick = showTar1090;
 
-showMerged();
+// Default map view: full tar1090 UI (detail sidebar handled differently).
+showTar1090();
 setInterval(function() {
     if (document.getElementById('map-merged-wrap').style.display !== 'none') refreshMergedAircraft();
 }, 4000);
