@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.277",
+    "date": "2026-03-19",
+    "notes": [
+      "Map: tar1090 map key modal — Location & range rings copy updated (geolocation + map layers / fixed ring distances)."
+    ]
+  },
+  {
     "version": "1.0.276",
     "date": "2026-03-19",
     "notes": [
