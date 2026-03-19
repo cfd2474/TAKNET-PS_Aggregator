@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.271",
+    "date": "2026-03-19",
+    "notes": [
+      "Map: tar1090 embed layout — banner is in normal flow above the iframe so it no longer covers the top of the map."
+    ]
+  },
+  {
     "version": "1.0.270",
     "date": "2026-03-19",
     "notes": [
