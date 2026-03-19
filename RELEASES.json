@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.255",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: request-access signup now supports user-controlled password unmasking via Show password checkbox."
+    ]
+  },
+  {
+    "version": "1.0.254",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: harden request-access signup password inputs to remain masked even if client-side type toggles occur."
+    ]
+  },
+  {
     "version": "1.0.253",
     "date": "2026-03-18",
     "notes": [
