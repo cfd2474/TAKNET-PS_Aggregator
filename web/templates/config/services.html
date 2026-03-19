@@ -59,6 +59,25 @@
                 <span>Enable email notifications</span>
             </label>
         </div>
+
+        <div style="margin-top:16px;">
+            <label for="resend-pending-user-recipient-input" style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">
+                New/Pending User Notification Recipient(s)
+            </label>
+
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="email" id="resend-pending-user-recipient-input" class="form-control"
+                       placeholder="Add email address"
+                       style="max-width:420px;font-family:monospace;font-size:13px;"
+                       autocomplete="off">
+                <button class="btn btn-sm" type="button" onclick="addResendPendingUserRecipient()">
+                    Add
+                </button>
+            </div>
+
+            <div id="resend-pending-user-recipient-list" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+            <p id="resend-pending-user-recipient-msg" style="font-size:11px;color:var(--text-muted);margin-top:8px;margin-bottom:0;"></p>
+        </div>
     </div>
 </div>
 
@@ -144,6 +163,82 @@ async function loadAdsbhubSettings() {
     }
 }
 
+let resendPendingUserRecipients = [];
+
+function renderResendPendingUserRecipients() {
+    const listEl = document.getElementById('resend-pending-user-recipient-list');
+    const msgEl = document.getElementById('resend-pending-user-recipient-msg');
+    if (!listEl || !msgEl) return;
+
+    listEl.innerHTML = '';
+
+    resendPendingUserRecipients.forEach((email, idx) => {
+        const chip = document.createElement('div');
+        chip.style.display = 'inline-flex';
+        chip.style.alignItems = 'center';
+        chip.style.gap = '8px';
+        chip.style.background = 'rgba(59,130,246,0.12)';
+        chip.style.border = '1px solid rgba(59,130,246,0.25)';
+        chip.style.color = 'var(--accent)';
+        chip.style.padding = '6px 10px';
+        chip.style.borderRadius = '999px';
+        chip.style.fontSize = '12px';
+
+        const txt = document.createElement('span');
+        txt.textContent = email;
+        chip.appendChild(txt);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = '×';
+        btn.style.border = 'none';
+        btn.style.background = 'transparent';
+        btn.style.color = 'var(--accent)';
+        btn.style.cursor = 'pointer';
+        btn.style.fontSize = '16px';
+        btn.style.lineHeight = '16px';
+        btn.onclick = () => removeResendPendingUserRecipient(idx);
+        chip.appendChild(btn);
+
+        listEl.appendChild(chip);
+    });
+
+    msgEl.textContent = resendPendingUserRecipients.length === 0
+        ? 'No recipients configured yet.'
+        : '';
+}
+
+function addResendPendingUserRecipient() {
+    const inp = document.getElementById('resend-pending-user-recipient-input');
+    const msgEl = document.getElementById('resend-pending-user-recipient-msg');
+    if (!inp || !msgEl) return;
+
+    const raw = (inp.value || '').trim();
+    if (!raw) return;
+    // Minimal validation; Resend will reject invalid addresses anyway.
+    if (!raw.includes('@') || raw.length < 6) {
+        msgEl.textContent = 'Please enter a valid email address.';
+        return;
+    }
+
+    const email = raw.toLowerCase();
+    if (resendPendingUserRecipients.includes(email)) {
+        msgEl.textContent = 'That email is already added.';
+        inp.value = '';
+        return;
+    }
+
+    resendPendingUserRecipients.push(email);
+    inp.value = '';
+    msgEl.textContent = '';
+    renderResendPendingUserRecipients();
+}
+
+function removeResendPendingUserRecipient(idx) {
+    resendPendingUserRecipients.splice(idx, 1);
+    renderResendPendingUserRecipients();
+}
+
 async function saveAdsbhub() {
     const feed = document.getElementById('adsbhub-feed').checked;
     const receive = document.getElementById('adsbhub-receive').checked;
@@ -187,6 +282,9 @@ async function loadResendMailSettings() {
         } else {
             document.getElementById('resend-msg').textContent = 'No API key stored yet.';
         }
+
+        resendPendingUserRecipients = Array.isArray(d.pending_user_recipients) ? d.pending_user_recipients : [];
+        renderResendPendingUserRecipients();
     } catch (e) {
         document.getElementById('resend-msg').textContent = 'Could not load Resend settings.';
     }
@@ -206,7 +304,7 @@ async function saveResendMail() {
         const r = await fetch('/api/settings/mail', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled: enabled, api_key: apiKey }),
+            body: JSON.stringify({ enabled: enabled, api_key: apiKey, pending_user_recipients: resendPendingUserRecipients }),
         });
         const d = await r.json();
         if (d.success) {
@@ -225,6 +323,14 @@ async function saveResendMail() {
         btn.disabled = false;
     }
 }
+
+// Allow quick entry: press Enter to add recipient.
+document.getElementById('resend-pending-user-recipient-input')?.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addResendPendingUserRecipient();
+    }
+});
 
 async function loadContainers() {
     try {

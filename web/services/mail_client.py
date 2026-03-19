@@ -20,6 +20,7 @@ RESEND_API_URL = "https://api.resend.com/emails"
 RESEND_API_KEY_ENV = "RESEND_API_KEY"
 RESEND_ENABLED_ENV = "RESEND_ENABLED"
 RESEND_FROM_EMAIL_ENV = "RESEND_FROM_EMAIL"
+RESEND_ADMIN_EMAILS_ENV = "RESEND_ADMIN_EMAILS"
 DEFAULT_FROM_EMAIL = "noreply@notify.tak-solutions.com"
 
 
@@ -75,6 +76,18 @@ def get_resend_from_email() -> str:
     """Sender email address used for transactional emails."""
     # If RESEND_FROM_EMAIL is unset, fall back to the project's default.
     return (_read_env_value(RESEND_FROM_EMAIL_ENV, DEFAULT_FROM_EMAIL) or DEFAULT_FROM_EMAIL).strip()
+
+
+def get_resend_admin_emails() -> list[str]:
+    """Return admin recipient email list from env.
+
+    Stored as comma-separated addresses in `RESEND_ADMIN_EMAILS`.
+    """
+    raw = _read_env_value(RESEND_ADMIN_EMAILS_ENV, "")
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.split(",")]
+    return [p for p in parts if p]
 
 
 class ResendMailClient:

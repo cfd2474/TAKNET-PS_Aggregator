@@ -7,7 +7,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from models import UserModel
 from app import AuthUser
-from services.mail_client import ResendMailClient, get_resend_from_email
+from services.mail_client import ResendMailClient, get_resend_from_email, get_resend_admin_emails
 
 bp = Blueprint("auth", __name__)
 
@@ -90,9 +90,11 @@ def register():
                 try:
                     mail_client = ResendMailClient.from_env()
                     if mail_client.enabled and mail_client.api_key:
-                        # Notify all active admins that have an email.
-                        admins = UserModel.get_active_users_by_role(("admin",))
-                        admin_emails = [a.get("email") for a in admins if (a.get("email") or "").strip()]
+                        # Prefer explicit recipient list (RESEND_ADMIN_EMAILS) so seeded admin accounts
+                        # don't need their profile email populated.
+                        admin_emails = get_resend_admin_emails()
+                        if not admin_emails:
+                            print("[auth] Registration admin notification: no recipients configured (RESEND_ADMIN_EMAILS is empty).")
                         if admin_emails:
                             user_id = int((result or {}).get("user_id") or 0)
                             created_user = (
@@ -150,9 +152,10 @@ def register():
                                 html=html,
                                 text=text,
                             )
-                except Exception:
+                except Exception as e:
                     # Don't block registration success if email fails.
-                    pass
+                    # Keep this as a print (no logging dependency) so issues show up in container logs.
+                    print(f"[auth] Registration admin email send failed: {e}")
             else:
                 error = "Username already taken." if "UNIQUE" in str(result) else str(result)
 

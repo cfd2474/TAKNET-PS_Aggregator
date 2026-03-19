@@ -164,6 +164,7 @@ GEOIP_ENABLED=true
 RESEND_ENABLED=false
 RESEND_API_KEY=
 RESEND_FROM_EMAIL="noreply@notify.tak-solutions.com"
+RESEND_ADMIN_EMAILS=
 ENVEOF
     warn "Created .env with defaults — edit $INSTALL_DIR/.env to customize"
 fi

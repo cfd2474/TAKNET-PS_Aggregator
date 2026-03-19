@@ -1015,9 +1015,12 @@ def get_mail_settings():
     """Return current mail settings from the mounted host .env file."""
     enabled = _read_env_bool("RESEND_ENABLED", False)
     api_key_present = bool((_read_env_value("RESEND_API_KEY", "") or "").strip())
+    recipients_raw = _read_env_value("RESEND_ADMIN_EMAILS", "")
+    pending_user_recipients = [p.strip() for p in (recipients_raw or "").split(",") if p.strip()]
     return jsonify({
         "enabled": enabled,
         "api_key_present": api_key_present,
+        "pending_user_recipients": pending_user_recipients,
         # Don't return the API key itself (avoid accidental logs/UI exposure).
         "api_key": "",
     })
@@ -1034,6 +1037,7 @@ def set_mail_settings():
     data = request.get_json() or {}
     enabled = bool(data.get("enabled", False))
     api_key = (data.get("api_key") or "").strip()
+    pending_user_recipients = data.get("pending_user_recipients", None)
 
     existing_api_key = (_read_env_value("RESEND_API_KEY", "") or "").strip()
     if api_key:
@@ -1042,6 +1046,18 @@ def set_mail_settings():
 
     if enabled and not existing_api_key:
         return jsonify({"success": False, "error": "api_key is required when enabling mail"}), 400
+
+    if pending_user_recipients is not None:
+        # Accept either `["a@x", "b@y"]` or a comma-separated string.
+        if isinstance(pending_user_recipients, str):
+            parts = [p.strip() for p in pending_user_recipients.split(",")]
+        elif isinstance(pending_user_recipients, list):
+            parts = [str(p).strip() for p in pending_user_recipients]
+        else:
+            return jsonify({"success": False, "error": "pending_user_recipients must be an array or a comma-separated string"}), 400
+
+        normalized = [p for p in parts if p]
+        _persist_env_var("RESEND_ADMIN_EMAILS", ",".join(normalized))
 
     _persist_env_var("RESEND_ENABLED", "true" if enabled else "false")
     return jsonify({

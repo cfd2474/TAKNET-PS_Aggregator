@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.250",
+    "date": "2026-03-18",
+    "notes": [
+      "Config: Resend settings now include a multi-email field for New/Pending user notification recipients (stored in RESEND_ADMIN_EMAILS) and registration notifications no longer depend on admin profile email."
+    ]
+  },
+  {
+    "version": "1.0.249",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: registration admin notification now uses RESEND_ADMIN_EMAILS (fallback to admin profile emails) so default seeded admins without emails still receive alerts."
+    ]
+  },
+  {
     "version": "1.0.248",
     "date": "2026-03-18",
     "notes": [
