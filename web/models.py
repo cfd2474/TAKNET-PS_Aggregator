@@ -603,7 +603,7 @@ class UserModel:
 
         conn = get_db()
         try:
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO users
                     (username, password_hash, role, status, first_name, last_name, email, phone, agency)
@@ -622,11 +622,36 @@ class UserModel:
                 ),
             )
             conn.commit()
+            user_id = cur.lastrowid
             conn.close()
-            return True, "Registration submitted"
+            return True, {"message": "Registration submitted", "user_id": int(user_id)}
         except Exception as e:
             conn.close()
             return False, str(e)
+
+    @staticmethod
+    def get_active_users_by_role(roles: tuple[str, ...] | list[str]) -> list[dict]:
+        """Return active users for one or more roles that have an email set."""
+        roles_list = [r for r in roles if r]
+        if not roles_list:
+            return []
+        placeholders = ",".join(["?"] * len(roles_list))
+        conn = get_db()
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT id, username, role, email, status
+                FROM users
+                WHERE role IN ({placeholders})
+                  AND status = 'active'
+                  AND email IS NOT NULL
+                  AND TRIM(email) != ''
+                """,
+                tuple(roles_list),
+            ).fetchall()
+            return dict_rows(rows)
+        finally:
+            conn.close()
 
     @staticmethod
     def approve(user_id, role):

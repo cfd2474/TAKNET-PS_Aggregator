@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.248",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: notify active admins via Resend email when a new user submits a registration request."
+    ]
+  },
+  {
     "version": "1.0.247",
     "date": "2026-03-18",
     "notes": [

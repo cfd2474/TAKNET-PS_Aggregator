@@ -72,7 +72,7 @@ def register():
         elif password != confirm:
             error = "Passwords do not match."
         else:
-            ok, msg = UserModel.register(
+            ok, result = UserModel.register(
                 username,
                 password,
                 {
@@ -85,8 +85,76 @@ def register():
             )
             if ok:
                 success = True
+
+                # Admin email notification for new registration (Resend).
+                try:
+                    mail_client = ResendMailClient.from_env()
+                    if mail_client.enabled and mail_client.api_key:
+                        # Notify all active admins that have an email.
+                        admins = UserModel.get_active_users_by_role(("admin",))
+                        admin_emails = [a.get("email") for a in admins if (a.get("email") or "").strip()]
+                        if admin_emails:
+                            user_id = int((result or {}).get("user_id") or 0)
+                            created_user = (
+                                UserModel.get_by_id(user_id) if user_id else None
+                            ) if user_id else None
+                            created_user = created_user or {}
+
+                            site_name = os.environ.get("SITE_NAME", "TAKNET-PS Aggregator")
+                            admin_users_url = url_for("config.users", _external=True)
+                            admin_user_detail_url = (
+                                url_for("config.user_detail", user_id=user_id, _external=True)
+                                if user_id else admin_users_url
+                            )
+
+                            req_user_first = (created_user.get("first_name") or "").strip() or username
+                            req_user_last = (created_user.get("last_name") or "").strip()
+                            req_user_email = (created_user.get("email") or "").strip()
+
+                            req_full_name = (req_user_first + (" " + req_user_last if req_user_last else "")).strip()
+
+                            subject = f"{site_name} — New Access Request"
+                            html = f"""
+<h3 style="margin:0 0 10px 0;">New user registration</h3>
+<p style="margin:0 0 12px 0;">An access request was submitted to <strong>{site_name}</strong>.</p>
+<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">
+  <tr><td style="padding:6px 10px;border:1px solid #ddd;color:#444;">Username</td><td style="padding:6px 10px;border:1px solid #ddd;color:#111;">{username}</td></tr>
+  <tr><td style="padding:6px 10px;border:1px solid #ddd;color:#444;">Name</td><td style="padding:6px 10px;border:1px solid #ddd;color:#111;">{req_full_name}</td></tr>
+  <tr><td style="padding:6px 10px;border:1px solid #ddd;color:#444;">Email</td><td style="padding:6px 10px;border:1px solid #ddd;color:#111;">{req_user_email}</td></tr>
+  <tr><td style="padding:6px 10px;border:1px solid #ddd;color:#444;">Phone</td><td style="padding:6px 10px;border:1px solid #ddd;color:#111;">{(phone or '').strip()}</td></tr>
+  <tr><td style="padding:6px 10px;border:1px solid #ddd;color:#444;">Agency</td><td style="padding:6px 10px;border:1px solid #ddd;color:#111;">{(agency or '').strip()}</td></tr>
+</table>
+<p style="margin:14px 0 10px 0;">
+  Review the request here:
+  <a href="{admin_user_detail_url}" style="display:inline-block;padding:10px 14px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:6px;">Open User Details</a>
+</p>
+<p style="margin:0;color:#666;font-size:12px;">
+  Alternatively: <a href="{admin_users_url}">{admin_users_url}</a>
+</p>
+"""
+
+                            text = (
+                                f"New access request submitted to {site_name}.\n\n"
+                                f"Username: {username}\n"
+                                f"Name: {req_full_name}\n"
+                                f"Email: {req_user_email}\n"
+                                f"Phone: {phone}\n"
+                                f"Agency: {agency}\n\n"
+                                f"Review: {admin_user_detail_url}\n"
+                            )
+
+                            mail_client.send_email(
+                                from_email=get_resend_from_email(),
+                                to=admin_emails,
+                                subject=subject,
+                                html=html,
+                                text=text,
+                            )
+                except Exception:
+                    # Don't block registration success if email fails.
+                    pass
             else:
-                error = "Username already taken." if "UNIQUE" in msg else msg
+                error = "Username already taken." if "UNIQUE" in str(result) else str(result)
 
     return render_template("auth/register.html", error=error, success=success)
 
