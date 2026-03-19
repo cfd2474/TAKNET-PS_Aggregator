@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.264",
+    "date": "2026-03-18",
+    "notes": [
+      "CoTProxy: distress criteria now include squawks 7700/7600/7500 and remarks include the matching distress descriptor."
+    ]
+  },
+  {
     "version": "1.0.263",
     "date": "2026-03-18",
     "notes": [

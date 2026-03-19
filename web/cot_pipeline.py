@@ -83,12 +83,22 @@ def _cot_type_hostile_variant(cot_type: str) -> str:
     return cot_type.replace("-f-", "-h-")
 
 
-def _aircraft_is_distress(aircraft: dict) -> bool:
-    """True if aircraft indicates emergency/distress (status emergency or squawk 7700)."""
-    if not isinstance(aircraft, dict):
-        return False
+_DISTRESS_SQUAWK_LABELS = {
+    "7700": "General Emergency.",
+    "7600": "Radio Failure/Lost Communication.",
+    "7500": "Unlawful Interference/Hijacking.",
+}
 
-    # Squawk 7700 (often string or int; sometimes partially provided).
+
+def _distress_descriptor(aircraft: dict) -> str | None:
+    """
+    Return a human-readable distress descriptor string (for remarks),
+    or None when aircraft is not in distress.
+    """
+    if not isinstance(aircraft, dict):
+        return None
+
+    # Squawk codes (often string or int; sometimes partially provided).
     squawk = aircraft.get("squawk")
     if squawk is None:
         squawk = aircraft.get("squawk_code")
@@ -96,8 +106,10 @@ def _aircraft_is_distress(aircraft: dict) -> bool:
         try:
             s = str(squawk).strip()
             if s:
-                if s.zfill(4)[:4] == "7700":
-                    return True
+                code = s.zfill(4)[:4]
+                label = _DISTRESS_SQUAWK_LABELS.get(code)
+                if label:
+                    return f"Distress: {label} (squawk {code})"
         except Exception:
             pass
 
@@ -109,17 +121,22 @@ def _aircraft_is_distress(aircraft: dict) -> bool:
         or aircraft.get("emerg")
     )
     if isinstance(status, bool):
-        return status is True
+        if status is True:
+            return "Distress: Emergency status."
     if status is not None:
         try:
             st = str(status).strip().lower()
-            if st:
-                if "emerg" in st:
-                    return True
+            if st and "emerg" in st:
+                return "Distress: Emergency status."
         except Exception:
             pass
 
-    return False
+    return None
+
+
+def _aircraft_is_distress(aircraft: dict) -> bool:
+    """True if aircraft indicates emergency/distress (emergency status or squawk list)."""
+    return _distress_descriptor(aircraft) is not None
 # Stale time seconds — how long until position is considered stale (default; use cot_stale_seconds in output config to override)
 COT_STALE_SECONDS = 30
 # ft/min per knot (for track slope from baro_rate and gs)
@@ -470,7 +487,8 @@ def build_cot_xml(
 
     cot_type = _cot_type_from_aircraft(aircraft)
     callsign = (aircraft.get("flight") or "").strip() or hex_code
-    distress = bool(distress_hostile) and _aircraft_is_distress(aircraft)
+    distress_desc = _distress_descriptor(aircraft) if bool(distress_hostile) else None
+    distress = distress_desc is not None
     if transform:
         if transform.get("cot"):
             cot_type = (transform["cot"] or "").strip() or _cot_type_from_aircraft(aircraft)
@@ -536,6 +554,8 @@ def build_cot_xml(
     # Remarks: always include source (taknet-ps, feed type), CoT-Proxy when transformed, TIS-B squawk when TIS-B, then transform text or ADS-B info
     feed_type = "ADSBHub" if (aircraft.get("source") or "").strip().lower() == "adsbhub" else "direct feed"
     rem_parts = ["taknet-ps", feed_type, f"Hex: {hex_code}"]
+    if distress_desc:
+        rem_parts.append(distress_desc)
     if transform:
         rem_parts.append("CoT-Proxy")
     if _is_tisb(aircraft):
