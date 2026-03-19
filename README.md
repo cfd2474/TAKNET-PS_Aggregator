@@ -181,6 +181,15 @@ NetBird is the primary feeder connectivity method. For setup documentation see h
 |----------|---------|-------------|
 | `GEOIP_ENABLED` | `true` | Enable GeoIP lookups for public IP feeders (db-ip.com City Lite, auto-downloaded) |
 
+### Transactional Email (Resend)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RESEND_ENABLED` | `false` | Enable transactional email sending (admin alerts and password reset emails) via Resend |
+| `RESEND_API_KEY` | *(blank)* | Resend API key |
+| `RESEND_FROM_EMAIL` | `noreply@notify.tak-solutions.com` | "From" address used for emails |
+| `RESEND_ADMIN_EMAILS` | *(blank)* | Comma-separated recipient list for new registration notifications |
+
 ---
 
 ## CLI Reference
@@ -213,7 +222,7 @@ Sortable, filterable table of all registered feeders. Filter by status and conne
 Full detail: connection info, statistics, edit form (name, tar1090 URL, notes), and connection history.
 
 ### Map (`/map`)
-Full-page tar1090 embed with live aircraft count in the toolbar. Accessible to all roles including viewer.
+Full-page tar1090 UI (default) with live aircraft count in the toolbar. Also lets you switch to the merged map view with the detail sidebar.
 
 ### Statistics (`/stats`)
 Full-page graphs1090 embed showing message rate, aircraft count, range, and CPU over time.
@@ -222,13 +231,24 @@ Full-page graphs1090 embed showing message rate, aircraft count, range, and CPU 
 Live NetBird peer status — online/total count, peer table with hostname, IP, and connection state. Also shows the NetBird client enrollment state for the aggregator server itself.
 
 ### Services (`/config/services`)
-Docker container management. Restart individual containers or use **Restart All Services** for a full soft reset. View last 200 lines of logs per container.
+Docker container management. Also includes the **Resend Mail** settings (enable/disable, API key, from address, admin recipient list) used for admin alerts and password reset emails.
+
+### Outputs (`/outputs`)
+Manage outgoing feeds (JSON, Beast RAW, CoT). For CoT outputs, the UI enforces COTProxy transforms (no CoTProxy selector in the output setup modal). In the COTProxy config page, you can enable **Distress -> Hostile** so emergency aircraft (emergency status or squawks 7700/7600/7500) are forced to hostile CoT type (overriding any COTProxy transform-provided type), their callsign gets prefixed with `*ALERT* - `, and remarks include the matching distress descriptor.
 
 ### Updates (`/config/updates`)
 Checks GitHub for the latest version and runs the web update workflow with live log streaming.
 
 ### Users (`/config/users`)
-User management (admin only). Create users, assign roles, reset passwords.
+User management (admin only). Includes:
+- Pending access requests card is always shown (even when empty)
+- Users table is sortable/searchable (Username / First name / Last name / Role)
+- Role filter is a dropdown
+- "Clean user database" button purges denied/rejected users to free usernames
+- Deny/delete actions purge usernames so rejected users can re-register
+
+### Authentication & Email Notifications (Resend)
+Request access signup supports a "Show password" checkbox. Password reset is available via `/forgot-password` and `/reset-password/<token>` and sends reset emails through Resend (when enabled). New user registrations notify admins via Resend using the configured `RESEND_ADMIN_EMAILS` recipients.
 
 ### Health (`/config/health`)
 CPU, memory, disk and top processes. **Server-wide view:** the installer runs a host-side script every 30s (systemd timer) that writes snapshots to `var/health_history.json`; the dashboard mounts `var` and uses this for overview, history chart, and top processes (e.g. netbird, readsb, python) so you can see what drives CPU spikes. Requires `python3` and `psutil` on the host (installer installs psutil if needed). Without it, the page shows container-only metrics (mainly gunicorn). **Active feeder count** is shown in the Overview for capacity planning.
