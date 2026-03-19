@@ -64,8 +64,8 @@ COT_TYPE_MIL_ROTOR = "a-f-A-M-H"
 COT_TYPE_MIL_LTA = "a-f-A-M-L"
 COT_TYPE_MIL_UAV = "a-f-A-M-F-Q"
 COT_TYPE_MIL = "a-f-A-M"
-# Unknown air track (e.g. TIS-B); MIL-STD-2525 a-f-A-U
-COT_TYPE_UNKNOWN_AIR = "a-f-A-U"
+# Unknown air track (e.g. TIS-B); MIL-STD-2525 affiliation unknown (u), battle dimension air (A), function unknown (U)
+COT_TYPE_UNKNOWN_AIR = "a-u-A-U"
 
 
 def _cot_type_hostile_variant(cot_type: str) -> str:

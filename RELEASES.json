@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.270",
+    "date": "2026-03-19",
+    "notes": [
+      "CoT: update unknown-air MIL-STD type to use affiliation=unknown (a-u-A-U) instead of affiliation=friendly (a-f-A-U) for TIS-B markers."
+    ]
+  },
+  {
     "version": "1.0.269",
     "date": "2026-03-19",
     "notes": [
