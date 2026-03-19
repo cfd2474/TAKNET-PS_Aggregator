@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.262",
+    "date": "2026-03-18",
+    "notes": [
+      "CoTProxy: distress aircraft now override COTProxy-provided CoT type (forced hostile) regardless of transform rules."
+    ]
+  },
+  {
+    "version": "1.0.261",
+    "date": "2026-03-18",
+    "notes": [
+      "CoTProxy: prefix distress aircraft callsign with '*ALERT* - '."
+    ]
+  },
+  {
     "version": "1.0.260",
     "date": "2026-03-18",
     "notes": [

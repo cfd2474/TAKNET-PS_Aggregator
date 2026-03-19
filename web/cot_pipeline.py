@@ -470,6 +470,7 @@ def build_cot_xml(
 
     cot_type = _cot_type_from_aircraft(aircraft)
     callsign = (aircraft.get("flight") or "").strip() or hex_code
+    distress = bool(distress_hostile) and _aircraft_is_distress(aircraft)
     if transform:
         if transform.get("cot"):
             cot_type = (transform["cot"] or "").strip() or _cot_type_from_aircraft(aircraft)
@@ -479,9 +480,17 @@ def build_cot_xml(
     if _is_tisb(aircraft):
         cot_type = COT_TYPE_UNKNOWN_AIR
 
-    # Optional distress override: emergency / squawk 7700 => use hostile CoT variant for the same class.
-    if distress_hostile and _aircraft_is_distress(aircraft):
-        cot_type = _cot_type_hostile_variant(cot_type)
+    # Optional distress override: emergency / squawk 7700 => use hostile CoT variant.
+    # This intentionally overrides any COTProxy-provided `transform["cot"]` so distress aircraft are always hostile.
+    if distress:
+        base_type = _cot_type_from_aircraft(aircraft)
+        # If base type is TIS-B/unknown, keep it as-is (hostile conversion is not meaningful there).
+        if base_type != COT_TYPE_UNKNOWN_AIR:
+            cot_type = _cot_type_hostile_variant(base_type)
+        else:
+            cot_type = base_type
+        # Also mark the callsign in TAK/clients for rapid identification.
+        callsign = "*ALERT* - " + (callsign or "")
 
     if now is None:
         now = _cot_time()
