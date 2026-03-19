@@ -589,11 +589,11 @@ def diagnostics_output():
         include_icon_in_cot = bool(config.get("include_icon_in_cot", True))
 
         transform = None
-        if bool(o.get("use_cotproxy")):
-            try:
-                transform = get_transform_for_aircraft(int(output_id), hex_code)
-            except Exception:
-                transform = None
+        # CoT outputs always use COTProxy transforms.
+        try:
+            transform = get_transform_for_aircraft(int(output_id), hex_code)
+        except Exception:
+            transform = None
 
         try:
             cot_xml = build_cot_xml(aircraft, transform=transform, include_icon_in_cot=include_icon_in_cot)
@@ -605,7 +605,7 @@ def diagnostics_output():
                 "output_id": output_id,
                 "output_name": o.get("name"),
                 "cot_type": cot_type,
-                "use_cotproxy": bool(o.get("use_cotproxy")),
+                "use_cotproxy": True,
                 "transform": transform,
                 "cot_xml": cot_xml,
             })
@@ -1288,7 +1288,8 @@ def output_create():
     output_format = (data.get("output_format") or ("cot" if output_type == "cot" else "as_is")).strip()
     if output_format not in ("as_is", "cot"):
         output_format = "cot" if output_type == "cot" else "as_is"
-    use_cotproxy = bool(data.get("use_cotproxy")) if output_type == "cot" else False
+    # CoT outputs always use COTProxy transforms (even if older records had this disabled).
+    use_cotproxy = True if output_type == "cot" else False
     import json as _json
     config = _json.dumps(data.get("config") or {})
     output_id = OutputModel.create(
@@ -1315,8 +1316,13 @@ def output_update(output_id):
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
     data = request.get_json(silent=True) or {}
-    if "use_cotproxy" in data:
-        data["use_cotproxy"] = 1 if data["use_cotproxy"] else 0
+    existing = OutputModel.get_by_id(output_id, current_user.id, current_user.role) or {}
+    target_type = (data.get("output_type") or existing.get("output_type") or "").strip()
+
+    # CoT outputs always use COTProxy transforms (selector removed from UI; also fixes older records).
+    data["use_cotproxy"] = 1 if target_type == "cot" else 0
+    if target_type == "cot":
+        data["output_format"] = "cot"
     if "config" in data and isinstance(data["config"], dict):
         data["config"] = _json.dumps(data["config"])
     OutputModel.update(output_id, data)

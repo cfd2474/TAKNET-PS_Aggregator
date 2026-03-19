@@ -48,6 +48,9 @@ th.sortable:hover { color: var(--accent); }
             <div>
                 <span style="font-weight:600;font-size:13px;">Pass all traffic</span>
                 <p id="pass-all-description" style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">Only transformed data is sent — aircraft that have a transform rule are sent; all other traffic is filtered out.</p>
+                <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">
+                    Note: enable this if COTProxy transforms are not being used (e.g. you have no per-hex rules), so even network traffic is still forwarded.
+                </p>
             </div>
         </label>
         <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">

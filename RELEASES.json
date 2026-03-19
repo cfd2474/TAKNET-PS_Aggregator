@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.259",
+    "date": "2026-03-18",
+    "notes": [
+      "CoT: force COTProxy enabled for all CoT outputs and remove COTProxy selector from output setup modal."
+    ]
+  },
+  {
     "version": "1.0.258",
     "date": "2026-03-18",
     "notes": [

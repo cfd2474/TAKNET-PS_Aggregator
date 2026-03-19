@@ -97,7 +97,8 @@ def get_cot_push_outputs():
             "output_id": row["id"],
             "name": row["name"],
             "cot_url": cot_url,
-            "use_cotproxy": bool(row["use_cotproxy"]),
+            # CoT outputs always use COTProxy transforms (forced for consistency with UI).
+            "use_cotproxy": True,
             "pass_all": bool(cfg.get("pass_all")),
             "config": cfg,
         })
