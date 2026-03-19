@@ -1007,6 +1007,49 @@ def set_adsbhub_settings():
     })
 
 
+# ── Resend (transactional mail) settings (Config → Services) ──────────────
+
+@bp.route("/settings/mail", methods=["GET"])
+@admin_required
+def get_mail_settings():
+    """Return current mail settings from the mounted host .env file."""
+    enabled = _read_env_bool("RESEND_ENABLED", False)
+    api_key_present = bool((_read_env_value("RESEND_API_KEY", "") or "").strip())
+    return jsonify({
+        "enabled": enabled,
+        "api_key_present": api_key_present,
+        # Don't return the API key itself (avoid accidental logs/UI exposure).
+        "api_key": "",
+    })
+
+
+@bp.route("/settings/mail", methods=["POST"])
+@admin_required
+def set_mail_settings():
+    """Update Resend settings in .env.
+
+    - If `api_key` is empty/missing, the existing stored key is preserved.
+    - If enabling mail but there is no key, returns 400.
+    """
+    data = request.get_json() or {}
+    enabled = bool(data.get("enabled", False))
+    api_key = (data.get("api_key") or "").strip()
+
+    existing_api_key = (_read_env_value("RESEND_API_KEY", "") or "").strip()
+    if api_key:
+        _persist_env_var("RESEND_API_KEY", api_key)
+        existing_api_key = api_key
+
+    if enabled and not existing_api_key:
+        return jsonify({"success": False, "error": "api_key is required when enabling mail"}), 400
+
+    _persist_env_var("RESEND_ENABLED", "true" if enabled else "false")
+    return jsonify({
+        "success": True,
+        "message": "Mail settings saved.",
+    })
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _get_aircraft_count():

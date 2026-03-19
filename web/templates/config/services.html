@@ -33,6 +33,35 @@
     </div>
 </div>
 
+<!-- Resend transactional mail settings -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <div>
+            <h3>Resend Mail</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+                Transactional email for admin alerts and password reset.
+            </p>
+        </div>
+        <button class="btn btn-primary" id="resend-save-btn" onclick="saveResendMail()" style="white-space:nowrap;">Save</button>
+    </div>
+    <div style="padding:0 20px 20px;">
+        <div style="margin-bottom:16px;">
+            <label for="resend-api-key" style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Resend API key</label>
+            <input type="password" id="resend-api-key" class="form-control"
+                   placeholder="Paste your Resend API key"
+                   style="max-width:400px;font-family:monospace;font-size:13px;" autocomplete="off">
+            <p id="resend-msg" style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-bottom:0;"></p>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:center;">
+            <label class="toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="resend-enabled" class="toggle">
+                <span>Enable email notifications</span>
+            </label>
+        </div>
+    </div>
+</div>
+
 <!-- Restart All card -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
@@ -135,6 +164,56 @@ async function saveAdsbhub() {
             msgEl.textContent = d.message || 'Saved.';
             msgEl.style.color = 'var(--green)';
             loadContainers();
+        } else {
+            msgEl.textContent = d.error || 'Save failed.';
+            msgEl.style.color = 'var(--red)';
+        }
+    } catch (e) {
+        msgEl.textContent = 'Error: ' + e.message;
+        msgEl.style.color = 'var(--red)';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function loadResendMailSettings() {
+    try {
+        const r = await fetch('/api/settings/mail');
+        const d = await r.json();
+        document.getElementById('resend-enabled').checked = !!d.enabled;
+        document.getElementById('resend-api-key').value = '';
+        if (d.api_key_present) {
+            document.getElementById('resend-msg').textContent = 'API key is stored. Leave input blank to keep it.';
+        } else {
+            document.getElementById('resend-msg').textContent = 'No API key stored yet.';
+        }
+    } catch (e) {
+        document.getElementById('resend-msg').textContent = 'Could not load Resend settings.';
+    }
+}
+
+async function saveResendMail() {
+    const btn = document.getElementById('resend-save-btn');
+    const msgEl = document.getElementById('resend-msg');
+    const enabled = document.getElementById('resend-enabled').checked;
+    const apiKey = document.getElementById('resend-api-key').value.trim();
+
+    btn.disabled = true;
+    msgEl.textContent = 'Saving mail settings...';
+    msgEl.style.color = 'var(--accent)';
+
+    try {
+        const r = await fetch('/api/settings/mail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enabled, api_key: apiKey }),
+        });
+        const d = await r.json();
+        if (d.success) {
+            msgEl.textContent = d.message || 'Saved.';
+            msgEl.style.color = 'var(--green)';
+            // Refresh without requiring a page reload.
+            await loadResendMailSettings();
         } else {
             msgEl.textContent = d.error || 'Save failed.';
             msgEl.style.color = 'var(--red)';
@@ -264,6 +343,7 @@ document.getElementById('logs-modal').addEventListener('click', function(e) {
 });
 
 loadAdsbhubSettings();
+loadResendMailSettings();
 loadContainers();
 setInterval(loadContainers, 30000);
 </script>

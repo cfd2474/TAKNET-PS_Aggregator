@@ -536,6 +536,19 @@ class UserModel:
         return dict_row(row)
 
     @staticmethod
+    def get_by_email(email: str):
+        """Return user by email (exact match)."""
+        email = (email or "").strip()
+        if not email:
+            return None
+        conn = get_db()
+        row = conn.execute(
+            "SELECT * FROM users WHERE email = ?", (email,)
+        ).fetchone()
+        conn.close()
+        return dict_row(row)
+
+    @staticmethod
     def get_by_id(user_id):
         conn = get_db()
         row = conn.execute(
@@ -674,6 +687,101 @@ class UserModel:
         )
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def create_password_reset_token(user_id: int, *, expires_in_seconds: int = 3600) -> str:
+        """Create a reset token for a user and return the raw token.
+
+        Token is stored hashed. Any previous unused tokens for the user are invalidated.
+        """
+        import hashlib
+        import secrets
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        # Use SQLite's datetime('now', '+N seconds') to avoid timezone confusion.
+        expires_sql = f"datetime('now', '+{int(expires_in_seconds)} seconds')"
+
+        conn = get_db()
+        try:
+            # Invalidate previous unused tokens for the user (avoid accumulation).
+            conn.execute(
+                "UPDATE password_reset_tokens SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL",
+                (user_id,),
+            )
+            conn.execute(
+                "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, "
+                + expires_sql +
+                ")",
+                (user_id, token_hash),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return token
+
+    @staticmethod
+    def consume_password_reset_token(raw_token: str, new_password: str) -> tuple[bool, str]:
+        """Consume a reset token and set a new password.
+
+        Returns (ok, message). Token can be used only once and must not be expired.
+        """
+        import hashlib
+
+        raw_token = (raw_token or "").strip()
+        if not raw_token:
+            return False, "missing_token"
+
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT id, user_id FROM password_reset_tokens "
+                "WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')",
+                (token_hash,),
+            ).fetchone()
+            if not row:
+                return False, "invalid_or_expired_token"
+
+            reset_id = row["id"]
+            user_id = row["user_id"]
+
+            conn.execute(
+                "UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?",
+                (generate_password_hash(new_password), user_id),
+            )
+            conn.execute(
+                "UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?",
+                (reset_id,),
+            )
+            conn.commit()
+            return True, "ok"
+        finally:
+            conn.close()
+
+    @staticmethod
+    def verify_password_reset_token(raw_token: str) -> tuple[bool, str]:
+        """Validate a reset token without consuming it."""
+        import hashlib
+
+        raw_token = (raw_token or "").strip()
+        if not raw_token:
+            return False, "missing_token"
+
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM password_reset_tokens "
+                "WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')",
+                (token_hash,),
+            ).fetchone()
+            if not row:
+                return False, "invalid_or_expired_token"
+            return True, "ok"
+        finally:
+            conn.close()
 
     @staticmethod
     def update_role(user_id, role):

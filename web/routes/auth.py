@@ -1,10 +1,13 @@
-"""Auth routes — login, logout, register, pending, change password."""
+"""Auth routes — login, logout, register, pending, password change, password reset."""
+
+import os
 
 from flask import Blueprint, render_template, redirect, url_for, request
 from flask_login import login_user, logout_user, login_required, current_user
 
 from models import UserModel
 from app import AuthUser
+from services.mail_client import ResendMailClient, get_resend_from_email
 
 bp = Blueprint("auth", __name__)
 
@@ -126,6 +129,103 @@ def profile():
             success = "Password updated successfully."
 
     return render_template("auth/profile.html", error=error, success=success)
+
+
+@bp.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """Request a password reset email (generic response to prevent enumeration)."""
+    success = False
+    error = None
+
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip()
+        # Always show the same success message to avoid user enumeration.
+        success = True
+
+        if not email:
+            return render_template("auth/forgot_password.html", success=success, error=error)
+
+        user = UserModel.get_by_email(email)
+        if not user or not (user.get("email") or "").strip():
+            return render_template("auth/forgot_password.html", success=success, error=error)
+
+        # Only create token if mail is enabled (otherwise user won't receive the link).
+        mail_client = ResendMailClient.from_env()
+        if not (mail_client.enabled and mail_client.api_key):
+            return render_template("auth/forgot_password.html", success=success, error=error)
+
+        token = UserModel.create_password_reset_token(int(user["id"]))
+
+        site_name = os.environ.get("SITE_NAME", "TAKNET-PS Aggregator")
+        reset_url = url_for("auth.reset_password", token=token, _external=True)
+
+        first_name = (user.get("first_name") or "").strip() or (user.get("username") or "")
+        subject = f"{site_name} Password Reset"
+
+        html = f"""
+<p>Hi {first_name},</p>
+<p>We received a request to reset your password for your {site_name} account.</p>
+<p>
+  <a href="{reset_url}" style="display:inline-block;padding:10px 14px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:6px;">
+    Reset your password
+  </a>
+</p>
+<p>
+  If you didn't request this, you can safely ignore this email.
+</p>
+<p style="font-size:12px;color:#666;">
+  This link will expire in about 1 hour.
+</p>
+"""
+        text = (
+            f"Hi {first_name},\n\n"
+            f"Reset your {site_name} password: {reset_url}\n\n"
+            "If you didn't request this, ignore this email.\n"
+        )
+
+        mail_client.send_email(
+            from_email=get_resend_from_email(),
+            to=user["email"],
+            subject=subject,
+            html=html,
+            text=text,
+        )
+
+        return render_template("auth/forgot_password.html", success=success, error=error)
+
+    return render_template("auth/forgot_password.html", success=success, error=error)
+
+
+@bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token: str):
+    """Set a new password using a reset token."""
+    error = None
+    success = False
+
+    token_ok, _ = UserModel.verify_password_reset_token(token)
+
+    if request.method == "POST":
+        password = (request.form.get("password") or "").strip()
+        confirm = (request.form.get("confirm_password") or "").strip()
+
+        if len(password) < 6:
+            error = "Password must be at least 6 characters."
+        elif password != confirm:
+            error = "Passwords do not match."
+        else:
+            ok, _msg = UserModel.consume_password_reset_token(token, password)
+            if ok:
+                success = True
+            else:
+                error = "This reset link is invalid or expired."
+
+        # Re-render with error/success state.
+        return render_template("auth/reset_password.html", error=error, success=success)
+
+    if not token_ok:
+        error = "This reset link is invalid or expired."
+
+    return render_template("auth/reset_password.html", error=error, success=success)
 
 
 def _role_home_url():

@@ -161,6 +161,9 @@ NETBIRD_API_URL=http://localhost:33073
 NETBIRD_API_TOKEN=
 NETBIRD_CIDR=100.64.0.0/10
 GEOIP_ENABLED=true
+RESEND_ENABLED=false
+RESEND_API_KEY=
+RESEND_FROM_EMAIL="noreply@notify.tak-solutions.com"
 ENVEOF
     warn "Created .env with defaults — edit $INSTALL_DIR/.env to customize"
 fi
