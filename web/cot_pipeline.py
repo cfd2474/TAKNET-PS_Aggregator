@@ -577,7 +577,7 @@ def build_cot_xml(
     # This intentionally overrides any COTProxy-provided `transform["cot"]` so distress aircraft are always hostile.
     if distress:
         base_type = _cot_type_from_aircraft(aircraft)
-        # If base type is TIS-B/unknown, keep it as-is (hostile conversion is not meaningful there).
+        # If base type is unknown, keep it as-is (hostile conversion is not meaningful there).
         if base_type != COT_TYPE_UNKNOWN_AIR:
             cot_type = _cot_type_hostile_variant(base_type)
         else:

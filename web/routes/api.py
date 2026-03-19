@@ -1,6 +1,7 @@
 """API routes — JSON endpoints for dashboard data."""
 
 import json
+import re
 import math
 import os
 import queue
@@ -470,6 +471,18 @@ _AIRCRAFT_JSON_CACHE = {"ts": 0.0, "data": None}
 _AIRCRAFT_JSON_CACHE_TTL_SEC = 1.0
 
 
+def _normalize_hex6(val) -> str | None:
+    """Extract the first 6 hex digits from a value (e.g. '~29AD8E' -> '29AD8E')."""
+    try:
+        s = str(val or "")
+    except Exception:
+        return None
+    m = re.search(r"([0-9A-Fa-f]{6})", s)
+    if not m:
+        return None
+    return m.group(1).upper()
+
+
 def _get_aircraft_json_cached_for_diag():
     """Fetch and cache merger aircraft.json for short time windows (helps inspector typing)."""
     import time as _time
@@ -494,8 +507,8 @@ def diagnostics_aircraft():
     if not q:
         return jsonify({"error": "Missing query `q` (hex or callsign)"}), 400
 
-    aircraft_q = q.upper()
-    is_hex = len(aircraft_q) == 6 and all(c in "0123456789ABCDEF" for c in aircraft_q)
+    aircraft_q = _normalize_hex6(q)
+    is_hex = aircraft_q is not None
     callsign_q = q.strip().lower()
 
     try:
@@ -509,7 +522,8 @@ def diagnostics_aircraft():
         if not isinstance(a, dict):
             continue
         if is_hex:
-            if str(a.get("hex") or "").strip().upper() == aircraft_q:
+            a_hex = _normalize_hex6(a.get("hex"))
+            if a_hex == aircraft_q:
                 matches.append(a)
         else:
             # callsign match (aircraft.json uses `flight` in many feeds)
@@ -536,8 +550,8 @@ def diagnostics_output():
     if not q:
         return jsonify({"error": "Missing query `q` (hex or callsign)"}), 400
 
-    aircraft_q = q.upper()
-    is_hex = len(aircraft_q) == 6 and all(c in "0123456789ABCDEF" for c in aircraft_q)
+    aircraft_q = _normalize_hex6(q)
+    is_hex = aircraft_q is not None
     callsign_q = q.lower()
 
     try:
@@ -551,7 +565,8 @@ def diagnostics_output():
         if not isinstance(a, dict):
             continue
         if is_hex:
-            if str(a.get("hex") or "").strip().upper() == aircraft_q:
+            a_hex = _normalize_hex6(a.get("hex"))
+            if a_hex == aircraft_q:
                 matches.append(a)
         else:
             flight = (a.get("flight") or "").strip().lower()

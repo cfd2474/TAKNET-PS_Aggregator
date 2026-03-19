@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.269",
+    "date": "2026-03-19",
+    "notes": [
+      "Diagnostics: aircraft lookup now normalizes hex queries by extracting 6 hex digits (so '~29AD8E' matches aircraft.json even when the map display includes a prefix)."
+    ]
+  },
+  {
     "version": "1.0.268",
     "date": "2026-03-19",
     "notes": [
