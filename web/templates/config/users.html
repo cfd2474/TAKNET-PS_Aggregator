@@ -48,10 +48,35 @@
     </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
-            <tbody>
+            <thead>
+                <tr>
+                    <th style="min-width:220px;">
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <button type="button" class="btn btn-sm" onclick="sortActiveUsersBy('username')" style="width:auto;">
+                                Username <span id="sort-indicator-username" style="font-weight:400;color:var(--text-muted);font-size:11px;"></span>
+                            </button>
+                            <input id="filter-username" type="text" placeholder="Filter name..." class="form-control"
+                                   style="padding:4px 8px;font-size:12px;width:100%;"
+                                   oninput="applyActiveUsersFilters()">
+                        </div>
+                    </th>
+                    <th style="min-width:160px;">
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <button type="button" class="btn btn-sm" onclick="sortActiveUsersBy('role')" style="width:auto;">
+                                Role <span id="sort-indicator-role" style="font-weight:400;color:var(--text-muted);font-size:11px;"></span>
+                            </button>
+                            <input id="filter-role" type="text" placeholder="Filter role..." class="form-control"
+                                   style="padding:4px 8px;font-size:12px;width:100%;"
+                                   oninput="applyActiveUsersFilters()">
+                        </div>
+                    </th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="active-users-tbody">
             {% for u in users %}
-            <tr id="user-row-{{ u.id }}">
+            <tr id="user-row-{{ u.id }}" data-username="{{ u.username }}" data-role="{{ u.role }}">
                 <td style="font-weight:500;color:var(--text-primary);font-family:monospace;">
                     <a href="/config/users/{{ u.id }}" style="color:inherit;text-decoration:none;">{{ u.username }}</a>
                 </td>
@@ -206,5 +231,84 @@ async function cleanUserDatabase() {
         btns.forEach(b => b.disabled = false);
     }
 }
+
+let activeUsersSortKey = 'username';
+let activeUsersSortDir = 'asc';
+
+function _getRowDataset(row) {
+    return {
+        username: (row.dataset.username || '').toLowerCase(),
+        role: (row.dataset.role || '').toLowerCase(),
+    };
+}
+
+function getActiveUserRows() {
+    const tbody = document.getElementById('active-users-tbody');
+    if (!tbody) return [];
+    return Array.from(tbody.querySelectorAll('tr'));
+}
+
+function applyActiveUsersFilters() {
+    const fNameEl = document.getElementById('filter-username');
+    const fRoleEl = document.getElementById('filter-role');
+    const fName = (fNameEl?.value || '').trim().toLowerCase();
+    const fRole = (fRoleEl?.value || '').trim().toLowerCase();
+
+    const rows = getActiveUserRows();
+    for (const row of rows) {
+        const ds = _getRowDataset(row);
+        const okName = !fName || ds.username.includes(fName);
+        const okRole = !fRole || ds.role.includes(fRole);
+        row.style.display = (okName && okRole) ? '' : 'none';
+    }
+}
+
+function _compareStrings(a, b) {
+    // localeCompare gives case-aware, human-friendly sorting.
+    return a.localeCompare(b, undefined, { sensitivity: 'base' });
+}
+
+function sortActiveUsersBy(key) {
+    const tbody = document.getElementById('active-users-tbody');
+    if (!tbody) return;
+
+    if (activeUsersSortKey === key) {
+        activeUsersSortDir = activeUsersSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        activeUsersSortKey = key;
+        activeUsersSortDir = 'asc';
+    }
+
+    const rows = getActiveUserRows();
+    rows.sort((ra, rb) => {
+        const da = _getRowDataset(ra);
+        const db = _getRowDataset(rb);
+        const va = key === 'role' ? da.role : da.username;
+        const vb = key === 'role' ? db.role : db.username;
+        const cmp = _compareStrings(va, vb);
+        return activeUsersSortDir === 'asc' ? cmp : -cmp;
+    });
+
+    for (const row of rows) tbody.appendChild(row);
+
+    // Update sort indicators
+    const nameInd = document.getElementById('sort-indicator-username');
+    const roleInd = document.getElementById('sort-indicator-role');
+    if (nameInd) nameInd.textContent = (activeUsersSortKey === 'username') ? (activeUsersSortDir.toUpperCase()) : '';
+    if (roleInd) roleInd.textContent = (activeUsersSortKey === 'role') ? (activeUsersSortDir.toUpperCase()) : '';
+}
+
+function applyActiveUsersFiltersAndSort() {
+    applyActiveUsersFilters();
+    sortActiveUsersBy(activeUsersSortKey);
+}
+
+// Initialize once the table is on the page.
+window.addEventListener('load', function () {
+    applyActiveUsersFilters();
+    // Ensure initial sort indicator is set.
+    const nameInd = document.getElementById('sort-indicator-username');
+    if (nameInd) nameInd.textContent = 'ASC';
+});
 </script>
 {% endblock %}

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.257",
+    "date": "2026-03-18",
+    "notes": [
+      "UI: make Users table sortable and filterable by Username and Role."
+    ]
+  },
+  {
     "version": "1.0.256",
     "date": "2026-03-18",
     "notes": [
