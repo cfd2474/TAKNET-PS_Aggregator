@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.272",
+    "date": "2026-03-19",
+    "notes": [
+      "Map: add /map/tar1090-help (tar1090 legend, filters, shortcuts, URL params) and map toolbar button linking to it; official ADS-B Exchange map help linked from the page."
+    ]
+  },
+  {
     "version": "1.0.271",
     "date": "2026-03-19",
     "notes": [

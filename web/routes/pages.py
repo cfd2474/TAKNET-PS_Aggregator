@@ -11,6 +11,14 @@ bp = Blueprint("pages", __name__)
 def map_page():
     return render_template("map.html")
 
+
+@bp.route("/map/tar1090-help")
+@login_required_any
+def tar1090_map_help():
+    """tar1090 map legend, filters, and URL params (local copy; official ref linked on page)."""
+    return render_template("tar1090_map_help.html")
+
+
 @bp.route("/stats")
 @network_admin_required
 def stats():
