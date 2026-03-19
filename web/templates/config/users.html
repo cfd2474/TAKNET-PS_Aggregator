@@ -23,7 +23,7 @@
                 <td>
                     <select id="pending-role-{{ u.id }}" class="form-control" style="padding:4px 8px;font-size:12px;width:auto;">
                         {% for r in roles %}
-                        <option value="{{ r }}">{{ r }}</option>
+                        <option value="{{ r }}" {% if r == u.role %}selected{% endif %}>{{ r }}</option>
                         {% endfor %}
                     </select>
                 </td>

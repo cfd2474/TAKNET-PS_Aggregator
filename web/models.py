@@ -585,7 +585,8 @@ class UserModel:
     @staticmethod
     def register(username, password, profile: dict):
         """Create a pending user from a self-registration request."""
-        role = "viewer"  # Permission group is set by the approving admin later.
+        # Default pending permission group (approving admin can still change it).
+        role = "network_admin"
 
         def _clean(v):
             if v is None:

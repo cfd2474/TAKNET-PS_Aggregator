@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.253",
+    "date": "2026-03-18",
+    "notes": [
+      "Auth: registration alert email links to the Users list (/config/users) and new pending requests default to network_admin."
+    ]
+  },
+  {
     "version": "1.0.252",
     "date": "2026-03-18",
     "notes": [

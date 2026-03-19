@@ -104,10 +104,7 @@ def register():
 
                             site_name = os.environ.get("SITE_NAME", "TAKNET-PS Aggregator")
                             admin_users_url = url_for("config.users", _external=True)
-                            admin_user_detail_url = (
-                                url_for("config.user_detail", user_id=user_id, _external=True)
-                                if user_id else admin_users_url
-                            )
+                            admin_review_url = admin_users_url
 
                             req_user_first = (created_user.get("first_name") or "").strip() or username
                             req_user_last = (created_user.get("last_name") or "").strip()
@@ -128,10 +125,7 @@ def register():
 </table>
 <p style="margin:14px 0 10px 0;">
   Review the request here:
-  <a href="{admin_user_detail_url}" style="display:inline-block;padding:10px 14px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:6px;">Open User Details</a>
-</p>
-<p style="margin:0;color:#666;font-size:12px;">
-  Alternatively: <a href="{admin_users_url}">{admin_users_url}</a>
+  <a href="{admin_users_url}" style="display:inline-block;padding:10px 14px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:6px;">Open Users List</a>
 </p>
 """
 
@@ -142,7 +136,7 @@ def register():
                                 f"Email: {req_user_email}\n"
                                 f"Phone: {phone}\n"
                                 f"Agency: {agency}\n\n"
-                                f"Review: {admin_user_detail_url}\n"
+                                f"Review: {admin_review_url}\n"
                             )
 
                             mail_client.send_email(
