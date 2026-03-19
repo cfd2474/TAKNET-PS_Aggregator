@@ -904,7 +904,12 @@ async function saveOutput() {
     } else {
         const type = document.getElementById('modal-type').value;
         const mode = document.getElementById('modal-mode').value;
-        const config = {};
+        // IMPORTANT: preserve existing COTProxy config when editing a COT output.
+        // When the output settings modal saves, it builds `config` from the Data filters UI; without merging,
+        // it would wipe optional CoTProxy fields like pass_all / include_icon_in_cot / cot_stale_seconds / etc.
+        const isEdit = !!id;
+        const existingCfg = (window._outputModalCfg || {});
+        const config = (isEdit && type === 'cot') ? Object.assign({}, existingCfg) : {};
         if (mode === 'push') {
             if (type === 'cot') {
                 const cotUrl = buildCotUrl();
