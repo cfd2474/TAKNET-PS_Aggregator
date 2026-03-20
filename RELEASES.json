@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.279",
+    "date": "2026-03-19",
+    "notes": [
+      "Map: tar1090 map key modal — remove icon-size / zoom footer row and unused plane-icons asset."
+    ]
+  },
+  {
     "version": "1.0.278",
     "date": "2026-03-19",
     "notes": [

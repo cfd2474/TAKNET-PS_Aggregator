@@ -195,16 +195,6 @@
     color: var(--tk-accent);
     margin-right: 4px;
 }
-#tar1090-key-modal .tar1090-key-inline-icons {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 14px;
-    margin: 10px 0 6px 0;
-    font-size: 12px;
-    color: var(--tk-muted);
-}
-#tar1090-key-modal .tar1090-key-inline-icons img { vertical-align: middle; }
 </style>
 <div id="tar1090-key-modal" aria-hidden="true" role="dialog" aria-labelledby="tar1090-key-title" aria-modal="true">
     <div class="tar1090-key-modal-backdrop" aria-hidden="true"></div>
@@ -273,10 +263,6 @@
                 <div class="tar1090-key-btn-row"><img src="{{ url_for('static', filename='img/tar1090-key/isolate-1-1.png') }}" alt="" width="35" height="35" loading="lazy"><div><strong>I</strong> Isolate selected aircraft</div></div>
                 <div class="tar1090-key-btn-row"><img src="{{ url_for('static', filename='img/tar1090-key/random-1-1.png') }}" alt="" width="37" height="37" loading="lazy"><div><strong>R</strong> Follow random plane</div></div>
                 <div class="tar1090-key-btn-row"><img src="{{ url_for('static', filename='img/tar1090-key/follow-1.png') }}" alt="" width="37" height="37" loading="lazy"><div><strong>F</strong> Follow plane (map moves)</div></div>
-                <div class="tar1090-key-inline-icons">
-                    <span><img src="{{ url_for('static', filename='img/tar1090-key/plane-icons-1-1.png') }}" alt="" width="44" height="44" loading="lazy"> Top left — icon size</span>
-                    <span>Lower right <strong>+</strong> / <strong>−</strong> or scroll — zoom</span>
-                </div>
             </div>
 
             <div class="tar1090-key-section">
