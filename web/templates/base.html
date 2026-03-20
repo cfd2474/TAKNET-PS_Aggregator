@@ -55,6 +55,17 @@
         .sidebar-header {
             padding: 20px 16px 16px;
             border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .sidebar-header-logo {
+            display: block;
+            width: 100%;
+            max-width: 190px;
+            height: auto;
+            mix-blend-mode: lighten;
         }
         .sidebar-header h1 {
             font-size: 15px;
@@ -407,6 +418,7 @@
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
+            <img src="/static/img/taknetlogo.png" alt="TAKNET-PS" class="sidebar-header-logo">
             <h1>TAKNET-PS</h1>
             <div class="version">Aggregator v{{ version }}</div>
         </div>

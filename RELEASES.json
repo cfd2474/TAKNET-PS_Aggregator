@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.290",
+    "date": "2026-03-19",
+    "notes": [
+      "UI: add TAKNET logo image to the left sidebar header (same asset as login page) while keeping version text."
+    ]
+  },
+  {
     "version": "1.0.289",
     "date": "2026-03-19",
     "notes": [
