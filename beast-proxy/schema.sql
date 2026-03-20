@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     mlat_enabled BOOLEAN DEFAULT 0,
     notes TEXT,
     owners TEXT NOT NULL DEFAULT '[]',
+    owners_locked INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

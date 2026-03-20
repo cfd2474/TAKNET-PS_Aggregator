@@ -219,7 +219,9 @@ Overview with stat cards (feeders, aircraft, system uptime), feeder breakdown by
 Sortable, filterable table of all registered feeders. Filter by status and connection type. Click a row for the detail view.
 
 ### Feeder Detail (`/inputs/feeder/<id>`)
-Full detail: connection info, statistics, edit form (name, tar1090 URL, notes), and connection history.
+Full detail: connection info, statistics, edit form (name, tar1090 URL, notes), and connection history. Admins can **Lock owner list** so automatic feeder claiming does not change **Owners**.
+
+**Feeder claiming:** Active users copy a **Feeder claim key** from their **Account details** page into feeder-side settings. The feeder sends one ASCII line `TAKNET_FEEDER_CLAIM <uuid>` immediately after connecting on Beast port **30004**, then the normal Beast binary stream; beast-proxy matches the key to a user and sets **Owners** unless the feeder is locked. Full wire format and behavior: **`FEEDER_CLAIM_CLIENT_SPEC.md`**.
 
 ### Map (`/map`)
 Full-page tar1090 UI (default) with live aircraft count in the toolbar. Also lets you switch to the merged map view with the detail sidebar. **tar1090 map key** opens an in-page modal (filters, shortcuts, URL parameters) with bundled help artwork under `web/static/img/tar1090-key/` (filters screenshot, toolbar letter icons, altitude bar, body texture; see folder README for attribution).
@@ -246,6 +248,7 @@ User management (admin only). Includes:
 - Role filter is a dropdown
 - "Clean user database" button purges denied/rejected users to free usernames
 - Deny/delete actions purge usernames so rejected users can re-register; admins can **Delete** active users from the list or user detail (not self)
+- Users viewing their own **Account details** see a permanent **Feeder claim key** (UUID) for feeder client configuration; see **`FEEDER_CLAIM_CLIENT_SPEC.md`**
 
 ### Authentication & Email Notifications (Resend)
 Request access signup supports a "Show password" checkbox. Password reset is available via `/forgot-password` and `/reset-password/<token>` and sends reset emails through Resend (when enabled). New user registrations notify admins via Resend using the configured `RESEND_ADMIN_EMAILS` recipients. When an admin **approves** a pending request, the user receives a **welcome email** at the address they registered (same Resend settings; skipped if email is missing or Resend is disabled).

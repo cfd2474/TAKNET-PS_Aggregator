@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.283",
+    "date": "2026-03-19",
+    "notes": [
+      "Feeder claiming: permanent user Feeder claim key (Account details), optional TCP line TAKNET_FEEDER_CLAIM <uuid> before Beast on 30004 (beast-proxy); auto-sets feeder owners unless admins enable Lock owner list. Spec: FEEDER_CLAIM_CLIENT_SPEC.md."
+    ]
+  },
+  {
     "version": "1.0.282",
     "date": "2026-03-19",
     "notes": [

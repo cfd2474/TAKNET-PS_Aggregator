@@ -1,5 +1,6 @@
 """Database wrapper for beast-proxy SQLite operations."""
 
+import json
 import os
 import sqlite3
 import threading
@@ -34,12 +35,54 @@ def init_db():
         conn.execute("ALTER TABLE output_api_keys ADD COLUMN key_type TEXT NOT NULL DEFAULT 'single_use'")
     except sqlite3.OperationalError:
         pass  # column already exists
+    try:
+        conn.execute(
+            "ALTER TABLE feeders ADD COLUMN owners_locked INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     print(f"[db] Database initialized at {DB_PATH}")
 
 
 def now_utc():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def try_apply_feeder_claim(feeder_id: int, claim_key: str) -> None:
+    """If claim_key matches an active user's feeder_claim_key, set feeders.owners to [username].
+
+    Skips when owners_locked is set (admin override). Shared DB with dashboard users table.
+    """
+    key = (claim_key or "").strip().lower()
+    if not key:
+        return
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT COALESCE(owners_locked, 0) AS ol FROM feeders WHERE id = ?",
+        (int(feeder_id),),
+    ).fetchone()
+    if not row or int(row["ol"] or 0) != 0:
+        return
+    u = conn.execute(
+        """SELECT username FROM users
+           WHERE lower(trim(feeder_claim_key)) = ? AND lower(trim(status)) = 'active'""",
+        (key,),
+    ).fetchone()
+    if not u:
+        print(f"[db] Feeder claim: no user for key (feeder_id={feeder_id})")
+        return
+    uname = (u["username"] or "").strip()
+    if not uname:
+        return
+    owners_json = json.dumps([uname])
+    conn.execute(
+        """UPDATE feeders SET owners = ?, updated_at = ?
+           WHERE id = ? AND COALESCE(owners_locked, 0) = 0""",
+        (owners_json, now_utc(), int(feeder_id)),
+    )
+    conn.commit()
+    print(f"[db] Feeder {feeder_id} owners set via claim → {uname}")
 
 
 def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=None):

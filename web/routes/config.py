@@ -56,6 +56,10 @@ def user_detail(user_id):
     if not user:
         abort(404)
 
+    feeder_claim_key = None
+    if int(user_id) == int(current_user.id):
+        feeder_claim_key = UserModel.ensure_feeder_claim_key(int(user_id))
+
     return render_template(
         "config/user_detail.html",
         user=user,
@@ -64,6 +68,7 @@ def user_detail(user_id):
             current_user.role == "admin" and int(user_id) != int(current_user.id)
         ),
         is_self=(int(user_id) == int(current_user.id)),
+        feeder_claim_key=feeder_claim_key,
         roles=UserModel.ROLES,
     )
 
@@ -142,6 +147,10 @@ def users_approve(user_id):
     was_pending = bool(existing and (existing.get("status") or "") == "pending")
     ok, msg = UserModel.approve(user_id, role)
     if ok and was_pending:
+        try:
+            UserModel.ensure_feeder_claim_key(user_id)
+        except Exception:
+            pass
         try:
             send_account_approved_welcome(UserModel.get_by_id(user_id))
         except Exception as e:

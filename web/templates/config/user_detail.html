@@ -94,6 +94,29 @@
     {% endif %}
 </div>
 
+{% if is_self %}
+<div class="card" style="max-width:760px;margin-top:16px;">
+    <div class="card-header">
+        <h3 style="margin:0;">Feeder claim key</h3>
+        <span style="font-size:12px;color:var(--text-muted);">Permanent — use on your feeder</span>
+    </div>
+    <div style="padding:16px;">
+        {% if feeder_claim_key %}
+        <p style="margin:0 0 10px 0;font-size:13px;color:var(--text-secondary);line-height:1.55;">
+            Paste this key into your <strong>feeder</strong> configuration (Beast client that connects to the aggregator). On each TCP connection the feeder must send one ASCII line with this key <em>before</em> any Beast binary data; the aggregator then assigns you as this feeder’s owner (unless an admin has locked the owner list). See project file <code>FEEDER_CLAIM_CLIENT_SPEC.md</code> for the exact wire format.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;">
+            <code id="feeder-claim-key-val" style="flex:1;min-width:220px;font-size:12px;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;word-break:break-all;display:block;">{{ feeder_claim_key }}</code>
+            <button type="button" class="btn" style="font-size:12px;align-self:center;" onclick="copyFeederClaimKey()">Copy</button>
+        </div>
+        <p style="margin:12px 0 0 0;font-size:11px;color:var(--text-muted);">Keep private — anyone with this key can claim feeders as you until an admin locks ownership.</p>
+        {% else %}
+        <p style="margin:0;font-size:13px;color:var(--text-secondary);">Your feeder claim key is created when your account is <strong>active</strong> (after an administrator approves registration).</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% if can_reset_password %}
 <div class="card" style="max-width:760px;margin-top:16px;border-color:rgba(239,68,68,0.35);">
     <div class="card-header" style="background:rgba(239,68,68,0.06);">
@@ -151,6 +174,28 @@
 {% block extra_scripts %}
 <script>
 let resetUserDetailId = {{ user.id }};
+
+function copyFeederClaimKey() {
+    var el = document.getElementById('feeder-claim-key-val');
+    if (!el) return;
+    var t = el.textContent || '';
+    if (!t) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(function() { alert('Copied to clipboard'); }).catch(function() { fallbackCopy(t); });
+    } else {
+        fallbackCopy(t);
+    }
+}
+function fallbackCopy(t) {
+    var ta = document.createElement('textarea');
+    ta.value = t;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); alert('Copied to clipboard'); } catch(e) { alert('Copy failed'); }
+    document.body.removeChild(ta);
+}
 
 async function updateRoleFromDetails() {
     const sel = document.getElementById('ud-role');

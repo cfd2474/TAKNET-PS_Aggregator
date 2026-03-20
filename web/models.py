@@ -3,6 +3,7 @@
 import json
 import os
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 
 DB_PATH = os.environ.get("DB_PATH", "/data/aggregator.db")
@@ -76,6 +77,26 @@ def get_db():
         try:
             conn.execute(
                 "ALTER TABLE feeders ADD COLUMN owners TEXT NOT NULL DEFAULT '[]'"
+            )
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(
+                "ALTER TABLE feeders ADD COLUMN owners_locked INTEGER NOT NULL DEFAULT 0"
+            )
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN feeder_claim_key TEXT")
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_feeder_claim_key_u "
+                "ON users(feeder_claim_key) WHERE feeder_claim_key IS NOT NULL"
             )
             conn.commit()
         except Exception:
@@ -209,6 +230,14 @@ def enrich_feeder_mlat_display(feeder):
     feeder["software_version"] = software_version  # blank when no " | v"
     feeder["tunnel_feeder_id"] = tunnel_feeder_id(feeder)
     feeder["owners"] = parse_feeder_owners(feeder.get("owners"))
+    ol = feeder.get("owners_locked")
+    if ol is None or ol == "":
+        feeder["owners_locked"] = False
+    else:
+        try:
+            feeder["owners_locked"] = bool(int(ol))
+        except (TypeError, ValueError):
+            feeder["owners_locked"] = False
     return feeder
 
 
@@ -284,11 +313,14 @@ class FeederModel:
         allowed = {"name", "tar1090_url", "graphs1090_url", "notes", "mlat_enabled"}
         if allow_owners:
             allowed.add("owners")
+            allowed.add("owners_locked")
         fields = []
         values = []
         for key, val in data.items():
             if key not in allowed:
                 continue
+            if key == "owners_locked":
+                val = 1 if val in (True, 1, "1", "true", "yes") else 0
             if key == "owners":
                 if isinstance(val, list):
                     val = json.dumps([str(x).strip() for x in val if str(x).strip()])
@@ -558,6 +590,40 @@ class UserModel:
         return dict_row(row)
 
     @staticmethod
+    def ensure_feeder_claim_key(user_id: int) -> str | None:
+        """Return this user's permanent feeder claim key, creating one if needed.
+
+        Only **active** users receive a key (pending accounts get None until approved).
+        """
+        conn = get_db()
+        row = conn.execute(
+            "SELECT id, status, feeder_claim_key FROM users WHERE id = ?",
+            (int(user_id),),
+        ).fetchone()
+        if not row:
+            conn.close()
+            return None
+        if (row["status"] or "").strip().lower() != "active":
+            conn.close()
+            return None
+        existing = (row["feeder_claim_key"] or "").strip()
+        if existing:
+            conn.close()
+            return existing.lower()
+        new_key = str(uuid.uuid4()).lower()
+        try:
+            conn.execute(
+                "UPDATE users SET feeder_claim_key = ?, updated_at = datetime('now') WHERE id = ?",
+                (new_key, int(user_id)),
+            )
+            conn.commit()
+        except Exception:
+            conn.close()
+            return None
+        conn.close()
+        return new_key
+
+    @staticmethod
     def get_all():
         conn = get_db()
         rows = conn.execute(
@@ -701,12 +767,17 @@ class UserModel:
             return False, "Invalid role"
         conn = get_db()
         try:
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
                 (username, generate_password_hash(password), role),
             )
             conn.commit()
+            new_id = cur.lastrowid
             conn.close()
+            try:
+                UserModel.ensure_feeder_claim_key(int(new_id))
+            except Exception:
+                pass
             return True, "User created"
         except Exception as e:
             conn.close()

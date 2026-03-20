@@ -7,6 +7,7 @@ classifies connections as Tailscale/NetBird/public, and forwards data to readsb.
 import asyncio
 import json
 import os
+import re
 import signal
 import sys
 import time
@@ -33,6 +34,36 @@ start_time = time.time()
 BEAST_ESCAPE = 0x1A
 BEAST_TYPES = {0x31, 0x32, 0x33, 0x34, 0x35}
 BEAST_LONG = {0x33, 0x35}  # Mode-S long messages (contain ADS-B/DF17)
+
+# Optional first line on Beast TCP port (before binary Beast frames):
+#   TAKNET_FEEDER_CLAIM <uuid>\n
+# UUID = 8-4-4-4-12 lowercase hex. Case-insensitive keyword.
+_CLAIM_LINE_RE = re.compile(
+    rb"(?i)^TAKNET_FEEDER_CLAIM[ \t]+([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})\s*$"
+)
+
+
+async def read_optional_feeder_claim_prefix(reader):
+    """Read optional claim line. Returns (claim_key_or_None, bytes_to_prepend to readsb stream)."""
+    b0 = await reader.read(1)
+    if not b0:
+        return None, b""
+    if b0 == bytes([BEAST_ESCAPE]):
+        return None, b0
+    if b0 != b"T":
+        return None, b0
+    rest = await reader.readline()
+    if not rest:
+        return None, b0
+    line = b0 + rest
+    if not line.endswith(b"\n"):
+        return None, line
+    stripped = line.rstrip(b"\r\n")
+    m = _CLAIM_LINE_RE.match(stripped)
+    if not m:
+        return None, line
+    key = m.group(1).decode("ascii").lower()
+    return key, b""
 
 
 def _reclassify_existing_feeders():
@@ -99,11 +130,18 @@ def count_beast_frames(data):
     return msgs, positions
 
 
-async def forward_stream(reader, writer, conn_info, direction):
-    """Forward data between two streams, tracking bytes and Beast messages."""
+async def forward_stream(reader, writer, conn_info, direction, lead_in=b""):
+    """Forward data between two streams, tracking bytes and Beast messages.
+
+    lead_in: bytes to send first on inbound (e.g. first Beast byte when no claim line).
+    """
     try:
+        pending = lead_in if direction == "inbound" else b""
         while True:
             data = await reader.read(8192)
+            if pending:
+                data = pending + (data or b"")
+                pending = b""
             if not data:
                 break
             writer.write(data)
@@ -150,7 +188,13 @@ async def handle_client(reader, writer):
             lon = geo.get("longitude")
         print(f"[proxy] {ip_address} classified as public, location: {location}")
 
+    claim_key, lead = await read_optional_feeder_claim_prefix(reader)
     feeder_id = db.upsert_feeder(ip_address, hostname, conn_type, location, lat, lon)
+    if claim_key:
+        try:
+            db.try_apply_feeder_claim(feeder_id, claim_key)
+        except Exception as e:
+            print(f"[proxy] Feeder claim apply error: {e}")
     connection_id = db.log_connection(feeder_id, ip_address)
 
     conn_info = {
@@ -179,7 +223,7 @@ async def handle_client(reader, writer):
         print(f"[proxy] Forwarding {ip_address} → readsb:{READSB_PORT}")
 
         await asyncio.gather(
-            forward_stream(reader, readsb_writer, conn_info, "inbound"),
+            forward_stream(reader, readsb_writer, conn_info, "inbound", lead_in=lead),
             forward_stream(readsb_reader, writer, conn_info, "outbound"),
         )
     except (ConnectionRefusedError, OSError) as e:

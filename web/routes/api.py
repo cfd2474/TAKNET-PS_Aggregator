@@ -275,6 +275,7 @@ def feeder_update(feeder_id):
         return jsonify({"error": "No data"}), 400
     if current_user.role != "admin":
         data.pop("owners", None)
+        data.pop("owners_locked", None)
     allow_owners = current_user.role == "admin"
     ok = FeederModel.update(feeder_id, data, allow_owners=allow_owners)
     if ok:

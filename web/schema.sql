@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     phone TEXT,
     agency TEXT,
     status TEXT NOT NULL DEFAULT 'active',       -- 'active', 'pending', 'denied'
+    feeder_claim_key TEXT,                     -- permanent UUID for feeder ownership claim (per user); unique index below
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     mlat_enabled BOOLEAN DEFAULT 0,
     notes TEXT,
     owners TEXT NOT NULL DEFAULT '[]',   -- JSON array of usernames; admin-only edit; empty = admin-only access
+    owners_locked INTEGER NOT NULL DEFAULT 0,  -- 1 = feeder claim cannot change owners (admin override)
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -100,6 +102,7 @@ CREATE TABLE IF NOT EXISTS update_history (
 CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
 CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen);
 CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_feeder_claim_key_u ON users(feeder_claim_key) WHERE feeder_claim_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_connections_feeder ON connections(feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_connected ON connections(connected_at);
 CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC);
