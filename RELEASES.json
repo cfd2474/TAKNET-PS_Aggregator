@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.289",
+    "date": "2026-03-19",
+    "notes": [
+      "Access request page: use POST/Redirect/GET after submit to prevent refresh re-submission; success message now tells users they will receive an approval email."
+    ]
+  },
+  {
     "version": "1.0.288",
     "date": "2026-03-19",
     "notes": [

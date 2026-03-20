@@ -44,7 +44,7 @@ def register():
         return _role_home()
 
     error = None
-    success = False
+    success = request.args.get("submitted") == "1"
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -84,8 +84,6 @@ def register():
                 },
             )
             if ok:
-                success = True
-
                 # Admin email notification for new registration (Resend).
                 try:
                     mail_client = ResendMailClient.from_env()
@@ -150,6 +148,8 @@ def register():
                     # Don't block registration success if email fails.
                     # Keep this as a print (no logging dependency) so issues show up in container logs.
                     print(f"[auth] Registration admin email send failed: {e}")
+                # POST/Redirect/GET prevents browser refresh from re-submitting form data.
+                return redirect(url_for("auth.register", submitted="1"))
             else:
                 error = "Username already taken." if "UNIQUE" in str(result) else str(result)
 
