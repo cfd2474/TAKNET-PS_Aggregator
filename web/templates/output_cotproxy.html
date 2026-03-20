@@ -207,34 +207,92 @@ th.sortable:hover { color: var(--accent); }
             <button class="modal-close" onclick="closeCotDuplicatesModal()">&#x2715;</button>
         </div>
         <div class="modal-body">
-            <div id="cot-dup-step-1">
+            <div id="cot-dup-scan-view">
                 <p style="margin:0 0 12px;color:var(--text-secondary);font-size:13px;line-height:1.5;">
-                    This scans transforms by HEX (case-insensitive). Exact duplicate rows (all fields match) are safe to auto-merge first; only HEX groups with mismatched values will require field-by-field choices.
+                    This scans transforms by HEX (case-insensitive). Exact duplicate rows (all fields match) can be auto-merged first; mismatched rows can be rectified field-by-field.
                 </p>
                 <div id="cot-dup-scan-summary" style="font-size:13px;color:var(--text-primary);margin-bottom:12px;"></div>
                 <div id="cot-dup-scan-error" style="display:none;margin-bottom:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);border-radius:8px;padding:12px;color:var(--red);font-size:13px;"></div>
-                <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">
+                <div id="cot-dup-actions-scan" style="display:flex;gap:10px;justify-content:flex-end;align-items:center;">
+                    <button type="button" class="btn" style="font-size:12px;" onclick="closeCotDuplicatesModal()">Cancel</button>
+                </div>
+                <div id="cot-dup-actions-ready" style="display:none;gap:10px;justify-content:flex-end;align-items:center;">
                     <button type="button" class="btn btn-primary" id="cot-dup-automerge-btn" style="font-size:12px;" onclick="cotDupAutomerge()" disabled>
-                        Auto-merge exact duplicates
+                        Auto merge identical records
+                    </button>
+                    <button type="button" class="btn btn-primary" id="cot-dup-rectify-btn" style="font-size:12px;" onclick="cotDupStartRectify()" disabled>
+                        Rectify mismatches
                     </button>
                     <button type="button" class="btn" style="font-size:12px;" onclick="closeCotDuplicatesModal()">Close</button>
                 </div>
             </div>
 
-            <div id="cot-dup-step-2" style="display:none;">
+            <div id="cot-dup-rectify-view" style="display:none;">
                 <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;">
                     <div>
-                        <h4 style="margin:0;font-size:14px;">Resolve mismatched duplicates</h4>
-                        <p id="cot-dup-step-2-subtitle" style="margin:4px 0 0;color:var(--text-muted);font-size:12px;line-height:1.4;"></p>
+                        <h4 style="margin:0;font-size:14px;">Rectify mismatches</h4>
+                        <p id="cot-dup-rectify-subtitle" style="margin:4px 0 0;color:var(--text-muted);font-size:12px;line-height:1.4;"></p>
                     </div>
-                    <div id="cot-dup-merge-status" style="color:var(--text-muted);font-size:12px;"></div>
+                    <div id="cot-dup-rectify-status" style="color:var(--text-muted);font-size:12px;"></div>
                 </div>
-                <div id="cot-dup-mismatch-container" style="margin-top:14px;display:flex;flex-direction:column;gap:12px;"></div>
+
+                <div style="margin-top:14px;">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Matching records (read-only)</div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>HEX</th>
+                                    <th>Callsign</th>
+                                    <th>Type</th>
+                                    <th>Domain</th>
+                                    <th>Agency</th>
+                                    <th>Reg</th>
+                                    <th>Model</th>
+                                    <th>CoT</th>
+                                    <th>Icon</th>
+                                    <th>Remarks</th>
+                                    <th>Video</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cot-dup-records-tbody">
+                                <tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="margin-top:14px;">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Resolved values</div>
+                    <div id="cot-dup-resolve-fields" style="display:flex;flex-direction:column;gap:10px;"></div>
+                </div>
+
                 <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:14px;">
-                    <button type="button" class="btn btn-primary" id="cot-dup-merge-btn" style="font-size:12px;" onclick="cotDupSubmitMerge()" disabled>
-                        Merge chosen values
+                    <button type="button" class="btn btn-primary" id="cot-dup-merge-btn" style="font-size:12px;" onclick="cotDupMergeAndNext()">
+                        Merge
                     </button>
-                    <button type="button" class="btn" style="font-size:12px;" onclick="closeCotDuplicatesModal()">Close</button>
+                    <button type="button" class="btn" style="font-size:12px;" onclick="cotDupFinish()">Finish</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Auto merge status modal -->
+<div class="modal-overlay" id="cot-dup-auto-modal" style="pointer-events:auto;">
+    <div class="modal" style="max-width:430px;">
+        <div class="modal-header">
+            <h3 id="cot-dup-auto-title">Auto merge identical records</h3>
+        </div>
+        <div class="modal-body">
+            <div id="cot-dup-auto-processing" style="text-align:center;padding:20px;">
+                <p style="margin:0;color:var(--text-secondary);">Processing… Please wait.</p>
+            </div>
+            <div id="cot-dup-auto-result" style="display:none;padding:20px;">
+                <p id="cot-dup-auto-message" style="margin:0 0 14px;font-size:13px;"></p>
+                <div style="display:flex;justify-content:flex-end;">
+                    <button type="button" class="btn btn-primary" onclick="closeCotDupAutoModal()">Acknowledge</button>
                 </div>
             </div>
         </div>
@@ -1050,13 +1108,48 @@ async function deleteTransform(id, hex) {
 
 // ── CoTProxy duplicate detection + merge ─────────────────────────────────
 let cotDupState = {
-    remainingGroups: [],
-    overridesByHex: {},
-    rowMapByHex: {},
+    scanGroups: [],
+    mismatchGroups: [],
+    currentIndex: 0,
+    currentGroup: null,
+    resolved: {},
 };
 
 function closeCotDuplicatesModal() {
     document.getElementById('cot-dup-modal').classList.remove('show');
+}
+
+function showCotDupScanView() {
+    document.getElementById('cot-dup-scan-view').style.display = 'block';
+    document.getElementById('cot-dup-rectify-view').style.display = 'none';
+}
+
+function showCotDupRectifyView() {
+    document.getElementById('cot-dup-scan-view').style.display = 'none';
+    document.getElementById('cot-dup-rectify-view').style.display = 'block';
+}
+
+function showCotDupScanActionsScanning() {
+    document.getElementById('cot-dup-actions-scan').style.display = 'flex';
+    document.getElementById('cot-dup-actions-ready').style.display = 'none';
+}
+
+function showCotDupScanActionsReady() {
+    document.getElementById('cot-dup-actions-scan').style.display = 'none';
+    document.getElementById('cot-dup-actions-ready').style.display = 'flex';
+}
+
+function showCotDupAutoModal(state, message, isError) {
+    document.getElementById('cot-dup-auto-modal').classList.add('show');
+    document.getElementById('cot-dup-auto-processing').style.display = state === 'processing' ? 'block' : 'none';
+    document.getElementById('cot-dup-auto-result').style.display = state === 'result' ? 'block' : 'none';
+    const msgEl = document.getElementById('cot-dup-auto-message');
+    msgEl.style.color = isError ? 'var(--red)' : 'var(--text-primary)';
+    msgEl.textContent = message || '';
+}
+
+function closeCotDupAutoModal() {
+    document.getElementById('cot-dup-auto-modal').classList.remove('show');
 }
 
 function cotDupValueDisplay(v) {
@@ -1071,20 +1164,23 @@ function cotDupTruncate(s, n) {
 }
 
 async function openCotDuplicatesModal() {
-    // Reset state/UI
-    cotDupState.remainingGroups = [];
-    cotDupState.overridesByHex = {};
-    cotDupState.rowMapByHex = {};
-    document.getElementById('cot-dup-step-2').style.display = 'none';
-    document.getElementById('cot-dup-step-1').style.display = 'block';
-    document.getElementById('cot-dup-mismatch-container').innerHTML = '';
-    document.getElementById('cot-dup-merge-status').textContent = '';
-    document.getElementById('cot-dup-merge-btn').disabled = true;
-    document.getElementById('cot-dup-automerge-btn').disabled = true;
+    cotDupState.scanGroups = [];
+    cotDupState.mismatchGroups = [];
+    cotDupState.currentIndex = 0;
+    cotDupState.currentGroup = null;
+    cotDupState.resolved = {};
 
+    showCotDupScanView();
+    showCotDupScanActionsScanning();
     document.getElementById('cot-dup-scan-error').style.display = 'none';
     document.getElementById('cot-dup-scan-error').textContent = '';
     document.getElementById('cot-dup-scan-summary').textContent = 'Scanning for duplicates…';
+    document.getElementById('cot-dup-automerge-btn').disabled = true;
+    document.getElementById('cot-dup-rectify-btn').disabled = true;
+    document.getElementById('cot-dup-rectify-status').textContent = '';
+    document.getElementById('cot-dup-records-tbody').innerHTML =
+        '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>';
+    document.getElementById('cot-dup-resolve-fields').innerHTML = '';
 
     document.getElementById('cot-dup-modal').classList.add('show');
 
@@ -1093,163 +1189,232 @@ async function openCotDuplicatesModal() {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Scan failed');
         const groups = d.groups || [];
+        cotDupState.scanGroups = groups;
+        cotDupState.mismatchGroups = groups.filter(g => !g.exact);
         const exactCount = groups.filter(g => g.exact).length;
-        const mismatchCount = groups.filter(g => !g.exact).length;
+        const mismatchCount = cotDupState.mismatchGroups.length;
         if (!groups.length) {
             document.getElementById('cot-dup-scan-summary').textContent = 'No duplicate HEX groups found.';
-            document.getElementById('cot-dup-automerge-btn').disabled = true;
-            document.getElementById('cot-dup-step-2').style.display = 'none';
+            showCotDupScanActionsReady();
             return;
         }
         document.getElementById('cot-dup-scan-summary').textContent =
             `Found ${groups.length} duplicate HEX group(s): ${exactCount} exact match(es) and ${mismatchCount} needing resolution.`;
-        document.getElementById('cot-dup-automerge-btn').disabled = exactCount > 0 || mismatchCount > 0;
+        document.getElementById('cot-dup-automerge-btn').disabled = false;
+        document.getElementById('cot-dup-rectify-btn').disabled = mismatchCount === 0;
+        showCotDupScanActionsReady();
     } catch (e) {
         document.getElementById('cot-dup-scan-error').style.display = 'block';
         document.getElementById('cot-dup-scan-error').textContent = 'Scan failed: ' + (e && e.message ? e.message : e);
-        document.getElementById('cot-dup-automerge-btn').disabled = true;
+        showCotDupScanActionsReady();
     }
 }
 
 async function cotDupAutomerge() {
-    const autoBtn = document.getElementById('cot-dup-automerge-btn');
-    autoBtn.disabled = true;
-    document.getElementById('cot-dup-scan-summary').textContent = 'Auto-merging exact duplicates…';
-    document.getElementById('cot-dup-scan-error').style.display = 'none';
-
+    showCotDupAutoModal('processing');
     try {
         const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/duplicates/automerge', { method: 'POST' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Auto-merge failed');
 
         const remaining = d.remaining_mismatched_groups || [];
-        cotDupState.remainingGroups = remaining;
-
-        document.getElementById('cot-dup-merge-status').textContent =
-            `Auto-merged ${d.merged_groups || 0} exact group(s), removed ${d.deleted_transforms || 0} duplicate row(s).`;
-
-        if (!remaining.length) {
-            document.getElementById('cot-dup-step-1').style.display = 'none';
-            document.getElementById('cot-dup-step-2').style.display = 'block';
-            document.getElementById('cot-dup-mismatch-container').innerHTML =
-                '<div style="padding:14px;border:1px solid var(--border);border-radius:8px;color:var(--text-secondary);">No mismatched duplicates remain.</div>';
-            document.getElementById('cot-dup-merge-btn').disabled = true;
-            setTimeout(function() {
-                closeCotDuplicatesModal();
-                loadTransforms();
-            }, 1200);
-            return;
-        }
-
-        renderCotDupMismatchGroups(remaining);
-        document.getElementById('cot-dup-step-1').style.display = 'none';
-        document.getElementById('cot-dup-step-2').style.display = 'block';
-        document.getElementById('cot-dup-merge-btn').disabled = false;
+        cotDupState.mismatchGroups = remaining;
+        document.getElementById('cot-dup-rectify-btn').disabled = remaining.length === 0;
+        document.getElementById('cot-dup-scan-summary').textContent =
+            `Auto-merge complete. Merged ${d.merged_groups || 0} identical group(s), removed ${d.deleted_transforms || 0} duplicate row(s). Remaining mismatched groups: ${remaining.length}.`;
+        showCotDupAutoModal(
+            'result',
+            `Completed. Merged ${d.merged_groups || 0} identical group(s), removed ${d.deleted_transforms || 0} duplicate row(s). Remaining mismatched groups: ${remaining.length}.`,
+            false
+        );
+        loadTransforms();
     } catch (e) {
-        document.getElementById('cot-dup-scan-error').style.display = 'block';
-        document.getElementById('cot-dup-scan-error').textContent = 'Auto-merge failed: ' + (e && e.message ? e.message : e);
-        document.getElementById('cot-dup-automerge-btn').disabled = false;
+        showCotDupAutoModal('result', 'Auto merge failed: ' + (e && e.message ? e.message : e), true);
     }
 }
 
-function cotDupSetOverride(hex, field, rowId) {
-    const rid = String(rowId);
-    const row = cotDupState.rowMapByHex[hex] && cotDupState.rowMapByHex[hex][rid];
-    if (!row) return;
-    cotDupState.overridesByHex[hex] = cotDupState.overridesByHex[hex] || {};
-    cotDupState.overridesByHex[hex][field] = row[field];
+function cotDupNorm(v) {
+    if (v === null || v === undefined) return '';
+    return String(v).trim();
 }
 
-function renderCotDupMismatchGroups(groups) {
-    const container = document.getElementById('cot-dup-mismatch-container');
-    cotDupState.overridesByHex = {};
-    cotDupState.rowMapByHex = {};
-    container.innerHTML = '';
+function cotDupDistinctValues(rows, field) {
+    const out = [];
+    const seen = new Set();
+    (rows || []).forEach(r => {
+        const nv = cotDupNorm(r[field]);
+        if (seen.has(nv)) return;
+        seen.add(nv);
+        out.push(nv);
+    });
+    return out;
+}
 
-    groups.forEach(g => {
-        const hex = g.hex;
-        const rows = g.rows || [];
-        const diffFields = g.diff_fields || [];
-        if (!rows.length || !diffFields.length) return;
+function cotDupRenderCurrentRectifyGroup() {
+    const grp = cotDupState.mismatchGroups[cotDupState.currentIndex];
+    cotDupState.currentGroup = grp || null;
+    cotDupState.resolved = {};
 
-        const keepRow = rows[0];
-        const keepId = keepRow.id;
+    const subtitle = document.getElementById('cot-dup-rectify-subtitle');
+    const recordsTbody = document.getElementById('cot-dup-records-tbody');
+    const resolveFields = document.getElementById('cot-dup-resolve-fields');
+    const statusEl = document.getElementById('cot-dup-rectify-status');
 
-        cotDupState.rowMapByHex[hex] = {};
-        rows.forEach(r => { cotDupState.rowMapByHex[hex][String(r.id)] = r; });
+    if (!grp) {
+        subtitle.textContent = 'No mismatched groups to rectify.';
+        recordsTbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>';
+        resolveFields.innerHTML = '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);">Nothing to rectify.</div>';
+        statusEl.textContent = '';
+        return;
+    }
 
-        cotDupState.overridesByHex[hex] = {};
-        diffFields.forEach(f => { cotDupState.overridesByHex[hex][f] = keepRow[f]; });
+    const rows = grp.rows || [];
+    subtitle.textContent = `HEX ${grp.hex} — record ${cotDupState.currentIndex + 1} of ${cotDupState.mismatchGroups.length}`;
+    statusEl.textContent = '';
 
-        const html = `
-            <div class="card" style="padding:12px;border-radius:10px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-weight:600;font-size:13px;">HEX <code>${escapeHtml(hex)}</code></div>
-                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${rows.length} duplicate row(s)</div>
-                    </div>
-                    <div style="font-size:12px;color:var(--text-muted);">Keep row #${keepId} as base</div>
+    recordsTbody.innerHTML = rows.map(r => `
+        <tr>
+            <td>${r.id}</td>
+            <td><code>${escapeHtml(r.hex || grp.hex || '')}</code></td>
+            <td>${escapeHtml(r.callsign || '')}</td>
+            <td>${escapeHtml(r.type || '')}</td>
+            <td>${escapeHtml(r.domain || '')}</td>
+            <td>${escapeHtml(r.agency || '')}</td>
+            <td>${escapeHtml(r.reg || '')}</td>
+            <td>${escapeHtml(r.model || '')}</td>
+            <td>${escapeHtml(r.cot || '')}</td>
+            <td title="${escapeHtml(r.icon || '')}">${escapeHtml(cotDupTruncate(r.icon || '', 28))}</td>
+            <td title="${escapeHtml(r.remarks || '')}">${escapeHtml(cotDupTruncate(r.remarks || '', 28))}</td>
+            <td>${(r.video && String(r.video).trim()) ? 'Yes' : ''}</td>
+        </tr>
+    `).join('');
+
+    const fieldOrder = ['hex', 'callsign', 'type', 'domain', 'agency', 'reg', 'model', 'cot', 'icon', 'remarks', 'video'];
+    const keepRow = rows[0] || {};
+    resolveFields.innerHTML = '';
+    fieldOrder.forEach(field => {
+        const distinct = cotDupDistinctValues(rows, field);
+        const exact = distinct.length <= 1;
+        const isHex = field === 'hex';
+        const baseVal = isHex ? cotDupNorm(grp.hex || keepRow.hex) : cotDupNorm(keepRow[field]);
+        cotDupState.resolved[field] = baseVal;
+
+        const label = field.toUpperCase();
+        if (isHex || exact) {
+            const roHtml = `
+                <div style="display:grid;grid-template-columns:170px 1fr;gap:10px;align-items:center;">
+                    <div style="font-size:12px;color:var(--text-muted);">${escapeHtml(label)}</div>
+                    <input class="form-control" value="${escapeHtml(baseVal)}" readonly>
                 </div>
-                <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
-                    ${diffFields.map(f => {
-                        const curVal = keepRow[f];
-                        const options = rows.map(r => {
-                            const rid = r.id;
-                            const disp = cotDupValueDisplay(r[f]);
-                            const selected = (rid === keepId) ? 'selected' : '';
-                            return `<option value="${rid}" ${selected}>#${rid}: ${escapeHtml(cotDupTruncate(disp, 46))}</option>`;
-                        }).join('');
-                        return `
-                            <div>
-                                <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Field: ${escapeHtml(f)}</div>
-                                <select id="cot-dup-sel-${hex}-${f}" style="width:100%;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;"
-                                        onchange="cotDupSetOverride('${hex}', '${f}', this.value)">
-                                    ${options}
-                                </select>
-                            </div>
-                        `;
-                    }).join('')}
+            `;
+            resolveFields.insertAdjacentHTML('beforeend', roHtml);
+        } else {
+            const options = distinct.map(v => {
+                const sel = v === baseVal ? 'selected' : '';
+                const optVal = v === '' ? '__NULL__' : v;
+                const disp = v === '' ? '(blank)' : v;
+                return `<option value="${escapeHtml(optVal)}" ${sel}>${escapeHtml(disp)}</option>`;
+            }).join('');
+            const id = `cot-dup-resolve-${field}`;
+            const selHtml = `
+                <div style="display:grid;grid-template-columns:170px 1fr;gap:10px;align-items:center;">
+                    <div style="font-size:12px;color:var(--text-muted);">${escapeHtml(label)} (mismatch)</div>
+                    <select id="${id}" class="form-control">
+                        ${options}
+                    </select>
                 </div>
-            </div>
-        `;
-        container.insertAdjacentHTML('beforeend', html);
+            `;
+            resolveFields.insertAdjacentHTML('beforeend', selHtml);
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', function() {
+                    cotDupState.resolved[field] = this.value === '__NULL__' ? '' : this.value;
+                });
+            }
+        }
     });
 }
 
-async function cotDupSubmitMerge() {
+function cotDupStartRectify() {
+    if (!cotDupState.mismatchGroups.length) {
+        document.getElementById('cot-dup-scan-error').style.display = 'block';
+        document.getElementById('cot-dup-scan-error').textContent = 'No mismatched duplicate groups to rectify.';
+        return;
+    }
+    cotDupState.currentIndex = 0;
+    showCotDupRectifyView();
+    cotDupRenderCurrentRectifyGroup();
+}
+
+async function cotDupMergeCurrentGroup(closeAfter) {
+    const grp = cotDupState.currentGroup;
+    if (!grp) {
+        if (closeAfter) closeCotDuplicatesModal();
+        return;
+    }
+    const rows = grp.rows || [];
+    if (!rows.length) {
+        if (closeAfter) closeCotDuplicatesModal();
+        return;
+    }
+    const keepId = rows[0].id;
     const mergeBtn = document.getElementById('cot-dup-merge-btn');
     mergeBtn.disabled = true;
-    document.getElementById('cot-dup-merge-status').textContent = 'Merging chosen values…';
+    document.getElementById('cot-dup-rectify-status').textContent = 'Merging…';
 
     try {
-        const merges = (cotDupState.remainingGroups || []).map(g => {
-            const hex = g.hex;
-            const rows = g.rows || [];
-            const keepRow = rows[0];
-            const diffFields = g.diff_fields || [];
-            const overrides = {};
-            diffFields.forEach(f => { overrides[f] = (cotDupState.overridesByHex[hex] || {})[f]; });
-            return { hex: hex, keep_id: keepRow.id, overrides: overrides };
+        const overrides = {};
+        ['callsign', 'type', 'domain', 'agency', 'reg', 'model', 'cot', 'icon', 'remarks', 'video'].forEach(f => {
+            const v = cotDupState.resolved[f];
+            overrides[f] = (v === null || v === undefined || String(v).trim() === '') ? null : String(v).trim();
         });
 
         const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/duplicates/merge', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groups: merges }),
+            body: JSON.stringify({
+                groups: [{
+                    hex: grp.hex,
+                    keep_id: keepId,
+                    overrides: overrides
+                }]
+            }),
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Merge failed');
 
-        document.getElementById('cot-dup-merge-status').textContent =
-            `Merge complete. Removed ${d.deleted_transforms || 0} duplicates.`;
-
-        closeCotDuplicatesModal();
+        document.getElementById('cot-dup-rectify-status').textContent = `Merged HEX ${grp.hex}. Removed ${d.deleted_transforms || 0} duplicate row(s).`;
+        cotDupState.mismatchGroups.splice(cotDupState.currentIndex, 1);
+        if (closeAfter) {
+            closeCotDuplicatesModal();
+            loadTransforms();
+            return;
+        }
+        if (!cotDupState.mismatchGroups.length) {
+            closeCotDuplicatesModal();
+            loadTransforms();
+            return;
+        }
+        if (cotDupState.currentIndex >= cotDupState.mismatchGroups.length) {
+            cotDupState.currentIndex = cotDupState.mismatchGroups.length - 1;
+        }
+        cotDupRenderCurrentRectifyGroup();
         loadTransforms();
     } catch (e) {
         mergeBtn.disabled = false;
-        document.getElementById('cot-dup-merge-status').textContent =
+        document.getElementById('cot-dup-rectify-status').textContent =
             'Merge failed: ' + (e && e.message ? e.message : e);
+        return;
     }
+    mergeBtn.disabled = false;
+}
+
+async function cotDupMergeAndNext() {
+    await cotDupMergeCurrentGroup(false);
+}
+
+async function cotDupFinish() {
+    await cotDupMergeCurrentGroup(true);
 }
 
 wireFilterInputs();
