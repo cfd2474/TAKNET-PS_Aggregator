@@ -185,7 +185,7 @@ NetBird is the primary feeder connectivity method. For setup documentation see h
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RESEND_ENABLED` | `false` | Enable transactional email sending (admin alerts and password reset emails) via Resend |
+| `RESEND_ENABLED` | `false` | Enable transactional email sending (admin alerts, password reset, approval welcome) via Resend |
 | `RESEND_API_KEY` | *(blank)* | Resend API key |
 | `RESEND_FROM_EMAIL` | `noreply@notify.tak-solutions.com` | "From" address used for emails |
 | `RESEND_ADMIN_EMAILS` | *(blank)* | Comma-separated recipient list for new registration notifications |
@@ -231,7 +231,7 @@ Full-page graphs1090 embed showing message rate, aircraft count, range, and CPU 
 Live NetBird peer status — online/total count, peer table with hostname, IP, and connection state. Also shows the NetBird client enrollment state for the aggregator server itself.
 
 ### Services (`/config/services`)
-Docker container management. Also includes the **Resend Mail** settings (enable/disable, API key, from address, admin recipient list) used for admin alerts and password reset emails.
+Docker container management. Also includes the **Resend Mail** settings (enable/disable, API key, from address, admin recipient list) used for admin alerts, password reset, and approval welcome emails.
 
 ### Outputs (`/outputs`)
 Manage outgoing feeds (JSON, Beast RAW, CoT). For CoT outputs, the UI enforces COTProxy transforms (no CoTProxy selector in the output setup modal). In the COTProxy config page, you can enable **Distress -> Hostile** so emergency aircraft (emergency status or squawks 7700/7600/7500) are forced to hostile CoT type (overriding any COTProxy transform-provided type), their callsign gets prefixed with `*ALERT* - `, and remarks include the matching distress descriptor.
@@ -248,7 +248,7 @@ User management (admin only). Includes:
 - Deny/delete actions purge usernames so rejected users can re-register
 
 ### Authentication & Email Notifications (Resend)
-Request access signup supports a "Show password" checkbox. Password reset is available via `/forgot-password` and `/reset-password/<token>` and sends reset emails through Resend (when enabled). New user registrations notify admins via Resend using the configured `RESEND_ADMIN_EMAILS` recipients.
+Request access signup supports a "Show password" checkbox. Password reset is available via `/forgot-password` and `/reset-password/<token>` and sends reset emails through Resend (when enabled). New user registrations notify admins via Resend using the configured `RESEND_ADMIN_EMAILS` recipients. When an admin **approves** a pending request, the user receives a **welcome email** at the address they registered (same Resend settings; skipped if email is missing or Resend is disabled).
 
 ### Health (`/config/health`)
 CPU, memory, disk and top processes. **Server-wide view:** the installer runs a host-side script every 30s (systemd timer) that writes snapshots to `var/health_history.json`; the dashboard mounts `var` and uses this for overview, history chart, and top processes (e.g. netbird, readsb, python) so you can see what drives CPU spikes. Requires `python3` and `psutil` on the host (installer installs psutil if needed). Without it, the page shows container-only metrics (mainly gunicorn). **Active feeder count** is shown in the Overview for capacity planning.

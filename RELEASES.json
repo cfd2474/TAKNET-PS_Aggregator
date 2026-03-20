@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.281",
+    "date": "2026-03-19",
+    "notes": [
+      "Email: when an admin approves a pending self-registration, send a Resend welcome email (TAKNET-PS intro + Log in button) to the user's profile email if configured."
+    ]
+  },
+  {
     "version": "1.0.280",
     "date": "2026-03-19",
     "notes": [

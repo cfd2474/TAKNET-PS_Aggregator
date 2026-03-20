@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, abort
 from flask_login import current_user
 from models import UserModel
 from routes.auth_utils import admin_required, network_admin_required, login_required_any
+from services.approval_welcome_email import send_account_approved_welcome
 
 bp = Blueprint("config", __name__, url_prefix="/config")
 
@@ -134,7 +135,14 @@ def users_delete(user_id):
 def users_approve(user_id):
     data = request.get_json(silent=True) or {}
     role = data.get("role", "viewer")
+    existing = UserModel.get_by_id(user_id)
+    was_pending = bool(existing and (existing.get("status") or "") == "pending")
     ok, msg = UserModel.approve(user_id, role)
+    if ok and was_pending:
+        try:
+            send_account_approved_welcome(UserModel.get_by_id(user_id))
+        except Exception as e:
+            print(f"[config] Approval welcome email error: {e}")
     return jsonify({"success": ok, "message": msg})
 
 
