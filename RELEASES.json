@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.287",
+    "date": "2026-03-19",
+    "notes": [
+      "CoTProxy: add 'Find duplicates' button with modal to auto-merge exact duplicate transforms and resolve mismatched HEX groups field-by-field before merging."
+    ]
+  },
+  {
     "version": "1.0.286",
     "date": "2026-03-19",
     "notes": [

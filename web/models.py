@@ -1174,6 +1174,230 @@ class CotTransformModel:
     CSV_HEADERS = ("DOMAIN", "AGENCY", "REG", "CALLSIGN", "TYPE", "MODEL", "HEX", "COT", "ICON", "REMARKS", "VIDEO")
 
     _SORT_COLUMNS = ("hex", "callsign", "type", "domain", "agency", "reg")
+    _DUP_FIELDS = ("domain", "agency", "reg", "callsign", "type", "model", "cot", "icon", "remarks", "video")
+
+    @staticmethod
+    def _norm_for_dup_compare(v):
+        """Normalize values for duplicate comparison.
+
+        We want "same line" to ignore whitespace differences and treat empty strings as NULL.
+        """
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            return s if s else None
+        # Fallback: coerce to string and apply same empty-string logic.
+        s = str(v).strip()
+        return s if s else None
+
+    @staticmethod
+    def _transform_row_signature(row: dict) -> tuple:
+        """Signature of all fields that define a "complete line" transform."""
+        return tuple(CotTransformModel._norm_for_dup_compare(row.get(f)) for f in CotTransformModel._DUP_FIELDS)
+
+    @staticmethod
+    def find_duplicates(output_id: int) -> dict:
+        """Find duplicate cot_transforms for the same output_id and same HEX (case-insensitive).
+
+        Returns groups:
+          - exact=true: all fields in the line are identical (safe to auto-merge)
+          - exact=false: some fields differ; UI must resolve per-field value.
+        """
+        conn = get_db()
+        try:
+            dup_hex_rows = conn.execute(
+                """SELECT UPPER(TRIM(hex)) AS hx, COUNT(*) as c
+                   FROM cot_transforms
+                   WHERE output_id = ?
+                   GROUP BY UPPER(TRIM(hex))
+                   HAVING COUNT(*) > 1
+                   ORDER BY hx""",
+                (output_id,),
+            ).fetchall()
+
+            groups = []
+            for d in dup_hex_rows:
+                hx = (d["hx"] or "").strip().upper()
+                if not hx:
+                    continue
+                rows = conn.execute(
+                    """SELECT id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video
+                       FROM cot_transforms
+                       WHERE output_id = ?
+                         AND UPPER(TRIM(hex)) = ?
+                       ORDER BY id""",
+                    (output_id, hx),
+                ).fetchall()
+                rows = [dict(r) for r in rows]
+
+                signatures = {}
+                for r in rows:
+                    sig = CotTransformModel._transform_row_signature(r)
+                    signatures.setdefault(sig, 0)
+                    signatures[sig] += 1
+                exact = len(signatures) == 1
+
+                diff_fields = []
+                if not exact:
+                    for f in CotTransformModel._DUP_FIELDS:
+                        vals = {CotTransformModel._norm_for_dup_compare(r.get(f)) for r in rows}
+                        if len(vals) > 1:
+                            diff_fields.append(f)
+
+                groups.append(
+                    {
+                        "hex": hx,
+                        "exact": exact,
+                        "ids": [r["id"] for r in rows],
+                        "rows": rows,
+                        "diff_fields": diff_fields,
+                    }
+                )
+
+            return {
+                "duplicate_hex_groups": len(groups),
+                "groups": groups,
+            }
+        finally:
+            conn.close()
+
+    @staticmethod
+    def automerge_exact_duplicates(output_id: int) -> dict:
+        """Merge (delete duplicates) where all transform fields are identical for a given HEX."""
+        conn = get_db()
+        deleted_transforms = 0
+        merged_groups = 0
+        try:
+            conn.execute("BEGIN")
+            dup_hex_rows = conn.execute(
+                """SELECT UPPER(TRIM(hex)) AS hx
+                   FROM cot_transforms
+                   WHERE output_id = ?
+                   GROUP BY UPPER(TRIM(hex))
+                   HAVING COUNT(*) > 1""",
+                (output_id,),
+            ).fetchall()
+
+            for d in dup_hex_rows:
+                hx = (d["hx"] or "").strip().upper()
+                if not hx:
+                    continue
+                rows = conn.execute(
+                    """SELECT id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video
+                       FROM cot_transforms
+                       WHERE output_id = ?
+                         AND UPPER(TRIM(hex)) = ?
+                       ORDER BY id""",
+                    (output_id, hx),
+                ).fetchall()
+                rows = [dict(r) for r in rows]
+                if len(rows) < 2:
+                    continue
+
+                sig0 = CotTransformModel._transform_row_signature(rows[0])
+                if all(CotTransformModel._transform_row_signature(r) == sig0 for r in rows[1:]):
+                    keep_id = min(r["id"] for r in rows)
+                    other_ids = [r["id"] for r in rows if r["id"] != keep_id]
+                    if other_ids:
+                        conn.execute(
+                            "DELETE FROM cot_transforms WHERE output_id = ? AND id IN (" + ",".join("?" * len(other_ids)) + ")",
+                            (output_id, *other_ids),
+                        )
+                        deleted_transforms += len(other_ids)
+                        merged_groups += 1
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        # Re-scan to return remaining mismatched groups.
+        remaining = CotTransformModel.find_duplicates(output_id)
+        remaining_groups = [g for g in remaining.get("groups", []) if not g.get("exact")]
+        return {
+            "merged_groups": merged_groups,
+            "deleted_transforms": deleted_transforms,
+            "remaining_mismatched_groups": remaining_groups,
+        }
+
+    @staticmethod
+    def merge_duplicate_groups(output_id: int, groups: list) -> dict:
+        """Merge mismatched duplicate groups by updating a chosen row per HEX and deleting the others.
+
+        groups payload items:
+          { hex: 'ABC', keep_id: <id>, overrides: { field: value_or_null, ... } }
+        """
+        allowed = set(CotTransformModel._DUP_FIELDS)
+        conn = get_db()
+        merged_groups = 0
+        deleted_transforms = 0
+        try:
+            conn.execute("BEGIN")
+            for g in groups or []:
+                hx = (g.get("hex") or "").strip().upper()
+                keep_id = g.get("keep_id")
+                overrides = g.get("overrides") or {}
+                if not hx or keep_id is None:
+                    raise ValueError("Missing hex or keep_id in merge request")
+
+                rows = conn.execute(
+                    """SELECT id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video
+                       FROM cot_transforms
+                       WHERE output_id = ?
+                         AND UPPER(TRIM(hex)) = ?
+                       ORDER BY id""",
+                    (output_id, hx),
+                ).fetchall()
+                rows = [dict(r) for r in rows]
+                ids = [r["id"] for r in rows]
+                if keep_id not in ids:
+                    raise ValueError(f"keep_id={keep_id} not found for duplicate HEX {hx}")
+                if len(ids) < 2:
+                    # Already merged by someone else.
+                    continue
+
+                # Normalize overrides and only apply allowed fields.
+                updates = {}
+                for k, v in overrides.items():
+                    if k not in allowed:
+                        continue
+                    if isinstance(v, str):
+                        v2 = v.strip()
+                        updates[k] = v2 if v2 else None
+                    else:
+                        updates[k] = v
+
+                if updates:
+                    set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+                    values = [updates[k] for k in updates.keys()] + [int(keep_id), int(output_id)]
+                    conn.execute(
+                        f"UPDATE cot_transforms SET {set_clause} WHERE id = ? AND output_id = ?",
+                        values,
+                    )
+
+                other_ids = [i for i in ids if int(i) != int(keep_id)]
+                if other_ids:
+                    conn.execute(
+                        "DELETE FROM cot_transforms WHERE output_id = ? AND id IN (" + ",".join("?" * len(other_ids)) + ")",
+                        (int(output_id), *[int(i) for i in other_ids]),
+                    )
+                    deleted_transforms += len(other_ids)
+                merged_groups += 1
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        return {
+            "merged_groups": merged_groups,
+            "deleted_transforms": deleted_transforms,
+        }
 
     @staticmethod
     def get_all(output_id: int):

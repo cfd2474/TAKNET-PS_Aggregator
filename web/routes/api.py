@@ -1643,6 +1643,47 @@ def cot_transforms_import(output_id):
     return jsonify({"success": True, "inserted": inserted, "errors": errors})
 
 
+@bp.route("/outputs/<int:output_id>/cot-transforms/duplicates/scan", methods=["GET"])
+@network_admin_required
+def cot_transforms_duplicates_scan(output_id):
+    """Scan for duplicate cot_transforms groups by HEX (case-insensitive)."""
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    return jsonify(CotTransformModel.find_duplicates(output_id))
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/duplicates/automerge", methods=["POST"])
+@network_admin_required
+def cot_transforms_duplicates_automerge(output_id):
+    """Auto-merge exact duplicate transform rows (same values across all fields)."""
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        return jsonify(CotTransformModel.automerge_exact_duplicates(output_id))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/duplicates/merge", methods=["POST"])
+@network_admin_required
+def cot_transforms_duplicates_merge(output_id):
+    """Merge mismatched duplicates using field overrides per HEX group."""
+    from flask_login import current_user
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    merges = data.get("groups") or []
+    try:
+        res = CotTransformModel.merge_duplicate_groups(output_id, merges)
+        return jsonify({"success": True, **res})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 def _extract_output_key():
     """Get API key from ?key=, X-API-Key:, or Authorization: Bearer (for Range API)."""
     k = request.args.get("key", "").strip()
