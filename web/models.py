@@ -1312,6 +1312,19 @@ class CotTransformModel:
         if not hex_val:
             raise ValueError("hex is required")
         conn = get_db()
+        # Enforce "hex unique per output" at the application level (no DB constraint).
+        # This prevents duplicate CoTProxy transform rows that would otherwise make
+        # the pipeline ambiguous (and break "generate" flows).
+        existing = conn.execute(
+            "SELECT id FROM cot_transforms WHERE output_id = ? AND UPPER(TRIM(hex)) = ?",
+            (output_id, hex_val),
+        ).fetchone()
+        if existing:
+            existing_id = existing["id"]
+            conn.close()
+            raise ValueError(
+                f"Duplicate HEX {hex_val}: transform already exists for this output (id={existing_id})."
+            )
         cursor = conn.execute(
             """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -1342,6 +1355,25 @@ class CotTransformModel:
         if not fields:
             return False
         conn = get_db()
+        if "hex" in fields:
+            new_hex = (data.get("hex") or "").strip().upper()
+            if not new_hex:
+                conn.close()
+                raise ValueError("hex cannot be empty")
+            dupe = conn.execute(
+                """SELECT id
+                   FROM cot_transforms
+                   WHERE output_id = ?
+                     AND UPPER(TRIM(hex)) = ?
+                     AND id <> ?""",
+                (output_id, new_hex, transform_id),
+            ).fetchone()
+            if dupe:
+                dupe_id = dupe["id"]
+                conn.close()
+                raise ValueError(
+                    f"Duplicate HEX {new_hex}: another transform already exists for this output (id={dupe_id})."
+                )
         conn.execute(
             """UPDATE cot_transforms SET
                domain=?, agency=?, reg=?, callsign=?, type=?, model=?, hex=?, cot=?, icon=?, remarks=?, video=?
@@ -1416,14 +1448,31 @@ class CotTransformModel:
                 reader.fieldnames = [f.strip().upper() for f in reader.fieldnames]
             conn = get_db()
             try:
+                # Preload existing hexes for this output so we can reject duplicates
+                # on a per-row basis (without failing the whole CSV).
+                existing = conn.execute(
+                    "SELECT id, UPPER(TRIM(hex)) as hx FROM cot_transforms WHERE output_id = ?",
+                    (output_id,),
+                ).fetchall()
+                existing_hex_to_id: dict[str, int] = {}
+                for r in existing:
+                    hx = (r["hx"] or "").strip().upper()
+                    if hx:
+                        existing_hex_to_id[hx] = r["id"]
+
                 for i, row in enumerate(reader):
                     row_num = i + 2
                     hex_val = (row.get("HEX") or "").strip().upper()
                     if not hex_val:
                         errors.append(f"Row {row_num}: HEX is required")
                         continue
+                    if hex_val in existing_hex_to_id:
+                        errors.append(
+                            f"Row {row_num}: Duplicate HEX {hex_val} — transform id={existing_hex_to_id[hex_val]} already exists for this output. Skipping row."
+                        )
+                        continue
                     try:
-                        conn.execute(
+                        cur = conn.execute(
                             """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video)
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                             (
@@ -1442,6 +1491,9 @@ class CotTransformModel:
                             ),
                         )
                         inserted += 1
+                        new_id = cur.lastrowid
+                        if new_id:
+                            existing_hex_to_id[hex_val] = new_id
                     except Exception as e:
                         errors.append(f"Row {row_num}: {e}")
                 conn.commit()

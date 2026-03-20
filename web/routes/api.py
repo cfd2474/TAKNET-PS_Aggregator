@@ -1517,8 +1517,13 @@ def cot_transform_update(output_id, transform_id):
     data = request.get_json(silent=True) or {}
     if CotTransformModel.get_by_id(transform_id, output_id) is None:
         return jsonify({"error": "Not found"}), 404
-    ok = CotTransformModel.update(transform_id, output_id, data)
-    return jsonify({"success": ok})
+    try:
+        ok = CotTransformModel.update(transform_id, output_id, data)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    if not ok:
+        return jsonify({"error": "No updatable fields (or update rejected)"}), 400
+    return jsonify({"success": True})
 
 
 @bp.route("/outputs/<int:output_id>/cot-transforms/<int:transform_id>", methods=["DELETE"])

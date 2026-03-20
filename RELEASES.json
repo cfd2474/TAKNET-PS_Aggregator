@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.286",
+    "date": "2026-03-19",
+    "notes": [
+      "CoTProxy transforms: reject duplicate HEX values per output during create/import/update, with per-row CSV skipping and clear error messages."
+    ]
+  },
+  {
     "version": "1.0.285",
     "date": "2026-03-19",
     "notes": [
