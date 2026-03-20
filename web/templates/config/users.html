@@ -30,7 +30,7 @@
                     <button class="btn" style="font-size:11px;padding:4px 12px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#22c55e;"
                             onclick="approveUser({{ u.id }})">Approve</button>
                     <button class="btn btn-danger" style="font-size:11px;padding:4px 12px;"
-                            onclick="denyUser({{ u.id }}, '{{ u.username }}')">Deny</button>
+                            onclick="denyUser({{ u.id }}, {{ u.username|tojson }})">Deny</button>
                 </td>
             </tr>
             {% endfor %}
@@ -124,12 +124,14 @@
                     </select>
                 </td>
                 <td style="font-size:12px;color:var(--text-muted);">{{ u.created_at[:10] }}</td>
-                <td style="display:flex;gap:6px;">
-                    <button class="btn" style="font-size:11px;padding:4px 10px;"
-                            onclick="showResetModal({{ u.id }}, '{{ u.username }}')">Reset PW</button>
-                    {% if u.id != current_user.id|int %}
-                    <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;"
-                            onclick="deleteUser({{ u.id }}, '{{ u.username }}')">Delete</button>
+                <td style="display:flex;gap:6px;flex-wrap:wrap;">
+                    {% if current_user.role == 'admin' %}
+                    <button type="button" class="btn" style="font-size:11px;padding:4px 10px;"
+                            onclick="showResetModal({{ u.id }}, {{ u.username|tojson }})">Reset PW</button>
+                    {% endif %}
+                    {% if current_user.role == 'admin' and u.id != current_user.id|int %}
+                    <button type="button" class="btn btn-danger" style="font-size:11px;padding:4px 10px;"
+                            onclick="deleteUser({{ u.id }}, {{ u.username|tojson }})">Delete</button>
                     {% endif %}
                 </td>
             </tr>
@@ -250,8 +252,13 @@ async function deleteUser(id, name) {
     if (!confirm('Delete user "' + name + '"? This cannot be undone.')) return;
     const r = await fetch('/config/users/' + id + '/delete', { method:'POST' });
     const d = await r.json();
-    if (d.success) { document.getElementById('user-row-' + id).remove(); }
-    else { alert('Error: ' + d.error); }
+    if (d.success) {
+        const row = document.getElementById('user-row-' + id);
+        if (row) row.remove();
+        renderActiveUsersTable();
+    } else {
+        alert('Error: ' + (d.error || d.message || 'Delete failed'));
+    }
 }
 
 async function cleanUserDatabase() {

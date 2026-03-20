@@ -245,7 +245,7 @@ User management (admin only). Includes:
 - Users table is sortable/searchable (Username / First name / Last name / Role)
 - Role filter is a dropdown
 - "Clean user database" button purges denied/rejected users to free usernames
-- Deny/delete actions purge usernames so rejected users can re-register
+- Deny/delete actions purge usernames so rejected users can re-register; admins can **Delete** active users from the list or user detail (not self)
 
 ### Authentication & Email Notifications (Resend)
 Request access signup supports a "Show password" checkbox. Password reset is available via `/forgot-password` and `/reset-password/<token>` and sends reset emails through Resend (when enabled). New user registrations notify admins via Resend using the configured `RESEND_ADMIN_EMAILS` recipients. When an admin **approves** a pending request, the user receives a **welcome email** at the address they registered (same Resend settings; skipped if email is missing or Resend is disabled).

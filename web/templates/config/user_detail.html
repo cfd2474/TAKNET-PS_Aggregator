@@ -130,6 +130,22 @@
     </div>
 </div>
 {% endif %}
+
+{% if can_delete_user %}
+<div class="card" style="max-width:760px;margin-top:16px;border-color:rgba(239,68,68,0.45);">
+    <div class="card-header" style="background:rgba(239,68,68,0.08);">
+        <h3 style="margin:0;">Delete user</h3>
+        <span style="font-size:12px;color:var(--text-muted);">Admin only — cannot be undone</span>
+    </div>
+    <div style="padding:16px;">
+        <p style="margin:0 0 14px 0;font-size:13px;color:var(--text-secondary);line-height:1.5;">
+            Permanently remove <strong style="font-family:monospace;color:var(--text-primary);">{{ user.username }}</strong> from the system. They will not be able to sign in and all account data for this user will be deleted.
+        </p>
+        <button type="button" class="btn btn-danger" style="font-size:12px;" onclick="deleteUserFromDetail()">Delete user</button>
+        <div id="user-detail-delete-error" style="display:none;margin-top:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);border-radius:8px;padding:12px;color:var(--red);font-size:13px;"></div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -209,6 +225,39 @@ function showResetModal() {
     if (pw) pw.value = '';
     closeUserDetailModal(); // ensure err reset state
     document.getElementById('reset-user-detail-modal').classList.add('show');
+}
+
+async function deleteUserFromDetail() {
+    const errEl = document.getElementById('user-detail-delete-error');
+    if (errEl) {
+        errEl.style.display = 'none';
+        errEl.textContent = '';
+    }
+    const uname = {{ user.username|tojson }};
+    if (!confirm('Permanently delete user "' + uname + '"? This cannot be undone.')) return;
+    try {
+        const r = await fetch('/config/users/' + resetUserDetailId + '/delete', { method: 'POST' });
+        const d = await r.json();
+        if (d.success) {
+            window.location.href = '/config/users';
+        } else {
+            const msg = d.error || d.message || 'Delete failed';
+            if (errEl) {
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+            } else {
+                alert(msg);
+            }
+        }
+    } catch (e) {
+        const msg = 'Error deleting user';
+        if (errEl) {
+            errEl.textContent = msg;
+            errEl.style.display = 'block';
+        } else {
+            alert(msg);
+        }
+    }
 }
 
 async function resetUserDetailPassword() {

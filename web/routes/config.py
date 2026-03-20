@@ -60,6 +60,9 @@ def user_detail(user_id):
         "config/user_detail.html",
         user=user,
         can_reset_password=(current_user.role == "admin"),
+        can_delete_user=(
+            current_user.role == "admin" and int(user_id) != int(current_user.id)
+        ),
         is_self=(int(user_id) == int(current_user.id)),
         roles=UserModel.ROLES,
     )

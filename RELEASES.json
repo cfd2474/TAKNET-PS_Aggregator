@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.282",
+    "date": "2026-03-19",
+    "notes": [
+      "Users: admin-only Delete on the user list (with safe username handling) and a Delete user section on user detail for other accounts; backend unchanged (POST /config/users/<id>/delete)."
+    ]
+  },
+  {
     "version": "1.0.281",
     "date": "2026-03-19",
     "notes": [
