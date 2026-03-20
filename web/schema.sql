@@ -102,7 +102,9 @@ CREATE TABLE IF NOT EXISTS update_history (
 CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
 CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen);
 CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_feeder_claim_key_u ON users(feeder_claim_key) WHERE feeder_claim_key IS NOT NULL;
+-- Partial unique index on users(feeder_claim_key) is created in models.get_db() migrations
+-- after ALTER adds feeder_claim_key (executescript skips CREATE TABLE for existing DBs, so an
+-- index here breaks upgrades with: no such column: feeder_claim_key → dashboard 502).
 CREATE INDEX IF NOT EXISTS idx_connections_feeder ON connections(feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_connected ON connections(connected_at);
 CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC);

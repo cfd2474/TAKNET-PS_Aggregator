@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.284",
+    "date": "2026-03-19",
+    "notes": [
+      "Fix dashboard 502 on upgrade: remove feeder_claim_key unique index from web/schema.sql executescript (existing DBs had no column yet). Index is still created in models.get_db() after ALTER ADD COLUMN."
+    ]
+  },
+  {
     "version": "1.0.283",
     "date": "2026-03-19",
     "notes": [
