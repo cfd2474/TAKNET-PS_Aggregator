@@ -269,6 +269,9 @@ th.sortable:hover { color: var(--accent); }
                 </div>
 
                 <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:14px;">
+                    <button type="button" class="btn" style="font-size:12px;" onclick="cotDupSkipCurrent()">
+                        Skip
+                    </button>
                     <button type="button" class="btn btn-primary" id="cot-dup-merge-btn" style="font-size:12px;" onclick="cotDupMergeAndNext()">
                         Merge
                     </button>
@@ -1411,6 +1414,21 @@ async function cotDupMergeCurrentGroup(closeAfter) {
 
 async function cotDupMergeAndNext() {
     await cotDupMergeCurrentGroup(false);
+}
+
+function cotDupSkipCurrent() {
+    if (!cotDupState.mismatchGroups.length) {
+        closeCotDuplicatesModal();
+        return;
+    }
+    cotDupState.currentIndex += 1;
+    if (cotDupState.currentIndex >= cotDupState.mismatchGroups.length) {
+        // End of queue: exit with remaining uncorrected.
+        closeCotDuplicatesModal();
+        loadTransforms();
+        return;
+    }
+    cotDupRenderCurrentRectifyGroup();
 }
 
 async function cotDupFinish() {

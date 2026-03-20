@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.288",
+    "date": "2026-03-19",
+    "notes": [
+      "CoTProxy duplicate-rectify flow: add Skip action to move past current mismatched HEX without merging; Finish still saves current HEX and exits."
+    ]
+  },
+  {
     "version": "1.0.287",
     "date": "2026-03-19",
     "notes": [
