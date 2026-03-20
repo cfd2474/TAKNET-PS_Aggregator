@@ -51,7 +51,7 @@ After this line, send **normal Beast binary** exactly as you do today (no extra 
 - On connect, **beast-proxy** reads the first byte:
   - If `0x1A` → treat whole stream as Beast (no claim).
   - If `T` → read until `\n`; if the line matches `TAKNET_FEEDER_CLAIM <uuid>`, record the UUID; otherwise forward the bytes to readsb (may corrupt decode — avoid sending stray `T` first).
-- After **upserting** the feeder row by source IP / hostname, if a valid claim UUID was parsed and the feeder’s **`owners_locked`** flag is **0**, the DB sets **`owners`** JSON to `["<username>"]` for the user whose `feeder_claim_key` matches.
+- After **upserting** the feeder row by source IP / hostname, if a valid claim UUID was parsed and the feeder’s **`owners_locked`** flag is **0**, the DB **merges** the claimed username into the existing **`owners`** JSON array (appends if missing) rather than erasing other owners.
 - If **`owners_locked`** is **1** (set by an admin in the feeder **Edit** form), claim processing **does not change** `owners`.
 
 ## Admin override

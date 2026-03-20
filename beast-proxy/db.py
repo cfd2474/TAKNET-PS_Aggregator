@@ -50,16 +50,18 @@ def now_utc():
 
 
 def try_apply_feeder_claim(feeder_id: int, claim_key: str) -> None:
-    """If claim_key matches an active user's feeder_claim_key, set feeders.owners to [username].
+    """If claim_key matches an active user's feeder_claim_key, merge into feeders.owners.
 
-    Skips when owners_locked is set (admin override). Shared DB with dashboard users table.
+    - Skips when feeders.owners_locked is set (admin override).
+    - Does not erase existing owners; it appends the claimed username if not already present.
+    Shared DB with dashboard users table.
     """
     key = (claim_key or "").strip().lower()
     if not key:
         return
     conn = _get_conn()
     row = conn.execute(
-        "SELECT COALESCE(owners_locked, 0) AS ol FROM feeders WHERE id = ?",
+        "SELECT COALESCE(owners_locked, 0) AS ol, owners FROM feeders WHERE id = ?",
         (int(feeder_id),),
     ).fetchone()
     if not row or int(row["ol"] or 0) != 0:
@@ -75,7 +77,32 @@ def try_apply_feeder_claim(feeder_id: int, claim_key: str) -> None:
     uname = (u["username"] or "").strip()
     if not uname:
         return
-    owners_json = json.dumps([uname])
+
+    # Merge into existing owners list (stored as JSON array of usernames).
+    existing_raw = row["owners"] or "[]"
+    try:
+        existing = json.loads(existing_raw) if existing_raw else []
+    except Exception:
+        existing = []
+    if not isinstance(existing, list):
+        existing = []
+
+    # Normalize and dedupe while preserving order.
+    normalized = []
+    seen = set()
+    for item in existing:
+        s = str(item).strip()
+        if not s:
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        normalized.append(s)
+
+    if uname not in seen:
+        normalized.append(uname)
+
+    owners_json = json.dumps(normalized)
     conn.execute(
         """UPDATE feeders SET owners = ?, updated_at = ?
            WHERE id = ? AND COALESCE(owners_locked, 0) = 0""",

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.285",
+    "date": "2026-03-19",
+    "notes": [
+      "Feeder claiming now merges claimed username into existing feeder Owners list (deduped) instead of overwriting it; admin Lock owner list still prevents changes."
+    ]
+  },
+  {
     "version": "1.0.284",
     "date": "2026-03-19",
     "notes": [
