@@ -15,7 +15,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;height:44px;background:var(--bg-secondary);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;">
         <span id="map-aircraft" style="font-size:13px;color:var(--text-secondary);">Loading map...</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="btn-tar1090-key" class="btn btn-sm" title="Legend, filters, keyboard shortcuts, URL parameters">tar1090 map key</button>
+            <button type="button" id="btn-tar1090-key" class="btn btn-sm" title="Legend, filters, keyboard shortcuts, display options">tar1090 map key</button>
             <span style="font-size:12px;color:var(--text-muted);">View:</span>
             <button type="button" id="btn-merged" class="btn btn-sm btn-primary" title="Map with detail sidebar — click any aircraft">Merged (all)</button>
             <button type="button" id="btn-tar1090" class="btn btn-sm" title="Full tar1090 UI (no sidebar here)">tar1090</button>
@@ -205,16 +205,11 @@
         </div>
         <div class="tar1090-key-modal-body">
             <div class="tar1090-key-inner">
-            <p style="margin:0 0 14px 0;">How to use the <strong>tar1090</strong> map: search, filters, keyboard shortcuts, and URL parameters.</p>
-
-            <div class="tar1090-key-section">
-                <h3>Search box</h3>
-                <p style="margin:0;">Universal search finds <strong>ICAO (hex)</strong>, <strong>registration</strong>, and <strong>aircraft type</strong>.</p>
-            </div>
+            <p style="margin:0 0 14px 0;">How to use the <strong>tar1090</strong> map: search, filters, keyboard shortcuts, and display options.</p>
 
             <div class="tar1090-key-section">
                 <h3>Filters</h3>
-                <p style="margin:0 0 8px 0;">Open <strong>Filters</strong> in the right sidebar for altitude, callsign, squawk, type, or type description.</p>
+                <p style="margin:0 0 8px 0;">Open the sidebar by clicking the <strong>left</strong> arrow; close the sidebar by clicking the <strong>right</strong> arrow. Open <strong>Filters</strong> in the sidebar for altitude, callsign, squawk, type, or type description.</p>
                 <div class="tar1090-key-figure">
                     <img src="{{ url_for('static', filename='img/tar1090-key/Screenshot_2020-02-27_00-46-07-1.png') }}" alt="Filters sidebar example" width="400" height="220" loading="lazy">
                     <div class="tar1090-key-figure-caption">Filter tab in the sidebar — no spaces in patterns; use <code>|</code> to combine; <code>.</code> matches any character.</div>
@@ -246,6 +241,11 @@
                 <p style="margin:8px 0 0 0;font-size:12px;">
                     <a href="https://www.icao.int/publications/DOC8643/Pages/Search.aspx" target="_blank" rel="noopener noreferrer">ICAO type code lookup (DOC 8643) ↗</a>
                 </p>
+            </div>
+
+            <div class="tar1090-key-section">
+                <h3>Search box</h3>
+                <p style="margin:0;">Universal search finds <strong>ICAO (hex)</strong>, <strong>registration</strong>, and <strong>aircraft type</strong>.</p>
             </div>
 
             <div class="tar1090-key-section">
@@ -293,36 +293,6 @@
                 <h3>Location &amp; range rings</h3>
                 <p style="margin:0 0 10px 0;">The map will attempt to detect your location automatically as long as you allow your browser to provide the info.</p>
                 <p style="margin:0;">Range Rings can be turned on and off in the Map Layers Icon, there is no way to adjust the ranges displayed.</p>
-            </div>
-
-            <div class="tar1090-key-section">
-                <h3>Mobile</h3>
-                <p style="margin:0;">Layout fits small screens; increase icon size for easier use. Some builds cap at ~100 planes when zoomed out (loaded low→high altitude) — zoom in to see all nearby traffic.</p>
-            </div>
-
-            <div class="tar1090-key-section">
-                <h3>URL parameters</h3>
-                <p style="margin:0 0 8px 0;font-size:12px;">First query uses <code>?</code>, then <code>&amp;</code>. Usually case-insensitive. Some flags need no value.</p>
-                <p class="tar1090-key-sub">Common</p>
-                <ul style="font-size:12px;">
-                    <li><code>icao=</code> — center, select, isolate</li>
-                    <li><code>icaoFilter=hex1,hex2</code></li>
-                    <li><code>hideSidebar</code>, <code>hideButtons</code></li>
-                    <li><code>tempTrails=&lt;sec&gt;</code>, <code>largeMode=1–4</code>, <code>sidebarWidth=</code></li>
-                    <li><code>mil</code>, <code>kiosk</code>, <code>zoom=</code>, <code>lat=</code> &amp; <code>lon=</code>, <code>airport=</code>, <code>replay</code></li>
-                </ul>
-                <p class="tar1090-key-sub">Display</p>
-                <ul style="font-size:12px;">
-                    <li><code>mapOrientation=</code>, <code>monochromeMarkers=</code>, <code>monochromeTracks=</code></li>
-                    <li><code>outlineWidth</code>, <code>outlineColor</code> (no WebGL)</li>
-                    <li><code>scale</code>, <code>iconScale</code>, <code>labelScale</code>, <code>mapDim</code>, <code>mapContrast</code></li>
-                </ul>
-                <p class="tar1090-key-sub">Troubleshooting</p>
-                <ul style="font-size:12px;">
-                    <li><code>reset</code> · <code>showerrors</code></li>
-                </ul>
-                <p class="tar1090-key-sub">Heatmaps</p>
-                <p style="margin:0;font-size:12px;"><code>heatmap=&lt;max dots&gt;</code> — optional <code>heatDuration</code>, <code>heatEnd</code>, <code>heatRadius</code>, <code>heatAlpha</code>, <code>heatManualRedraw</code>, <code>realHeat</code>, <code>heatBlur</code>, <code>heatWeight</code>. Heavy on the CPU; use lower counts on slower devices.</p>
             </div>
             </div>
         </div>
