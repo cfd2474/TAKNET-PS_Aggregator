@@ -635,8 +635,28 @@ async function copyAdsbDirectUrl() {
     const el = document.getElementById('adsb-direct-url-val');
     const msg = document.getElementById('adsb-direct-url-copy-msg');
     if (!el || !el.textContent) return;
+    const text = el.textContent.trim();
+    async function copyWithFallback(value) {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+            return;
+        }
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (!ok) throw new Error('Clipboard copy failed');
+    }
     try {
-        await navigator.clipboard.writeText(el.textContent.trim());
+        await copyWithFallback(text);
         if (msg) msg.textContent = 'Copied to clipboard.';
     } catch (e) {
         if (msg) msg.textContent = 'Copy failed. Select and copy manually.';
@@ -860,7 +880,7 @@ async function openEditModal(id) {
     }
 
     var saveBtn = document.getElementById('modal-save-btn');
-    saveBtn.textContent = locked ? 'Save Notes' : 'Save';
+    saveBtn.textContent = (locked && o.output_type !== 'adsb_direct') ? 'Save Notes' : 'Save';
     saveBtn.onclick = saveOutput;
     document.getElementById('modal-error').style.display = 'none';
     onTypeChange(); onModeChange();

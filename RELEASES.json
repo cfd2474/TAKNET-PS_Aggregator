@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.295",
+    "date": "2026-03-19",
+    "notes": [
+      "Fix ADSB Direct URL copy button: add robust clipboard fallback for browsers/environments where navigator.clipboard is unavailable."
+    ]
+  },
+  {
+    "version": "1.0.294",
+    "date": "2026-03-19",
+    "notes": [
+      "Outputs UI: ADSB Direct details modal now shows Save (not Save Notes) when editing a key-locked output."
+    ]
+  },
+  {
     "version": "1.0.293",
     "date": "2026-03-19",
     "notes": [
