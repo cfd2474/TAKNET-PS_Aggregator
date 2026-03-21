@@ -48,7 +48,7 @@
             </div>
             <div style="background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.35);border-radius:8px;padding:12px;">
                 <div style="font-size:12px;font-weight:600;color:var(--cyan);margin-bottom:4px;">JSON</div>
-                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.45;">Keyed JSON stream/range access plus airplanes.live-style private endpoints at <code>/api/outputs/json/&lt;key&gt;/v2/...</code> (<code>all</code>, <code>health</code>, <code>hex</code>, <code>callsign</code>, <code>reg</code>, <code>type</code>, <code>squawk</code>, <code>mil</code>, <code>ladd</code>, <code>pia</code>, <code>point</code>).</p>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.45;">Keyed JSON stream/range access for integrations that consume structured aircraft data.</p>
             </div>
             <div style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.35);border-radius:8px;padding:12px;">
                 <div style="font-size:12px;font-weight:600;color:var(--orange);margin-bottom:4px;">Beast RAW</div>
@@ -64,6 +64,18 @@
             use <strong>Enable</strong> to pause/resume an output, <strong>Edit</strong> to update config/filters, and <strong>Regen Key</strong> to rotate credentials.
             API outputs with generated keys show key details in the output modal, including copy controls.
         </p>
+        <div style="margin-top:12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">JSON Helper Guidance</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text-muted);line-height:1.5;">
+                <li><code>/api/outputs/stream/&lt;key&gt;</code> - Full live aircraft stream for the JSON output key.</li>
+                <li><code>/api/outputs/range/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;?key=&lt;key&gt;</code> - Aircraft inside a point/radius query (max 250 nm).</li>
+                <li><code>/api/outputs/json/&lt;key&gt;/v2/all</code> - airplanes.live-style full dataset for this keyed output.</li>
+                <li><code>/api/outputs/json/&lt;key&gt;/v2/health</code> - Compatibility health check for key and response timing.</li>
+                <li><code>/api/outputs/json/&lt;key&gt;/v2/hex/&lt;hex&gt;</code>, <code>/callsign/&lt;callsign&gt;</code>, <code>/reg/&lt;reg&gt;</code>, <code>/type/&lt;type&gt;</code>, <code>/squawk/&lt;squawk&gt;</code> - Filter by aircraft identity fields.</li>
+                <li><code>/api/outputs/json/&lt;key&gt;/v2/mil</code>, <code>/ladd</code>, <code>/pia</code> - Filter by common airplanes.live-style groupings.</li>
+                <li><code>/api/outputs/json/&lt;key&gt;/v2/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;</code> - Keyed point/radius path variant for compatibility clients.</li>
+            </ul>
+        </div>
     </div>
 </div>
 

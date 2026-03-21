@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.302",
+    "date": "2026-03-21",
+    "notes": [
+      "Outputs guidance: move airplanes.live endpoint details out of the JSON type tile into a dedicated JSON Helper Guidance box with itemized paths and descriptions."
+    ]
+  },
+  {
     "version": "1.0.301",
     "date": "2026-03-21",
     "notes": [
