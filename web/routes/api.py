@@ -1301,10 +1301,12 @@ def output_create():
     key_type    = data.get("key_type", "single_use")
     if not name or not output_type:
         return jsonify({"error": "name and output_type are required"}), 400
-    if output_type not in ("json", "beast_raw", "cot"):
-        return jsonify({"error": "output_type must be 'json', 'beast_raw', or 'cot'"}), 400
+    if output_type not in ("json", "beast_raw", "cot", "adsb_direct"):
+        return jsonify({"error": "output_type must be 'json', 'beast_raw', 'cot', or 'adsb_direct'"}), 400
     if mode not in ("api", "push"):
         return jsonify({"error": "mode must be 'api' or 'push'"}), 400
+    if output_type == "adsb_direct" and mode != "api":
+        return jsonify({"error": "adsb_direct output_type supports API mode only"}), 400
     if key_type not in ("single_use", "durable"):
         return jsonify({"error": "key_type must be 'single_use' or 'durable'"}), 400
     output_format = (data.get("output_format") or ("cot" if output_type == "cot" else "as_is")).strip()
@@ -1340,6 +1342,9 @@ def output_update(output_id):
     data = request.get_json(silent=True) or {}
     existing = OutputModel.get_by_id(output_id, current_user.id, current_user.role) or {}
     target_type = (data.get("output_type") or existing.get("output_type") or "").strip()
+    target_mode = (data.get("mode") or existing.get("mode") or "").strip()
+    if target_type == "adsb_direct" and target_mode != "api":
+        return jsonify({"error": "adsb_direct output_type supports API mode only"}), 400
 
     # CoT outputs always use COTProxy transforms (selector removed from UI; also fixes older records).
     data["use_cotproxy"] = 1 if target_type == "cot" else 0
@@ -1708,6 +1713,35 @@ def _haversine_nm(lat1, lon1, lat2, lon2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def _as_int_or_none(v):
+    try:
+        if v is None or str(v).strip() == "":
+            return None
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _aircraft_altitude_ft(a: dict):
+    """Best-effort altitude in feet from aircraft object."""
+    for k in ("alt_baro", "alt_geom", "altitude", "alt"):
+        val = a.get(k)
+        if val is None:
+            continue
+        if isinstance(val, (int, float)):
+            return int(val)
+        s = str(val).strip().lower()
+        if s in ("", "none", "nan"):
+            continue
+        if s == "ground":
+            return 0
+        try:
+            return int(float(s))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 @bp.route("/outputs/range/point/<string:lat>/<string:lon>/<string:radius_nm>")
 def output_range_point(lat, lon, radius_nm):
     """Range API: aircraft within radius_nm of (lat, lon). Key required; respects Include Network ADSB.
@@ -1818,6 +1852,91 @@ def output_range_query():
             dist = _haversine_nm(lat, lon, a_lat, a_lon)
             if dist <= radius_nm:
                 matched.append({**a, "_distance_nm": round(dist, 2)})
+        matched.sort(key=lambda x: x.get("_distance_nm", 9999))
+        now_ts = data.get("now", time.time())
+        return jsonify({
+            "msg": "No error",
+            "now": now_ts,
+            "total": len(matched),
+            "ctime": now_ts,
+            "ptime": 0,
+            "aircraft": matched,
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e), "aircraft": []}), 503
+
+
+@bp.route("/outputs/direct/<string:raw_key>/point/<string:lat>/<string:lon>/<string:radius_nm>")
+def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
+    """ADSB Direct API: key in URL path; range by point/radius plus output-level filters.
+
+    Output-level filters:
+    - include_network_adsb (bool)
+    - direct_alt_min_ft / direct_alt_max_ft (optional ints)
+    """
+    from models import OutputKeyModel
+    try:
+        lat = float(lat)
+        lon = float(lon)
+        radius_nm = min(max(0, float(radius_nm)), 250.0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid lat, lon, or radius_nm", "aircraft": []}), 400
+
+    output = OutputKeyModel.validate(raw_key)
+    if not output:
+        return jsonify({"error": "Invalid or inactive API key", "aircraft": []}), 401
+    if output.get("output_type") != "adsb_direct":
+        return jsonify({"error": "This key is not for ADSB Direct", "aircraft": []}), 400
+
+    raw_config = output.get("config")
+    if isinstance(raw_config, dict):
+        config = raw_config
+    else:
+        try:
+            config = json.loads(str(raw_config or "{}"))
+        except (TypeError, ValueError):
+            config = {}
+
+    v = config.get("include_network_adsb", True)
+    include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
+    min_alt = _as_int_or_none(config.get("direct_alt_min_ft"))
+    max_alt = _as_int_or_none(config.get("direct_alt_max_ft"))
+    if min_alt is not None:
+        min_alt = max(0, min(40000, min_alt))
+    if max_alt is not None:
+        max_alt = max(0, min(40000, max_alt))
+    if min_alt is not None and max_alt is not None and min_alt > max_alt:
+        return jsonify({"error": "Invalid ADSB Direct config: min altitude exceeds max altitude", "aircraft": []}), 400
+
+    try:
+        resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
+        if resp.status_code != 200:
+            return jsonify({"error": "Upstream data unavailable", "aircraft": []}), 503
+        data = resp.json()
+        aircraft = data.get("aircraft", [])
+        if not include_network:
+            aircraft = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+
+        matched = []
+        for a in aircraft:
+            a_lat, a_lon = a.get("lat"), a.get("lon")
+            if a_lat is None or a_lon is None:
+                continue
+            dist = _haversine_nm(lat, lon, a_lat, a_lon)
+            if dist > radius_nm:
+                continue
+
+            if min_alt is not None or max_alt is not None:
+                alt = _aircraft_altitude_ft(a)
+                if alt is None:
+                    continue
+                if min_alt is not None and alt < min_alt:
+                    continue
+                if max_alt is not None and alt > max_alt:
+                    continue
+
+            matched.append({**a, "_distance_nm": round(dist, 2)})
+
         matched.sort(key=lambda x: x.get("_distance_nm", 9999))
         now_ts = data.get("now", time.time())
         return jsonify({

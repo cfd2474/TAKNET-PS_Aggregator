@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.291",
+    "date": "2026-03-19",
+    "notes": [
+      "Outputs: add API-only ADSB Direct output type with key-in-URL endpoint (/api/outputs/direct/<key>/point/<lat>/<lon>/<radius_nm>) and per-output filters for include-network and altitude min/max."
+    ]
+  },
+  {
     "version": "1.0.290",
     "date": "2026-03-19",
     "notes": [
