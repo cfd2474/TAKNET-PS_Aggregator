@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.299",
+    "date": "2026-03-21",
+    "notes": [
+      "JSON outputs now provide private airplanes.live-style compatibility endpoints at /api/outputs/json/<key>/v2/* (all, health, hex, callsign, reg, type, squawk, mil, ladd, pia, point) with per-output filters applied."
+    ]
+  },
+  {
     "version": "1.0.298",
     "date": "2026-03-19",
     "notes": [

@@ -1745,6 +1745,108 @@ def _aircraft_altitude_ft(a: dict):
     return None
 
 
+# dbFlags bit constants (airplanes.live-style filters)
+FLAG_MIL = 1
+FLAG_INTERESTING = 2
+FLAG_PIA = 4
+FLAG_LADD = 8
+
+
+def _output_v2_envelope(aircraft, now_ts, ptime_ms):
+    return {
+        "msg": "No error",
+        "now": now_ts,
+        "total": len(aircraft),
+        "ctime": now_ts,
+        "ptime": round(float(ptime_ms or 0), 2),
+        "aircraft": aircraft,
+    }
+
+
+def _output_v2_error(msg, code=400):
+    return jsonify({
+        "msg": msg,
+        "now": time.time(),
+        "total": 0,
+        "ctime": 0,
+        "ptime": 0,
+        "aircraft": [],
+    }), code
+
+
+def _coerce_json_output_for_v2(raw_key: str):
+    """Validate key for JSON output and return (output, config) tuple."""
+    from models import OutputKeyModel
+    output = OutputKeyModel.validate(raw_key)
+    if not output:
+        return None, None, _output_v2_error("Invalid or inactive API key", 401)
+    if output.get("output_type") != "json":
+        return None, None, _output_v2_error("This key is not for JSON output", 400)
+    raw_config = output.get("config")
+    if isinstance(raw_config, dict):
+        cfg = raw_config
+    else:
+        try:
+            cfg = json.loads(str(raw_config or "{}"))
+        except (TypeError, ValueError):
+            cfg = {}
+    return output, cfg, None
+
+
+def _filter_aircraft_for_json_output(ac_list, config: dict):
+    """Apply JSON output filters configured in Outputs UI."""
+    # Include network ADSB toggle
+    v = config.get("include_network_adsb", True)
+    include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
+    if not include_network:
+        ac_list = [a for a in ac_list if (a.get("source") or "").lower() != "adsbhub"]
+
+    # Optional range-limits filter (center/radius configured on the output itself)
+    if config.get("range_limit_enabled"):
+        try:
+            c_lat = float(config.get("range_limit_lat"))
+            c_lon = float(config.get("range_limit_lon"))
+            c_nm = min(max(0.0, float(config.get("range_limit_nm"))), 250.0)
+        except (TypeError, ValueError):
+            c_lat = c_lon = c_nm = None
+        if c_lat is not None and c_lon is not None and c_nm is not None:
+            tmp = []
+            for a in ac_list:
+                a_lat, a_lon = a.get("lat"), a.get("lon")
+                if a_lat is None or a_lon is None:
+                    continue
+                if _haversine_nm(c_lat, c_lon, a_lat, a_lon) <= c_nm:
+                    tmp.append(a)
+            ac_list = tmp
+
+    # Optional elevation filter
+    if config.get("elevation_filter_enabled"):
+        no_min = bool(config.get("elevation_no_min"))
+        no_max = bool(config.get("elevation_no_max"))
+        min_ft = None if no_min else _as_int_or_none(config.get("elevation_min_ft"))
+        max_ft = None if no_max else _as_int_or_none(config.get("elevation_max_ft"))
+        if min_ft is not None:
+            min_ft = max(0, min(40000, min_ft))
+        if max_ft is not None:
+            max_ft = max(0, min(40000, max_ft))
+        if min_ft is not None and max_ft is not None and min_ft > max_ft:
+            min_ft, max_ft = max_ft, min_ft
+        if min_ft is not None or max_ft is not None:
+            tmp = []
+            for a in ac_list:
+                alt = _aircraft_altitude_ft(a)
+                if alt is None:
+                    continue
+                if min_ft is not None and alt < min_ft:
+                    continue
+                if max_ft is not None and alt > max_ft:
+                    continue
+                tmp.append(a)
+            ac_list = tmp
+
+    return ac_list
+
+
 @bp.route("/outputs/range/point/<string:lat>/<string:lon>/<string:radius_nm>")
 def output_range_point(lat, lon, radius_nm):
     """Range API: aircraft within radius_nm of (lat, lon). Key required; respects Include Network ADSB.
@@ -1996,6 +2098,177 @@ def output_json_stream(raw_key):
                         headers={"Access-Control-Allow-Origin": "*"})
     except Exception as e:
         return jsonify({"error": str(e)}), 503
+
+
+def _json_output_v2_data(raw_key: str):
+    """Load tar1090 aircraft and apply output-level JSON filters."""
+    _out, config, err = _coerce_json_output_for_v2(raw_key)
+    if err is not None:
+        return None, None, err
+    try:
+        started = time.perf_counter()
+        upstream = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
+        if upstream.status_code != 200:
+            return None, None, _output_v2_error("Upstream data unavailable", 503)
+        payload = upstream.json()
+        aircraft = payload.get("aircraft", [])
+        aircraft = _filter_aircraft_for_json_output(aircraft, config)
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        return payload, (aircraft, elapsed_ms), None
+    except Exception as e:
+        return None, None, _output_v2_error(str(e), 503)
+
+
+def _json_output_v2_finalize(payload, aircraft, ptime_ms):
+    return jsonify(_output_v2_envelope(aircraft, payload.get("now", time.time()), ptime_ms)), 200
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/health")
+def output_json_v2_health(raw_key):
+    _payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    _, ptime_ms = data
+    return jsonify({
+        "status": "ok",
+        "key_valid": True,
+        "ptype": "json",
+        "ptime": round(float(ptime_ms), 2),
+    }), 200
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/all")
+def output_json_v2_all(raw_key):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+    return _json_output_v2_finalize(payload, aircraft, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/hex/<string:hex_code>")
+def output_json_v2_hex(raw_key, hex_code):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+    wanted = (hex_code or "").strip().lower()
+    filtered = [a for a in aircraft if str(a.get("hex", "")).lower() == wanted]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/callsign/<string:callsign>")
+def output_json_v2_callsign(raw_key, callsign):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+    wanted = (callsign or "").strip().lower()
+    filtered = [a for a in aircraft if str(a.get("flight", "")).strip().lower() == wanted]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/reg/<string:reg>")
+def output_json_v2_reg(raw_key, reg):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+    wanted = (reg or "").strip().lower()
+    filtered = [a for a in aircraft if str(a.get("r", "")).strip().lower() == wanted]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/type/<string:type_code>")
+def output_json_v2_type(raw_key, type_code):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+    wanted = (type_code or "").strip().lower()
+    filtered = [a for a in aircraft if str(a.get("t", "")).strip().lower() == wanted]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/squawk/<string:squawk>")
+def output_json_v2_squawk(raw_key, squawk):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+    wanted = (squawk or "").strip().lower()
+    filtered = [a for a in aircraft if str(a.get("squawk", "")).strip().lower() == wanted]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/mil")
+def output_json_v2_mil(raw_key):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+
+    def _is_mil(a):
+        dbf = int(a.get("dbFlags") or 0)
+        return bool(dbf & FLAG_MIL) or bool(a.get("mil"))
+
+    filtered = [a for a in aircraft if _is_mil(a)]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/ladd")
+def output_json_v2_ladd(raw_key):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+
+    def _is_ladd(a):
+        dbf = int(a.get("dbFlags") or 0)
+        return bool(dbf & FLAG_LADD) or bool(a.get("ladd"))
+
+    filtered = [a for a in aircraft if _is_ladd(a)]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/pia")
+def output_json_v2_pia(raw_key):
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+
+    def _is_pia(a):
+        dbf = int(a.get("dbFlags") or 0)
+        return bool(dbf & FLAG_PIA) or bool(a.get("pia"))
+
+    filtered = [a for a in aircraft if _is_pia(a)]
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
+
+
+@bp.route("/outputs/json/<string:raw_key>/v2/point/<string:lat>/<string:lon>/<string:radius_nm>")
+def output_json_v2_point(raw_key, lat, lon, radius_nm):
+    try:
+        c_lat = float(lat)
+        c_lon = float(lon)
+        c_nm = min(max(0.0, float(radius_nm)), 250.0)
+    except (TypeError, ValueError):
+        return _output_v2_error("Invalid lat, lon, or radius_nm", 400)
+
+    payload, data, err = _json_output_v2_data(raw_key)
+    if err is not None:
+        return err
+    aircraft, ptime_ms = data
+    filtered = []
+    for a in aircraft:
+        a_lat, a_lon = a.get("lat"), a.get("lon")
+        if a_lat is None or a_lon is None:
+            continue
+        d = _haversine_nm(c_lat, c_lon, a_lat, a_lon)
+        if d <= c_nm:
+            filtered.append({**a, "_distance_nm": round(d, 2)})
+    filtered.sort(key=lambda x: x.get("_distance_nm", 9999))
+    return _json_output_v2_finalize(payload, filtered, ptime_ms)
 
 
 # ── Feeder Proxy (nginx handles actual proxying, Flask handles auth) ───────────

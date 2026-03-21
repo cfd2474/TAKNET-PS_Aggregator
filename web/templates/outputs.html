@@ -216,12 +216,14 @@
                 <div id="api-info-json-stream" style="background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
                     <strong style="color:var(--text-primary);">JSON Stream</strong> — External services call:<br>
                     <code style="color:var(--green);font-size:12px;">GET /api/outputs/stream/&lt;key&gt;</code><br>
-                    Returns current aircraft.json from this aggregator.
+                    Returns current aircraft.json from this aggregator.<br>
+                    <span style="font-size:12px;color:var(--text-muted);">airplanes.live-style private compatibility is also available at <code>/api/outputs/json/&lt;key&gt;/v2/...</code> (all, hex, callsign, reg, type, squawk, mil, ladd, pia, point, health).</span>
                 </div>
                 <div id="api-info-json-range" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
                     <strong style="color:var(--text-primary);">JSON Range API</strong> — Call with center point and radius in the URL. Key in query or header.<br>
                     <code style="color:var(--green);font-size:12px;">GET /api/outputs/range/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;?key=&lt;key&gt;</code><br>
-                    Max radius 250 nm. Respects &quot;Include Network ADSB Traffic&quot; below.
+                    Max radius 250 nm. Respects &quot;Include Network ADSB Traffic&quot; below.<br>
+                    <span style="font-size:12px;color:var(--text-muted);">airplanes.live-style private compatibility is also available at <code>/api/outputs/json/&lt;key&gt;/v2/...</code>.</span>
                 </div>
                 <div id="api-info-adsb-direct" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
                     <strong style="color:var(--text-primary);">ADSB Direct</strong> — Key is embedded in URL path; query by center point and radius.<br>
@@ -1208,7 +1210,9 @@ function showKeyModal(key, outputType, extra) {
             <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">GET /api/outputs/range/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;?key=${key}</code>
             <p style="margin:0 0 6px;"><strong>Example (curl):</strong></p>
             <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--text-secondary);">curl "https://adsb.tak-solutions.com/api/outputs/range/point/35.07/-85.18/150?key=${key}"</code>
-            <p style="margin:0;font-size:12px;color:var(--text-muted);">Max radius 250 nm. Respects the &quot;Include Network ADSB Traffic&quot; setting for this output.</p>`;
+            <p style="margin:0 0 8px;font-size:12px;color:var(--text-muted);">Max radius 250 nm. Respects the &quot;Include Network ADSB Traffic&quot; setting for this output.</p>
+            <p style="margin:0 0 6px;"><strong>airplanes.live-style compatibility base:</strong></p>
+            <code style="display:block;margin:0;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">https://adsb.tak-solutions.com/api/outputs/json/${key}/v2/all</code>`;
     } else if (outputType === 'adsb_direct') {
         info = `
             <p style="margin:0 0 10px;"><strong>What this is:</strong> ADSB Direct endpoint with the key embedded in the URL path (unique per output config).</p>
@@ -1223,7 +1227,9 @@ function showKeyModal(key, outputType, extra) {
             <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">https://adsb.tak-solutions.com/api/outputs/stream/${key}</code>
             <p style="margin:0 0 6px;"><strong>Example (using curl in a terminal):</strong></p>
             <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--text-secondary);">curl "https://adsb.tak-solutions.com/api/outputs/stream/${key}"</code>
-            <p style="margin:0;font-size:12px;color:var(--text-muted);">The response is a standard JSON object. Call it as often as you need — there's no rate limit, but once per second is plenty for aircraft tracking.</p>`;
+            <p style="margin:0 0 8px;font-size:12px;color:var(--text-muted);">The response is a standard JSON object. Call it as often as you need — there's no rate limit, but once per second is plenty for aircraft tracking.</p>
+            <p style="margin:0 0 6px;"><strong>airplanes.live-style compatibility base:</strong></p>
+            <code style="display:block;margin:0;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">https://adsb.tak-solutions.com/api/outputs/json/${key}/v2/all</code>`;
     }
     document.getElementById('key-usage-info').innerHTML = info;
     document.getElementById('key-modal').classList.add('show');
