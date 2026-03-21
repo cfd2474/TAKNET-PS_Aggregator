@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.292",
+    "date": "2026-03-19",
+    "notes": [
+      "ADSB Direct UX: enforce durable keys, hide mode/key-type selection, and show base output URL (/api/outputs/direct/<key>/point) in output details after creation."
+    ]
+  },
+  {
     "version": "1.0.291",
     "date": "2026-03-19",
     "notes": [

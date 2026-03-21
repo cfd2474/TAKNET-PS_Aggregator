@@ -1307,6 +1307,9 @@ def output_create():
         return jsonify({"error": "mode must be 'api' or 'push'"}), 400
     if output_type == "adsb_direct" and mode != "api":
         return jsonify({"error": "adsb_direct output_type supports API mode only"}), 400
+    if output_type == "adsb_direct":
+        # ADSB Direct is always durable so plugin endpoints remain stable.
+        key_type = "durable"
     if key_type not in ("single_use", "durable"):
         return jsonify({"error": "key_type must be 'single_use' or 'durable'"}), 400
     output_format = (data.get("output_format") or ("cot" if output_type == "cot" else "as_is")).strip()
@@ -1384,7 +1387,7 @@ def output_regenerate_key(output_id):
     signal_drop_output(output_id)
     # Preserve existing key_type when regenerating
     existing_key = OutputKeyModel.get_for_output(output_id)
-    key_type = (existing_key or {}).get("key_type", "single_use")
+    key_type = "durable" if item.get("output_type") == "adsb_direct" else (existing_key or {}).get("key_type", "single_use")
     raw_key = OutputKeyModel.generate(output_id, key_type=key_type)
     return jsonify({"success": True, "api_key": raw_key})
 
