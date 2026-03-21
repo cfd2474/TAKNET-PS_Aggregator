@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.298",
+    "date": "2026-03-19",
+    "notes": [
+      "Outputs guidance panel: color-code output type tiles to match list badge colors (ADSB Direct, JSON, Beast RAW, CoT)."
+    ]
+  },
+  {
     "version": "1.0.297",
     "date": "2026-03-19",
     "notes": [
