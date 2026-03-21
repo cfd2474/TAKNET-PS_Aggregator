@@ -780,6 +780,7 @@ def _run_cot_sender_cycle_impl(requests):
         use_cotproxy = out["use_cotproxy"]
         pass_all = out["pass_all"]
         config = out.get("config") or {}
+        pass_only_tisb = bool(config.get("pass_only_tisb"))
         include_icon_in_cot = config.get("include_icon_in_cot", True)
         # Per-output stale seconds so TAK refreshes/expires markers sooner (e.g. 10–15 when pushing every 2s)
         try:
@@ -806,7 +807,8 @@ def _run_cot_sender_cycle_impl(requests):
             if not hex_code:
                 continue
             transform = transforms_by_hex.get(hex_code) if use_cotproxy else None
-            if not pass_all and not transform:
+            is_tisb = _is_tisb(ac)
+            if not pass_all and not transform and not (pass_only_tisb and is_tisb):
                 continue
             seen_hexes.add(hex_code)
             state = _state_key(ac)

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.301",
+    "date": "2026-03-21",
+    "notes": [
+      "CoT outputs: add \"Pass only TIS-B\" option to pass detected TIS-B traffic in addition to COTProxy-matched aircraft while preserving existing TIS-B CoT handling."
+    ]
+  },
+  {
     "version": "1.0.300",
     "date": "2026-03-21",
     "notes": [
