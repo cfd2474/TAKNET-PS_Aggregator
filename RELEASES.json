@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.303",
+    "date": "2026-03-21",
+    "notes": [
+      "CoT settings UX: move \"Pass only TIS-B\" control from output connection modal to COTProxy config page while keeping the same pass_only_tisb behavior."
+    ]
+  },
+  {
     "version": "1.0.302",
     "date": "2026-03-21",
     "notes": [

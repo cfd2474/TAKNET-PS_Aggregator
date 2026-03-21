@@ -274,14 +274,6 @@
                     <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">When checked, network traffic (e.g. ADSBHub) is included. When unchecked, only direct feeder traffic is sent. Applied to JSON and ADSB Direct outputs; Beast Raw uses a single stream and cannot filter by source.</p>
                 </div>
 
-                <div id="cot-pass-only-tisb-section" class="form-group" style="display:none;margin-bottom:14px;">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="checkbox" id="cot-pass-only-tisb">
-                        <span>Pass only TIS-B</span>
-                    </label>
-                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">CoT only: when enabled, detected TIS-B traffic is passed in addition to aircraft matched by COTProxy transforms. Existing TIS-B CoT formatting remains unchanged.</p>
-                </div>
-
                 <div id="adsb-direct-alt-section" class="form-group" style="display:none;margin-bottom:14px;">
                     <label style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;display:block;">ADSB Direct altitude thresholds (feet MSL)</label>
                     <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px;">Optional: leave blank to disable min/max altitude filtering.</p>
@@ -398,11 +390,6 @@ const userRole = '{{ current_user.role }}';
 function applyFilterConfigToPayload(config, errEl) {
     config.include_network_adsb = document.getElementById('filter-include-network-adsb').checked;
     const type = document.getElementById('modal-type').value;
-    if (type === 'cot') {
-        config.pass_only_tisb = !!document.getElementById('cot-pass-only-tisb').checked;
-    } else {
-        delete config.pass_only_tisb;
-    }
     if (type === 'adsb_direct') {
         const minRaw = document.getElementById('adsb-direct-min-alt').value.trim();
         const maxRaw = document.getElementById('adsb-direct-max-alt').value.trim();
@@ -613,7 +600,6 @@ function onTypeChange() {
     if (urlWrap) urlWrap.style.display = isAdsbDirect ? 'block' : 'none';
     document.getElementById('filter-range-section').style.display = (isRangeApi || isAdsbDirect) ? 'none' : 'block';
     document.getElementById('filter-elevation-section').style.display = (isRangeApi || isAdsbDirect) ? 'none' : 'block';
-    document.getElementById('cot-pass-only-tisb-section').style.display = isCot ? 'block' : 'none';
     const mode = document.getElementById('modal-mode').value;
     document.getElementById('cot-dest-config').style.display = (isCot && mode === 'push' && !isAdsbDirect) ? 'block' : 'none';
     document.getElementById('push-url-label').textContent =
@@ -842,7 +828,6 @@ function openCreateModal() {
     document.getElementById('modal-enabled').checked = true;
     document.getElementById('modal-error').style.display = 'none';
     document.getElementById('filter-include-network-adsb').checked = true;
-    document.getElementById('cot-pass-only-tisb').checked = false;
     document.getElementById('adsb-direct-min-alt').value = '';
     document.getElementById('adsb-direct-max-alt').value = '';
     document.getElementById('filter-range-enable').checked = false;
@@ -902,7 +887,6 @@ async function openEditModal(id) {
     document.getElementById('modal-notes').value = o.notes || '';
     document.getElementById('modal-enabled').checked = (o.status || 'active') === 'active';
     document.getElementById('filter-include-network-adsb').checked = cfg.include_network_adsb !== false;
-    document.getElementById('cot-pass-only-tisb').checked = !!cfg.pass_only_tisb;
     document.getElementById('adsb-direct-min-alt').value = cfg.direct_alt_min_ft != null ? String(cfg.direct_alt_min_ft) : '';
     document.getElementById('adsb-direct-max-alt').value = cfg.direct_alt_max_ft != null ? String(cfg.direct_alt_max_ft) : '';
     document.getElementById('filter-range-enable').checked = !!cfg.range_limit_enabled;

@@ -54,6 +54,16 @@ th.sortable:hover { color: var(--accent); }
             </div>
         </label>
         <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+            <input type="checkbox" id="pass-only-tisb-toggle" style="margin-top:3px;">
+            <div>
+                <span style="font-weight:600;font-size:13px;">Pass only TIS-B</span>
+                <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">
+                    When enabled, detected TIS-B traffic is passed in addition to aircraft matched by COTProxy transforms.
+                    Existing TIS-B CoT handling and formatting remain unchanged.
+                </p>
+            </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
             <input type="checkbox" id="distress-hostile-toggle" style="margin-top:3px;">
             <div>
                 <span style="font-weight:600;font-size:13px;">Distress -> Hostile CoT</span>
@@ -628,6 +638,37 @@ document.getElementById('pass-all-toggle').addEventListener('change', function()
     updatePassAllDescription();
     savePassAll();
 });
+
+function updatePassOnlyTisbToggle() {
+    const el = document.getElementById('pass-only-tisb-toggle');
+    if (!el) return;
+    el.checked = outputConfig.pass_only_tisb === true;
+}
+
+async function savePassOnlyTisb() {
+    const el = document.getElementById('pass-only-tisb-toggle');
+    if (!el) return;
+    const on = el.checked;
+    outputConfig.pass_only_tisb = on;
+    try {
+        const r = await fetch('/api/outputs/' + outputId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: outputConfig })
+        });
+        if (!r.ok) throw new Error((await r.json()).error || 'Save failed');
+    } catch (e) {
+        console.error('Failed to save pass_only_tisb', e);
+        el.checked = !on;
+        outputConfig.pass_only_tisb = !on;
+    }
+}
+
+updatePassOnlyTisbToggle();
+const passOnlyTisbEl = document.getElementById('pass-only-tisb-toggle');
+if (passOnlyTisbEl) {
+    passOnlyTisbEl.addEventListener('change', function() { savePassOnlyTisb(); });
+}
 
 function updateDistressHostileToggle() {
     const el = document.getElementById('distress-hostile-toggle');
