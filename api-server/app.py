@@ -1,20 +1,8 @@
 """
-TAKNET-PS ADS-B REST API — v2
-Airplanes.live-compatible endpoint structure.
-Public — no authentication required.
+TAKNET-PS ADS-B REST API helper service.
 
-Endpoints:
-  GET /v2/hex/<hex>
-  GET /v2/callsign/<callsign>
-  GET /v2/reg/<reg>
-  GET /v2/type/<type>
-  GET /v2/squawk/<squawk>
-  GET /v2/mil
-  GET /v2/ladd
-  GET /v2/pia
-  GET /v2/point/<lat>/<lon>/<radius_nm>
-  GET /v2/all
-  GET /v2/health
+Legacy public /v2 endpoints are retired.
+Use keyed output endpoints from dashboard-managed outputs instead.
 """
 
 import math
@@ -28,6 +16,16 @@ TAR1090_URL = os.environ.get("TAR1090_URL", "http://tar1090:80/data/aircraft.jso
 SITE_NAME   = os.environ.get("SITE_NAME", "TAKNET-PS Aggregator")
 
 app = Flask(__name__)
+
+
+@app.before_request
+def retire_public_v2():
+    """Retire legacy public REST API endpoints under /v2."""
+    if request.path.startswith("/v2"):
+        return _error(
+            "Public REST API (/v2/*) has been retired. Use dashboard-managed keyed outputs (for example ADSB Direct).",
+            410,
+        )
 
 
 # ── Aircraft data fetch ───────────────────────────────────────────────────────

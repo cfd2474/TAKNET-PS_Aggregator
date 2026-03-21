@@ -34,40 +34,36 @@
     </div>
 </div>
 
-<!-- REST API (v2) reference -->
+<!-- Output guidance -->
 <div class="card" style="margin-top:16px;">
     <div class="card-header">
-        <h3>REST API (v2)</h3>
-        <span style="font-size:12px;color:var(--text-muted);">Airplanes.live–compatible · public, no auth</span>
+        <h3>Output Types and Controls</h3>
+        <span style="font-size:12px;color:var(--text-muted);">Guidance</span>
     </div>
     <div style="padding:0 20px 20px;">
-        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">This aggregator exposes an ADS-B REST API at <code style="color:var(--green);">/v2/</code> with the same endpoint structure and response format as <a href="https://airplanes.live/api-guide/" target="_blank" rel="noopener">airplanes.live</a>. Use it to query merged aircraft (local + ADSBHub) by hex, callsign, point/radius, and more.</p>
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px;"><strong style="color:var(--text-secondary);">Example:</strong> <code style="color:var(--green);font-size:11px;">curl "https://adsb.tak-solutions.com/v2/point/33.8753/-117.5664/50"</code> — aircraft within 50 nm of a point.</p>
-        <div class="table-wrap" style="margin-bottom:12px;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Endpoint</th>
-                        <th>Method</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td><code>/v2/hex/&lt;hex&gt;</code></td><td>GET</td><td>Aircraft with exact match on one or more Mode S hex IDs (comma-separated, limited to 1000)</td></tr>
-                    <tr><td><code>/v2/callsign/&lt;callsign&gt;</code></td><td>GET</td><td>Aircraft with exact match on one or more callsigns</td></tr>
-                    <tr><td><code>/v2/reg/&lt;reg&gt;</code></td><td>GET</td><td>Aircraft with exact match on one or more registrations</td></tr>
-                    <tr><td><code>/v2/type/&lt;type&gt;</code></td><td>GET</td><td>Aircraft with specified ICAO type code (e.g. A321, B738)</td></tr>
-                    <tr><td><code>/v2/squawk/&lt;squawk&gt;</code></td><td>GET</td><td>Aircraft squawking the specified value</td></tr>
-                    <tr><td><code>/v2/mil</code></td><td>GET</td><td>Aircraft tagged as military</td></tr>
-                    <tr><td><code>/v2/ladd</code></td><td>GET</td><td>Aircraft tagged as LADD</td></tr>
-                    <tr><td><code>/v2/pia</code></td><td>GET</td><td>Aircraft tagged as PIA</td></tr>
-                    <tr><td><code>/v2/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;</code></td><td>GET</td><td>Aircraft within radius (nautical miles) of a point; radius up to 250 nm</td></tr>
-                    <tr><td><code>/v2/all</code></td><td>GET</td><td>All currently tracked aircraft</td></tr>
-                    <tr><td><code>/v2/health</code></td><td>GET</td><td>Service health check</td></tr>
-                </tbody>
-            </table>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px;">
+            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">ADSB Direct</div>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.45;">Keyed URL output for plugin use. Supports include-network traffic and altitude threshold filters.</p>
+            </div>
+            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">JSON</div>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.45;">Keyed JSON stream/range access for integrations that consume structured aircraft data.</p>
+            </div>
+            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Beast RAW</div>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.45;">TCP beast stream output for decoder/client software using Beast protocol.</p>
+            </div>
+            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">CoT</div>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.45;">Cursor on Target output with optional COTProxy transforms for per-aircraft mapping.</p>
+            </div>
         </div>
-        <p style="font-size:12px;color:var(--text-muted);margin:0;">Responses use the same JSON envelope and field names as airplanes.live. For data field descriptions, see <a href="https://airplanes.live/api-guide/" target="_blank" rel="noopener">airplanes.live API guide</a> and data field docs. Use a reasonable request rate (e.g. 1 request per second) when polling.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.6;">
+            <strong style="color:var(--text-secondary);">Basic controls:</strong>
+            use <strong>Enable</strong> to pause/resume an output, <strong>Edit</strong> to update config/filters, and <strong>Regen Key</strong> to rotate credentials.
+            API outputs with generated keys show key details in the output modal, including copy controls.
+        </p>
     </div>
 </div>
 

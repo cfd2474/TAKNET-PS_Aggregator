@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.297",
+    "date": "2026-03-19",
+    "notes": [
+      "Retire legacy public /v2 REST API (returns 410) and replace Outputs page REST reference card with guidance on output types and core controls."
+    ]
+  },
+  {
     "version": "1.0.296",
     "date": "2026-03-19",
     "notes": [
