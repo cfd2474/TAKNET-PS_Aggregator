@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.300",
+    "date": "2026-03-21",
+    "notes": [
+      "Outputs page guidance: JSON tile in Output Types and Controls now lists airplanes.live-style private compatibility endpoints under /api/outputs/json/<key>/v2/...."
+    ]
+  },
+  {
     "version": "1.0.299",
     "date": "2026-03-21",
     "notes": [
