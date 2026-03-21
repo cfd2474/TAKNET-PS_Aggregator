@@ -226,7 +226,11 @@
                 </div>
                 <div id="adsb-direct-url-wrap" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
                     <strong style="color:var(--text-primary);">ADSB Direct URL</strong><br>
-                    <code id="adsb-direct-url-val" style="color:var(--green);font-size:12px;word-break:break-all;"></code><br>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                        <code id="adsb-direct-url-val" style="color:var(--green);font-size:12px;word-break:break-all;"></code>
+                        <button type="button" class="btn btn-sm" id="adsb-direct-url-copy-btn" onclick="copyAdsbDirectUrl()" style="font-size:11px;padding:4px 8px;">Copy</button>
+                    </div>
+                    <div id="adsb-direct-url-copy-msg" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
                     Base URL only; plugin appends values after <code>/point</code>.
                 </div>
                 <div id="api-info-beast" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
@@ -607,7 +611,9 @@ function onModeChange() {
 function updateAdsbDirectUrlDisplay(outputObj, apiKeyOverride) {
     const wrap = document.getElementById('adsb-direct-url-wrap');
     const val = document.getElementById('adsb-direct-url-val');
+    const msg = document.getElementById('adsb-direct-url-copy-msg');
     if (!wrap || !val) return;
+    if (msg) msg.textContent = '';
     const type = document.getElementById('modal-type').value;
     if (type !== 'adsb_direct') {
         wrap.style.display = 'none';
@@ -623,6 +629,18 @@ function updateAdsbDirectUrlDisplay(outputObj, apiKeyOverride) {
     const base = window.location.origin + '/api/outputs/direct/' + key + '/point';
     val.textContent = base;
     wrap.style.display = 'block';
+}
+
+async function copyAdsbDirectUrl() {
+    const el = document.getElementById('adsb-direct-url-val');
+    const msg = document.getElementById('adsb-direct-url-copy-msg');
+    if (!el || !el.textContent) return;
+    try {
+        await navigator.clipboard.writeText(el.textContent.trim());
+        if (msg) msg.textContent = 'Copied to clipboard.';
+    } catch (e) {
+        if (msg) msg.textContent = 'Copy failed. Select and copy manually.';
+    }
 }
 
 async function loadOutputs() {
@@ -653,16 +671,15 @@ async function loadOutputs() {
                 ? '<span class="badge" style="font-size:11px;background:rgba(168,85,247,0.12);color:var(--purple);">api</span>'
                 : '<span class="badge badge-tailscale" style="font-size:11px;">push</span>';
 
-            // Key display, type badge, and status
+            // Key display in list: hide raw keys; show only type + status.
             let keyCell = '—';
             let keyStatusCell = '—';
             if (o.mode === 'api' && o.key_meta) {
                 const k = o.key_meta;
                 const isDurable = k.key_type === 'durable';
-                const keyTypeBadge = isDurable
-                    ? '<span class="badge" style="font-size:10px;background:rgba(16,185,129,0.12);color:var(--green);margin-left:4px;">durable</span>'
-                    : '<span class="badge" style="font-size:10px;background:rgba(148,163,184,0.12);color:var(--text-muted);margin-left:4px;">single-use</span>';
-                keyCell = `<code style="font-size:11px;color:var(--text-secondary);">${k.key_display}</code>${keyTypeBadge}`;
+                keyCell = isDurable
+                    ? '<span class="badge" style="font-size:10px;background:rgba(16,185,129,0.12);color:var(--green);">durable</span>'
+                    : '<span class="badge" style="font-size:10px;background:rgba(148,163,184,0.12);color:var(--text-muted);">single-use</span>';
                 const isReady = k.status === 'ready';
                 keyStatusCell = isDurable
                     ? '<span class="badge badge-live" style="font-size:11px;">active</span>'
