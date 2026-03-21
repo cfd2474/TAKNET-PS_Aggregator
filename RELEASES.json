@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.296",
+    "date": "2026-03-19",
+    "notes": [
+      "Outputs details modal: show generated API key section (for keyed API outputs) with copy-to-clipboard support; keeps existing ADSB Direct URL copy control."
+    ]
+  },
+  {
     "version": "1.0.295",
     "date": "2026-03-19",
     "notes": [

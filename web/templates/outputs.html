@@ -209,6 +209,14 @@
 
             <!-- API config info (shown when mode=api) -->
             <div id="api-config" style="margin-top:4px;">
+                <div id="api-key-detail-wrap" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    <strong style="color:var(--text-primary);">API Key</strong>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                        <code id="api-key-detail-val" style="color:var(--green);font-size:12px;word-break:break-all;"></code>
+                        <button type="button" class="btn btn-sm" onclick="copyApiKeyDetail()" style="font-size:11px;padding:4px 8px;">Copy</button>
+                    </div>
+                    <div id="api-key-detail-copy-msg" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
+                </div>
                 <div id="api-info-json-stream" style="background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
                     <strong style="color:var(--text-primary);">JSON Stream</strong> — External services call:<br>
                     <code style="color:var(--green);font-size:12px;">GET /api/outputs/stream/&lt;key&gt;</code><br>
@@ -608,6 +616,57 @@ function onModeChange() {
     else document.getElementById('cot-certs-section').style.display = 'none';
 }
 
+async function copyTextToClipboard(text) {
+    const value = (text || '').trim();
+    if (!value) throw new Error('No text to copy');
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        return;
+    }
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (!ok) throw new Error('Clipboard copy failed');
+}
+
+function updateApiKeyDetailDisplay(outputObj) {
+    const wrap = document.getElementById('api-key-detail-wrap');
+    const val = document.getElementById('api-key-detail-val');
+    const msg = document.getElementById('api-key-detail-copy-msg');
+    if (!wrap || !val) return;
+    if (msg) msg.textContent = '';
+    const key = (((outputObj || {}).key_meta || {}).key_display || '').trim();
+    const mode = ((outputObj || {}).mode || '').trim();
+    if (!key || mode !== 'api') {
+        wrap.style.display = 'none';
+        val.textContent = '';
+        return;
+    }
+    val.textContent = key;
+    wrap.style.display = 'block';
+}
+
+async function copyApiKeyDetail() {
+    const el = document.getElementById('api-key-detail-val');
+    const msg = document.getElementById('api-key-detail-copy-msg');
+    if (!el || !el.textContent) return;
+    try {
+        await copyTextToClipboard(el.textContent);
+        if (msg) msg.textContent = 'Copied to clipboard.';
+    } catch (e) {
+        if (msg) msg.textContent = 'Copy failed. Select and copy manually.';
+    }
+}
+
 function updateAdsbDirectUrlDisplay(outputObj, apiKeyOverride) {
     const wrap = document.getElementById('adsb-direct-url-wrap');
     const val = document.getElementById('adsb-direct-url-val');
@@ -635,28 +694,8 @@ async function copyAdsbDirectUrl() {
     const el = document.getElementById('adsb-direct-url-val');
     const msg = document.getElementById('adsb-direct-url-copy-msg');
     if (!el || !el.textContent) return;
-    const text = el.textContent.trim();
-    async function copyWithFallback(value) {
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(value);
-            return;
-        }
-        const ta = document.createElement('textarea');
-        ta.value = value;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.top = '-9999px';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        ta.setSelectionRange(0, ta.value.length);
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        if (!ok) throw new Error('Clipboard copy failed');
-    }
     try {
-        await copyWithFallback(text);
+        await copyTextToClipboard(el.textContent);
         if (msg) msg.textContent = 'Copied to clipboard.';
     } catch (e) {
         if (msg) msg.textContent = 'Copy failed. Select and copy manually.';
@@ -794,6 +833,7 @@ function openCreateModal() {
     document.getElementById('filter-elevation-min-slider').value = 0;
     document.getElementById('filter-elevation-max-slider').value = 40000;
     filterElevationEnableChange();
+    updateApiKeyDetailDisplay(null);
     updateAdsbDirectUrlDisplay(null, '');
     var saveBtn = document.getElementById('modal-save-btn');
     saveBtn.textContent = 'Save';
@@ -884,6 +924,7 @@ async function openEditModal(id) {
     saveBtn.onclick = saveOutput;
     document.getElementById('modal-error').style.display = 'none';
     onTypeChange(); onModeChange();
+    updateApiKeyDetailDisplay(o);
     updateAdsbDirectUrlDisplay(o, '');
     document.getElementById('output-modal').classList.add('show');
 }
