@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.304",
+    "date": "2026-03-22",
+    "notes": [
+      "UI: hide the sidebar mobile-toggle button by default and only show it on mobile breakpoints so desktop browsers no longer display the floating menu button."
+    ]
+  },
+  {
     "version": "1.0.303",
     "date": "2026-03-21",
     "notes": [
