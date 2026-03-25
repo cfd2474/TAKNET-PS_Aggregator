@@ -41,29 +41,67 @@ BEAST_LONG = {0x33, 0x35}  # Mode-S long messages (contain ADS-B/DF17)
 _CLAIM_LINE_RE = re.compile(
     rb"(?i)^TAKNET_FEEDER_CLAIM[ \t]+([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})\s*$"
 )
+_MAC_LINE_RE = re.compile(
+    rb"(?i)^TAKNET_FEEDER_MAC[ \t]+([0-9a-fA-F:\-]{11,17})\s*$"
+)
 
 
-async def read_optional_feeder_claim_prefix(reader):
-    """Read optional claim line. Returns (claim_key_or_None, bytes_to_prepend to readsb stream)."""
+async def read_optional_feeder_metadata_prefix(reader):
+    """Read optional feeder metadata lines before Beast data.
+
+    Supported lines (case-insensitive):
+    - TAKNET_FEEDER_CLAIM <uuid>
+    - TAKNET_FEEDER_MAC <mac>
+
+    Returns (metadata_dict, bytes_to_prepend_to_readsb_stream).
+    Unknown/non-metadata content is preserved and forwarded unchanged.
+    """
+    metadata = {"claim_key": None, "device_mac": None}
+    lead = b""
+
     b0 = await reader.read(1)
     if not b0:
-        return None, b""
+        return metadata, b""
     if b0 == bytes([BEAST_ESCAPE]):
-        return None, b0
+        return metadata, b0
     if b0 != b"T":
-        return None, b0
-    rest = await reader.readline()
-    if not rest:
-        return None, b0
-    line = b0 + rest
-    if not line.endswith(b"\n"):
-        return None, line
-    stripped = line.rstrip(b"\r\n")
-    m = _CLAIM_LINE_RE.match(stripped)
-    if not m:
-        return None, line
-    key = m.group(1).decode("ascii").lower()
-    return key, b""
+        return metadata, b0
+
+    while True:
+        rest = await reader.readline()
+        if not rest:
+            lead += b"T"
+            break
+
+        line = b"T" + rest
+        if not line.endswith(b"\n"):
+            lead += line
+            break
+
+        stripped = line.rstrip(b"\r\n")
+
+        m_claim = _CLAIM_LINE_RE.match(stripped)
+        if m_claim:
+            metadata["claim_key"] = m_claim.group(1).decode("ascii").lower()
+        else:
+            m_mac = _MAC_LINE_RE.match(stripped)
+            if m_mac:
+                metadata["device_mac"] = m_mac.group(1).decode("ascii")
+            else:
+                lead += line
+                break
+
+        nxt = await reader.read(1)
+        if not nxt:
+            break
+        if nxt == bytes([BEAST_ESCAPE]):
+            lead += nxt
+            break
+        if nxt != b"T":
+            lead += nxt
+            break
+
+    return metadata, lead
 
 
 def _reclassify_existing_feeders():
@@ -188,8 +226,19 @@ async def handle_client(reader, writer):
             lon = geo.get("longitude")
         print(f"[proxy] {ip_address} classified as public, location: {location}")
 
-    claim_key, lead = await read_optional_feeder_claim_prefix(reader)
-    feeder_id = db.upsert_feeder(ip_address, hostname, conn_type, location, lat, lon)
+    metadata, lead = await read_optional_feeder_metadata_prefix(reader)
+    claim_key = metadata.get("claim_key")
+    device_mac = metadata.get("device_mac")
+
+    feeder_id = db.upsert_feeder(
+        ip_address,
+        hostname,
+        conn_type,
+        location,
+        lat,
+        lon,
+        device_mac=device_mac,
+    )
     if claim_key:
         try:
             db.try_apply_feeder_claim(feeder_id, claim_key)

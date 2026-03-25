@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.305",
+    "date": "2026-03-25",
+    "notes": [
+      "Feeder identity: beast-proxy now supports optional pre-Beast metadata line TAKNET_FEEDER_MAC <mac> and uses normalized MAC as primary upsert key (fallback to IP/hostname), preventing duplicate feeder records when public-IP feeders move to a new network."
+    ]
+  },
+  {
     "version": "1.0.304",
     "date": "2026-03-22",
     "notes": [

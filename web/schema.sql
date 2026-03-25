@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.55
+-- TAKNET-PS Aggregator Database Schema v1.0.305
 
 -- Users (authentication)
 CREATE TABLE IF NOT EXISTS users (
@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     name TEXT,
     conn_type TEXT NOT NULL DEFAULT 'public',   -- 'tailscale', 'netbird', 'public'
     ip_address TEXT,
+    device_mac TEXT,                            -- optional feeder-reported MAC (stable identity across IP changes)
     hostname TEXT,
     location TEXT,
     latitude REAL,
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS update_history (
 CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
 CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen);
 CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
+CREATE INDEX IF NOT EXISTS idx_feeders_device_mac ON feeders(device_mac);
 -- Partial unique index on users(feeder_claim_key) is created in models.get_db() migrations
 -- after ALTER adds feeder_claim_key (executescript skips CREATE TABLE for existing DBs, so an
 -- index here breaks upgrades with: no such column: feeder_claim_key → dashboard 502).

@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.54
+-- TAKNET-PS Aggregator Database Schema v1.0.305
 
 -- Users (authentication)
 CREATE TABLE IF NOT EXISTS users (
@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     name TEXT,
     conn_type TEXT NOT NULL DEFAULT 'public',   -- 'tailscale', 'netbird', 'public'
     ip_address TEXT,
+    device_mac TEXT,                            -- optional feeder-reported MAC (stable identity across IP changes)
     hostname TEXT,
     location TEXT,
     latitude REAL,
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS update_history (
 CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
 CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen);
 CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
+CREATE INDEX IF NOT EXISTS idx_feeders_device_mac ON feeders(device_mac);
 CREATE INDEX IF NOT EXISTS idx_connections_feeder ON connections(feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_connected ON connections(connected_at);
 CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC);

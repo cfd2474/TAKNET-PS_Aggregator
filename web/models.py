@@ -89,6 +89,16 @@ def get_db():
         except Exception:
             pass
         try:
+            conn.execute("ALTER TABLE feeders ADD COLUMN device_mac TEXT")
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_feeders_device_mac ON feeders(device_mac)")
+            conn.commit()
+        except Exception:
+            pass
+        try:
             conn.execute("ALTER TABLE users ADD COLUMN feeder_claim_key TEXT")
             conn.commit()
         except Exception:

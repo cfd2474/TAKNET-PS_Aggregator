@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -41,12 +42,31 @@ def init_db():
         )
     except sqlite3.OperationalError:
         pass
+    try:
+        conn.execute("ALTER TABLE feeders ADD COLUMN device_mac TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_feeders_device_mac ON feeders(device_mac)")
     conn.commit()
     print(f"[db] Database initialized at {DB_PATH}")
 
 
 def now_utc():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _normalize_mac(mac_address):
+    """Normalize MAC to lowercase colon-separated format, or None if invalid."""
+    raw = (mac_address or "").strip()
+    if not raw:
+        return None
+    hex_only = re.sub(r"[^0-9A-Fa-f]", "", raw)
+    if len(hex_only) != 12:
+        return None
+    if re.fullmatch(r"[0-9A-Fa-f]{12}", hex_only) is None:
+        return None
+    hex_only = hex_only.lower()
+    return ":".join(hex_only[i:i + 2] for i in range(0, 12, 2))
 
 
 def try_apply_feeder_claim(feeder_id: int, claim_key: str) -> None:
@@ -112,19 +132,28 @@ def try_apply_feeder_claim(feeder_id: int, claim_key: str) -> None:
     print(f"[db] Feeder {feeder_id} owners set via claim → {uname}")
 
 
-def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=None):
+def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=None, device_mac=None):
     """Create or update feeder record. Returns feeder ID."""
     conn = _get_conn()
     ts = now_utc()
+    normalized_mac = _normalize_mac(device_mac)
 
     # Auto-populate map/stats URLs for NetBird feeders
     nb_tar1090 = f"http://{ip_address}:8080" if conn_type == "netbird" else None
     nb_graphs  = f"http://{ip_address}:8080/graphs1090/" if conn_type == "netbird" else None
 
-    # Try to find existing feeder by IP first
-    row = conn.execute(
-        "SELECT id, name FROM feeders WHERE ip_address = ?", (ip_address,)
-    ).fetchone()
+    # Prefer stable hardware identity when available, then fall back to IP.
+    row = None
+    if normalized_mac:
+        row = conn.execute(
+            "SELECT id, name FROM feeders WHERE device_mac = ?",
+            (normalized_mac,),
+        ).fetchone()
+    if not row:
+        row = conn.execute(
+            "SELECT id, name FROM feeders WHERE ip_address = ?",
+            (ip_address,),
+        ).fetchone()
 
     # If not found by IP but we have a hostname, check for a stale record
     # from a different IP (e.g. same feeder previously connected via public IP).
@@ -153,6 +182,7 @@ def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=
         feeder_id = row["id"]
         conn.execute(
             """UPDATE feeders SET
+                device_mac = COALESCE(?, device_mac),
                 hostname = COALESCE(?, hostname),
                 conn_type = ?,
                 location = COALESCE(?, location),
@@ -164,7 +194,7 @@ def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=
                 tar1090_url    = CASE WHEN (tar1090_url IS NULL OR tar1090_url = '') AND ? IS NOT NULL THEN ? ELSE tar1090_url END,
                 graphs1090_url = CASE WHEN (graphs1090_url IS NULL OR graphs1090_url = '') AND ? IS NOT NULL THEN ? ELSE graphs1090_url END
             WHERE id = ?""",
-            (hostname, conn_type, location, lat, lon, ts, ts,
+            (normalized_mac, hostname, conn_type, location, lat, lon, ts, ts,
              nb_tar1090, nb_tar1090, nb_graphs, nb_graphs, feeder_id),
         )
     else:
@@ -181,11 +211,12 @@ def upsert_feeder(ip_address, hostname, conn_type, location=None, lat=None, lon=
         cursor = conn.execute(
             """INSERT INTO feeders
                 (name, conn_type, ip_address, hostname, location, latitude, longitude,
+                 device_mac,
                  tar1090_url, graphs1090_url,
                  first_seen, last_seen, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
             (name, conn_type, ip_address, hostname, location, lat, lon,
-             nb_tar1090, nb_graphs, ts, ts, ts, ts),
+             normalized_mac, nb_tar1090, nb_graphs, ts, ts, ts, ts),
         )
         feeder_id = cursor.lastrowid
 
