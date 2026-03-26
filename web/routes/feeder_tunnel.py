@@ -271,9 +271,6 @@ def _rewrite_feeder_service_urls(text: str, prefix: str) -> str:
 
     text = _RE_FEEDER_ORIGIN_SERVICE.sub(_abs_repl, text)
     text = _RE_FEEDER_PROTO_REL_SERVICE.sub(_abs_repl, text)
-    # JS patterns that concatenate hostname + ':8754/' or ':8082/'
-    text = text.replace(":8754/", "/fr24/")
-    text = text.replace(":8082/", "/flightaware/")
     return text
 
 
