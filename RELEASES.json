@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.306",
+    "date": "2026-03-26",
+    "notes": [
+      "Feeder tunnel: rewrite FR24 (:8754) and FlightAware (:8082) links to stay under /feeder/<id>/..., and route those paths through dedicated tunnel targets so pages load through the proxy."
+    ]
+  },
+  {
     "version": "1.0.305",
     "date": "2026-03-25",
     "notes": [

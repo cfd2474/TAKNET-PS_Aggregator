@@ -162,6 +162,10 @@ def _infer_tunnel_target(path: str) -> str:
         "/libs/",
         "/images/",
     )
+    if p == "/fr24" or p.startswith("/fr24/"):
+        return "fr24"
+    if p == "/flightaware" or p.startswith("/flightaware/"):
+        return "flightaware"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
     if any(p.startswith(pref) for pref in tar_prefixes):
@@ -192,7 +196,7 @@ def _infer_tunnel_target(path: str) -> str:
     return "dashboard"
 
 
-def _request_headers_for_proxy(feeder_id: str = "", path: str = "/"):
+def _request_headers_for_proxy(feeder_id: str = "", path: str = "/", target_override: str = ""):
     """Build dict of request headers to send to tunnel (and thus to feeder).
     Set Host to the feeder's host:8080 (from tunnel register, else DB ip, else localhost) so the
     feeder serves tar1090/graphs1090 the same as when browsed directly.
@@ -204,7 +208,7 @@ def _request_headers_for_proxy(feeder_id: str = "", path: str = "/"):
         out[key] = value
     # Hint feeder tunnel client which local backend should receive this request.
     # Feeder can use this to route map/stats paths to :8080 tar1090 web stack.
-    out["X-Tunnel-Target"] = _infer_tunnel_target(path)
+    out["X-Tunnel-Target"] = target_override or _infer_tunnel_target(path)
     if feeder_id:
         out["Host"] = _get_feeder_host_for_proxy(feeder_id)
     return out
@@ -243,6 +247,34 @@ _FEEDER_LOCAL_ORIGINS = (
 )
 # Regex: any http(s)://host:8080 (feeder's tar1090 port — 127.0.0.1, NetBird IP, etc.)
 _RE_FEEDER_ORIGIN_8080 = re.compile(r"https?://[^/]+:8080")
+_RE_FEEDER_ORIGIN_SERVICE = re.compile(r"https?://[^/]+:(8754|8082)(/[^\"'`\s<]*)?")
+_RE_FEEDER_PROTO_REL_SERVICE = re.compile(r"//[^/]+:(8754|8082)(/[^\"'`\s<]*)?")
+
+
+def _service_prefix_for_port(port: str) -> str:
+    if str(port) == "8754":
+        return "fr24"
+    if str(port) == "8082":
+        return "flightaware"
+    return ""
+
+
+def _rewrite_feeder_service_urls(text: str, prefix: str) -> str:
+    """Rewrite FR24/FlightAware absolute URLs to tunnel-relative proxy paths."""
+    def _abs_repl(match):
+        port = match.group(1) or ""
+        path = match.group(2) or "/"
+        svc = _service_prefix_for_port(port)
+        if not svc:
+            return match.group(0)
+        return f"{prefix}/{svc}{path}"
+
+    text = _RE_FEEDER_ORIGIN_SERVICE.sub(_abs_repl, text)
+    text = _RE_FEEDER_PROTO_REL_SERVICE.sub(_abs_repl, text)
+    # JS patterns that concatenate hostname + ':8754/' or ':8082/'
+    text = text.replace(":8754/", "/fr24/")
+    text = text.replace(":8082/", "/flightaware/")
+    return text
 
 
 def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
@@ -252,6 +284,7 @@ def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
     for origin in _FEEDER_LOCAL_ORIGINS:
         text = text.replace(origin, prefix)
     text = _RE_FEEDER_ORIGIN_8080.sub(prefix, text)
+    text = _rewrite_feeder_service_urls(text, prefix)
     return text
 
 
@@ -292,6 +325,22 @@ def _normalize_tar1090_path_for_proxy(path_only: str) -> str:
     # Root-level single-file assets -> graphs1090 asset path
     if re.match(r"^/[^/]+\.(css|js|png|jpg|jpeg|gif|svg|ico|map|json|woff2?|ttf|eot)$", p, re.IGNORECASE):
         return "/graphs1090" + p
+    return p
+
+
+def _normalize_aux_service_path_for_proxy(path_only: str, target: str) -> str:
+    """Strip tunnel-only service prefixes before forwarding to feeder backend."""
+    p = path_only or "/"
+    if target == "fr24":
+        if p == "/fr24":
+            return "/"
+        if p.startswith("/fr24/"):
+            return p[len("/fr24"):] or "/"
+    if target == "flightaware":
+        if p == "/flightaware":
+            return "/"
+        if p.startswith("/flightaware/"):
+            return p[len("/flightaware"):] or "/"
     return p
 
 
@@ -463,9 +512,11 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
                 mimetype="text/html; charset=utf-8",
             )
     # Build path including query string (per wire protocol: path includes query)
-    path_only = "/" + subpath if subpath else "/"
-    path_only = _normalize_tar1090_path_for_proxy(path_only)
-    is_static_asset = _is_static_asset_path(path_only)
+    browser_path_only = "/" + subpath if subpath else "/"
+    target_hint = _infer_tunnel_target(browser_path_only)
+    path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
+    path_only = _normalize_aux_service_path_for_proxy(path_only, target_hint)
+    is_static_asset = _is_static_asset_path(browser_path_only)
     local_path = path_only
     if request.query_string:
         local_path = f"{path_only}?{request.query_string.decode('utf-8', errors='replace')}"
@@ -474,7 +525,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     body_bytes = request.get_data()
     body_b64 = base64.b64encode(body_bytes).decode("ascii") if body_bytes else ""
 
-    headers = _request_headers_for_proxy(feeder_id, local_path)
+    headers = _request_headers_for_proxy(feeder_id, local_path, target_hint)
     status, resp_headers, body_bytes = 503, {}, None
     for tunnel_fid in _tunnel_feeder_ids_to_try(feeder_id):
         status, resp_headers, body_bytes = _proxy_to_feeder(
@@ -517,7 +568,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     # For static assets, always passthrough (no decompress/rewrite) for speed and to avoid JS corruption.
     # For tar1090/graphs HTML, inject base only; for dashboard HTML/JS/CSS, apply existing rewrites.
     we_rewrote = False
-    target = _infer_tunnel_target(path_only)
+    target = target_hint
     # Only force static passthrough for tar1090 target. Dashboard static JS/CSS still needs
     # path-prefix rewriting (/api -> /feeder/<id>/api) when served through tunnel.
     skip_body_rewrite = is_static_asset and target == "tar1090"
@@ -527,10 +578,10 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
                 body_bytes = _decompress_body(body_bytes, content_encoding)
             # Base URL must reflect current subpath directory so relative assets resolve correctly.
             # Example: /feeder/<id>/graphs1090/?... must use base /feeder/<id>/graphs1090/
-            if path_only == "/":
+            if browser_path_only == "/":
                 base_suffix = _feeder_prefix(feeder_id) + "/"
             else:
-                base_suffix = _feeder_prefix(feeder_id) + path_only.rstrip("/") + "/"
+                base_suffix = _feeder_prefix(feeder_id) + browser_path_only.rstrip("/") + "/"
             base_url = request.url_root.rstrip("/") + base_suffix
             origin_no_slash = base_url.rstrip("/")
             if target == "tar1090":
@@ -560,7 +611,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
         resp.headers[name] = value
     # Cache static assets under feeder tunnel paths to reduce repeated fetch latency.
     if is_static_asset and status == 200 and not resp.headers.get("Cache-Control"):
-        resp.headers["Cache-Control"] = _cache_control_for_path(path_only)
+        resp.headers["Cache-Control"] = _cache_control_for_path(browser_path_only)
     return resp
 
 
