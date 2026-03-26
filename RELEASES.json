@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.314",
+    "date": "2026-03-26",
+    "notes": [
+      "Feeder tunnel: properly route /fr24 and /flightaware paths as dashboard target so the feeder's nginx proxies them to :8754 and :8082 internally. Rewrite only full absolute URLs (http://host:8754/... and http://host:8082/...) to tunnel paths — no broad string replacements that corrupt other content."
+    ]
+  },
+  {
     "version": "1.0.313",
     "date": "2026-03-26",
     "notes": [

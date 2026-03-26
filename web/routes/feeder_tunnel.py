@@ -162,6 +162,8 @@ def _infer_tunnel_target(path: str) -> str:
         "/libs/",
         "/images/",
     )
+    if p.startswith("/fr24") or p.startswith("/flightaware"):
+        return "dashboard"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
     if any(p.startswith(pref) for pref in tar_prefixes):
@@ -243,13 +245,28 @@ _FEEDER_LOCAL_ORIGINS = (
 )
 # Regex: any http(s)://host:8080 (feeder's tar1090 port — 127.0.0.1, NetBird IP, etc.)
 _RE_FEEDER_ORIGIN_8080 = re.compile(r"https?://[^/]+:8080")
+# Full absolute URLs to FR24 (:8754) and FlightAware (:8082) — rewrite to tunnel /fr24/ and /flightaware/ paths.
+# The feeder's nginx on port 80 already proxies /fr24/ -> :8754 and /flightaware/ -> :8082 internally.
+_RE_FEEDER_ORIGIN_FR24 = re.compile(r"https?://[^/]+:8754(/[^\"'`\s<]*)?")
+_RE_FEEDER_ORIGIN_FA = re.compile(r"https?://[^/]+:8082(/[^\"'`\s<]*)?")
+
 def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
     """Rewrite feeder local URLs to proxy path so Map/Statistics open in tunnel.
     Covers 127.0.0.1:8080, localhost:8080, and any host:8080 (e.g. feeder's NetBird IP).
+    Also rewrites full absolute URLs to :8754 (FR24) and :8082 (FlightAware) so they route
+    through the tunnel via the feeder's dashboard nginx which proxies /fr24/ and /flightaware/.
     """
     for origin in _FEEDER_LOCAL_ORIGINS:
         text = text.replace(origin, prefix)
     text = _RE_FEEDER_ORIGIN_8080.sub(prefix, text)
+    def _fr24_repl(m):
+        path = m.group(1) or "/"
+        return f"{prefix}/fr24{path}"
+    def _fa_repl(m):
+        path = m.group(1) or "/"
+        return f"{prefix}/flightaware{path}"
+    text = _RE_FEEDER_ORIGIN_FR24.sub(_fr24_repl, text)
+    text = _RE_FEEDER_ORIGIN_FA.sub(_fa_repl, text)
     return text
 
 
