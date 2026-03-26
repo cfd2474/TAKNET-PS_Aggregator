@@ -162,7 +162,7 @@ def _infer_tunnel_target(path: str) -> str:
         "/libs/",
         "/images/",
     )
-    if p.startswith("/fr24") or p.startswith("/flightaware"):
+    if p.startswith("/fr24") or p.startswith("/piaware") or p.startswith("/flightaware"):
         return "dashboard"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
@@ -245,16 +245,16 @@ _FEEDER_LOCAL_ORIGINS = (
 )
 # Regex: any http(s)://host:8080 (feeder's tar1090 port — 127.0.0.1, NetBird IP, etc.)
 _RE_FEEDER_ORIGIN_8080 = re.compile(r"https?://[^/]+:8080")
-# Full absolute URLs to FR24 (:8754) and FlightAware (:8082) — rewrite to tunnel /fr24/ and /flightaware/ paths.
-# The feeder's nginx on port 80 already proxies /fr24/ -> :8754 and /flightaware/ -> :8082 internally.
+# Full absolute URLs to FR24 (:8754) and PiAware/FlightAware (:8082) — rewrite to tunnel /fr24/ and /piaware/ paths.
+# The feeder's nginx on port 80 is expected to proxy /fr24/ -> :8754 and /piaware/ -> :8082 internally.
 _RE_FEEDER_ORIGIN_FR24 = re.compile(r"https?://[^/]+:8754(/[^\"'`\s<]*)?")
 _RE_FEEDER_ORIGIN_FA = re.compile(r"https?://[^/]+:8082(/[^\"'`\s<]*)?")
 
 def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
     """Rewrite feeder local URLs to proxy path so Map/Statistics open in tunnel.
     Covers 127.0.0.1:8080, localhost:8080, and any host:8080 (e.g. feeder's NetBird IP).
-    Also rewrites full absolute URLs to :8754 (FR24) and :8082 (FlightAware) so they route
-    through the tunnel via the feeder's dashboard nginx which proxies /fr24/ and /flightaware/.
+    Also rewrites full absolute URLs to :8754 (FR24) and :8082 (PiAware/FlightAware) so they route
+    through the tunnel via the feeder's dashboard nginx which proxies /fr24/ and /piaware/.
     """
     for origin in _FEEDER_LOCAL_ORIGINS:
         text = text.replace(origin, prefix)
@@ -264,7 +264,7 @@ def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
         return f"{prefix}/fr24{path}"
     def _fa_repl(m):
         path = m.group(1) or "/"
-        return f"{prefix}/flightaware{path}"
+        return f"{prefix}/piaware{path}"
     text = _RE_FEEDER_ORIGIN_FR24.sub(_fr24_repl, text)
     text = _RE_FEEDER_ORIGIN_FA.sub(_fa_repl, text)
     return text
@@ -385,6 +385,12 @@ def _rewrite_js_text(text: str, feeder_id: str, origin_for_js: str = "") -> str:
         text = text.replace("window.location.origin", json.dumps(origin_for_js.rstrip("/")))
     # Map/Statistics: rewrite feeder local URLs (e.g. window.open('http://127.0.0.1:8080/'))
     text = _rewrite_feeder_local_urls(text, prefix)
+    # Handle common dynamic link patterns like "... + ':8754/'" and "... + ':8082/'" safely.
+    # Restrict to quoted literals only to avoid broad content corruption.
+    text = text.replace("':8754/'", f"'{prefix}/fr24/'")
+    text = text.replace('":8754/"', f'"{prefix}/fr24/"')
+    text = text.replace("':8082/'", f"'{prefix}/piaware/'")
+    text = text.replace('":8082/"', f'"{prefix}/piaware/"')
     text = text.replace('"/', '"' + prefix + "/")
     # Don't replace '/ when followed by regex flags (e.g. .replace(/'/g, ...) for SSID escaping)
     text = re.sub(r"'/(?![gimsuy][,\)\s\"'])", "'" + prefix + "/", text)
@@ -479,6 +485,9 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
             )
     # Build path including query string (per wire protocol: path includes query)
     browser_path_only = "/" + subpath if subpath else "/"
+    # Backward-compat alias: old rewrites may still point to /flightaware.
+    if browser_path_only == "/flightaware" or browser_path_only.startswith("/flightaware/"):
+        browser_path_only = "/piaware" + browser_path_only[len("/flightaware"):]
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
     is_static_asset = _is_static_asset_path(browser_path_only)
