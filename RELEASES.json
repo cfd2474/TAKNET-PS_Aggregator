@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.312",
+    "date": "2026-03-26",
+    "notes": [
+      "Feeder tunnel: map FR24/FlightAware port-rewritten links to the feeder /feeds page instead of non-existent /fr24 and /flightaware paths."
+    ]
+  },
+  {
     "version": "1.0.311",
     "date": "2026-03-26",
     "notes": [

@@ -252,10 +252,11 @@ _RE_FEEDER_PROTO_REL_SERVICE = re.compile(r"//[^/]+:(8754|8082)(/[^\"'`\s<]*)?")
 
 
 def _service_prefix_for_port(port: str) -> str:
+    # FR24 / FlightAware local pages are managed from feeder's /feeds UI.
     if str(port) == "8754":
-        return "fr24"
+        return "feeds"
     if str(port) == "8082":
-        return "flightaware"
+        return "feeds"
     return ""
 
 
@@ -502,6 +503,11 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
             )
     # Build path including query string (per wire protocol: path includes query)
     browser_path_only = "/" + subpath if subpath else "/"
+    # Backward compatibility for older rewritten links.
+    if browser_path_only == "/fr24" or browser_path_only.startswith("/fr24/"):
+        browser_path_only = "/feeds"
+    if browser_path_only == "/flightaware" or browser_path_only.startswith("/flightaware/"):
+        browser_path_only = "/feeds"
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
     is_static_asset = _is_static_asset_path(browser_path_only)
