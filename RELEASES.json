@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.315",
+    "date": "2026-03-26",
+    "notes": [
+      "Feeder tunnel FR24/PiAware compatibility: route /fr24 and /piaware to dashboard target, treat /flightaware as alias to /piaware, and rewrite both absolute and quoted-port link patterns (:8754/:8082) to tunneled paths without broad string replacements."
+    ]
+  },
+  {
     "version": "1.0.314",
     "date": "2026-03-26",
     "notes": [
