@@ -163,9 +163,9 @@ def _infer_tunnel_target(path: str) -> str:
         "/images/",
     )
     if p == "/fr24" or p.startswith("/fr24/"):
-        return "fr24"
+        return "dashboard"
     if p == "/flightaware" or p.startswith("/flightaware/"):
-        return "flightaware"
+        return "dashboard"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
     if any(p.startswith(pref) for pref in tar_prefixes):
@@ -196,7 +196,7 @@ def _infer_tunnel_target(path: str) -> str:
     return "dashboard"
 
 
-def _request_headers_for_proxy(feeder_id: str = "", path: str = "/", target_override: str = ""):
+def _request_headers_for_proxy(feeder_id: str = "", path: str = "/"):
     """Build dict of request headers to send to tunnel (and thus to feeder).
     Set Host to the feeder's host:8080 (from tunnel register, else DB ip, else localhost) so the
     feeder serves tar1090/graphs1090 the same as when browsed directly.
@@ -208,7 +208,7 @@ def _request_headers_for_proxy(feeder_id: str = "", path: str = "/", target_over
         out[key] = value
     # Hint feeder tunnel client which local backend should receive this request.
     # Feeder can use this to route map/stats paths to :8080 tar1090 web stack.
-    out["X-Tunnel-Target"] = target_override or _infer_tunnel_target(path)
+    out["X-Tunnel-Target"] = _infer_tunnel_target(path)
     if feeder_id:
         out["Host"] = _get_feeder_host_for_proxy(feeder_id)
     return out
@@ -325,22 +325,6 @@ def _normalize_tar1090_path_for_proxy(path_only: str) -> str:
     # Root-level single-file assets -> graphs1090 asset path
     if re.match(r"^/[^/]+\.(css|js|png|jpg|jpeg|gif|svg|ico|map|json|woff2?|ttf|eot)$", p, re.IGNORECASE):
         return "/graphs1090" + p
-    return p
-
-
-def _normalize_aux_service_path_for_proxy(path_only: str, target: str) -> str:
-    """Strip tunnel-only service prefixes before forwarding to feeder backend."""
-    p = path_only or "/"
-    if target == "fr24":
-        if p == "/fr24":
-            return "/"
-        if p.startswith("/fr24/"):
-            return p[len("/fr24"):] or "/"
-    if target == "flightaware":
-        if p == "/flightaware":
-            return "/"
-        if p.startswith("/flightaware/"):
-            return p[len("/flightaware"):] or "/"
     return p
 
 
@@ -515,7 +499,6 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     browser_path_only = "/" + subpath if subpath else "/"
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
-    path_only = _normalize_aux_service_path_for_proxy(path_only, target_hint)
     is_static_asset = _is_static_asset_path(browser_path_only)
     local_path = path_only
     if request.query_string:
@@ -525,7 +508,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     body_bytes = request.get_data()
     body_b64 = base64.b64encode(body_bytes).decode("ascii") if body_bytes else ""
 
-    headers = _request_headers_for_proxy(feeder_id, local_path, target_hint)
+    headers = _request_headers_for_proxy(feeder_id, local_path)
     status, resp_headers, body_bytes = 503, {}, None
     for tunnel_fid in _tunnel_feeder_ids_to_try(feeder_id):
         status, resp_headers, body_bytes = _proxy_to_feeder(

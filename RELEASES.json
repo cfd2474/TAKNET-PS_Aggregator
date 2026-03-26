@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.307",
+    "date": "2026-03-26",
+    "notes": [
+      "Feeder tunnel: fix FR24/FlightAware 502 regression by keeping X-Tunnel-Target on supported values (dashboard/tar1090) while still rewriting :8754/:8082 links under /feeder/<id>/..."
+    ]
+  },
+  {
     "version": "1.0.306",
     "date": "2026-03-26",
     "notes": [
