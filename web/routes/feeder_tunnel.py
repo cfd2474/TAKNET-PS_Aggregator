@@ -162,10 +162,6 @@ def _infer_tunnel_target(path: str) -> str:
         "/libs/",
         "/images/",
     )
-    if p == "/fr24" or p.startswith("/fr24/"):
-        return "dashboard"
-    if p == "/flightaware" or p.startswith("/flightaware/"):
-        return "dashboard"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
     if any(p.startswith(pref) for pref in tar_prefixes):
@@ -247,42 +243,6 @@ _FEEDER_LOCAL_ORIGINS = (
 )
 # Regex: any http(s)://host:8080 (feeder's tar1090 port — 127.0.0.1, NetBird IP, etc.)
 _RE_FEEDER_ORIGIN_8080 = re.compile(r"https?://[^/]+:8080")
-_RE_FEEDER_ORIGIN_SERVICE = re.compile(r"https?://[^/]+:(8754|8082)(/[^\"'`\s<]*)?")
-_RE_FEEDER_PROTO_REL_SERVICE = re.compile(r"//[^/]+:(8754|8082)(/[^\"'`\s<]*)?")
-
-
-def _service_prefix_for_port(port: str) -> str:
-    # FR24 / FlightAware local pages are managed from feeder's /feeds UI.
-    if str(port) == "8754":
-        return "feeds"
-    if str(port) == "8082":
-        return "feeds"
-    return ""
-
-
-def _rewrite_feeder_service_urls(text: str, prefix: str) -> str:
-    """Rewrite FR24/FlightAware absolute URLs to tunnel-relative proxy paths."""
-    def _abs_repl(match):
-        port = match.group(1) or ""
-        path = match.group(2) or "/"
-        svc = _service_prefix_for_port(port)
-        if not svc:
-            return match.group(0)
-        return f"{prefix}/{svc}{path}"
-
-    text = _RE_FEEDER_ORIGIN_SERVICE.sub(_abs_repl, text)
-    text = _RE_FEEDER_PROTO_REL_SERVICE.sub(_abs_repl, text)
-    # JS patterns that dynamically build URLs with hostname + :port.
-    # Keep host/protocol expression intact, but swap service port suffix to tunneled path.
-    text = text.replace(":8754/", f"{prefix}/fr24/")
-    text = text.replace(":8082/", f"{prefix}/flightaware/")
-    text = text.replace(":8754\"", f"{prefix}/fr24\"")
-    text = text.replace(":8082\"", f"{prefix}/flightaware\"")
-    text = text.replace(":8754'", f"{prefix}/fr24'")
-    text = text.replace(":8082'", f"{prefix}/flightaware'")
-    return text
-
-
 def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
     """Rewrite feeder local URLs to proxy path so Map/Statistics open in tunnel.
     Covers 127.0.0.1:8080, localhost:8080, and any host:8080 (e.g. feeder's NetBird IP).
@@ -290,7 +250,6 @@ def _rewrite_feeder_local_urls(text: str, prefix: str) -> str:
     for origin in _FEEDER_LOCAL_ORIGINS:
         text = text.replace(origin, prefix)
     text = _RE_FEEDER_ORIGIN_8080.sub(prefix, text)
-    text = _rewrite_feeder_service_urls(text, prefix)
     return text
 
 
@@ -503,11 +462,6 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
             )
     # Build path including query string (per wire protocol: path includes query)
     browser_path_only = "/" + subpath if subpath else "/"
-    # Backward compatibility for older rewritten links.
-    if browser_path_only == "/fr24" or browser_path_only.startswith("/fr24/"):
-        browser_path_only = "/feeds"
-    if browser_path_only == "/flightaware" or browser_path_only.startswith("/flightaware/"):
-        browser_path_only = "/feeds"
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
     is_static_asset = _is_static_asset_path(browser_path_only)
