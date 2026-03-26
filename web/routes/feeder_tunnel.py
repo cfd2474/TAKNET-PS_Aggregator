@@ -271,6 +271,14 @@ def _rewrite_feeder_service_urls(text: str, prefix: str) -> str:
 
     text = _RE_FEEDER_ORIGIN_SERVICE.sub(_abs_repl, text)
     text = _RE_FEEDER_PROTO_REL_SERVICE.sub(_abs_repl, text)
+    # JS patterns that dynamically build URLs with hostname + :port.
+    # Keep host/protocol expression intact, but swap service port suffix to tunneled path.
+    text = text.replace(":8754/", f"{prefix}/fr24/")
+    text = text.replace(":8082/", f"{prefix}/flightaware/")
+    text = text.replace(":8754\"", f"{prefix}/fr24\"")
+    text = text.replace(":8082\"", f"{prefix}/flightaware\"")
+    text = text.replace(":8754'", f"{prefix}/fr24'")
+    text = text.replace(":8082'", f"{prefix}/flightaware'")
     return text
 
 

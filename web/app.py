@@ -1,5 +1,6 @@
 """TAKNET-PS Aggregator Dashboard — Flask Application."""
 
+import logging
 import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -8,6 +9,8 @@ from flask_login import LoginManager, UserMixin, current_user
 
 from models import mark_stale_feeders, ActivityModel, UserModel
 from services.health_snapshot import collect_health_snapshot
+
+log = logging.getLogger(__name__)
 
 
 class AuthUser(UserMixin):
@@ -114,7 +117,13 @@ def create_app():
     from routes.config import bp as config_bp
     from routes.pages import bp as pages_bp
     from routes.api import bp as api_bp
-    from routes.feeder_tunnel import bp as feeder_tunnel_bp
+    feeder_tunnel_bp = None
+    try:
+        from routes.feeder_tunnel import bp as _feeder_tunnel_bp
+        feeder_tunnel_bp = _feeder_tunnel_bp
+    except Exception:
+        # Fail open for core dashboard pages if tunnel route module fails to import.
+        log.exception("Failed to load feeder tunnel routes; continuing without /feeder proxy.")
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -122,7 +131,8 @@ def create_app():
     app.register_blueprint(config_bp)
     app.register_blueprint(pages_bp)
     app.register_blueprint(api_bp)
-    app.register_blueprint(feeder_tunnel_bp)
+    if feeder_tunnel_bp is not None:
+        app.register_blueprint(feeder_tunnel_bp)
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(mark_stale_feeders, "interval", seconds=30, id="mark_stale")

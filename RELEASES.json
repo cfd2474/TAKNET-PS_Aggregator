@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.310",
+    "date": "2026-03-26",
+    "notes": [
+      "Startup resiliency: app now fails open if feeder tunnel routes cannot import, so core dashboard pages avoid site-wide 502 and tunnel issues remain isolated."
+    ]
+  },
+  {
+    "version": "1.0.309",
+    "date": "2026-03-26",
+    "notes": [
+      "Feeder tunnel: rewrite dynamic JS-generated FR24/FlightAware host:port links (8754/8082) to tunnel-prefixed paths so clicks stay under /feeder/<id>/... instead of external host ports."
+    ]
+  },
+  {
     "version": "1.0.308",
     "date": "2026-03-26",
     "notes": [
