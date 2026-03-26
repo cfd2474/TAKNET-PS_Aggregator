@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.311",
+    "date": "2026-03-26",
+    "notes": [
+      "DB compatibility: prevent startup crash on legacy databases missing feeders.device_mac by adding preflight migration before schema/index apply and retrying schema load when needed."
+    ]
+  },
+  {
     "version": "1.0.310",
     "date": "2026-03-26",
     "notes": [

@@ -22,8 +22,38 @@ def get_db():
     if not _initialized:
         schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
         if os.path.exists(schema_path):
+            # Preflight compatibility for legacy DBs:
+            # schema.sql now creates an index on feeders(device_mac), which fails on older
+            # deployments where feeders exists without the device_mac column.
+            try:
+                feeders_tbl = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='feeders' LIMIT 1"
+                ).fetchone()
+                if feeders_tbl:
+                    cols = {
+                        str(r["name"]).lower()
+                        for r in conn.execute("PRAGMA table_info(feeders)").fetchall()
+                    }
+                    if "device_mac" not in cols:
+                        conn.execute("ALTER TABLE feeders ADD COLUMN device_mac TEXT")
+                        conn.commit()
+            except Exception:
+                pass
             with open(schema_path) as f:
-                conn.executescript(f.read())
+                schema_sql = f.read()
+            try:
+                conn.executescript(schema_sql)
+            except sqlite3.OperationalError as e:
+                # Safety net for partially migrated legacy DBs.
+                if "no such column: device_mac" in str(e).lower():
+                    try:
+                        conn.execute("ALTER TABLE feeders ADD COLUMN device_mac TEXT")
+                        conn.commit()
+                    except Exception:
+                        pass
+                    conn.executescript(schema_sql)
+                else:
+                    raise
             conn.commit()
         # Migration: add status column to users if it doesn't exist
         try:
