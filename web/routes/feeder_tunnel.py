@@ -24,6 +24,18 @@ from routes.auth_utils import login_required_any
 
 # Bare HTML pages at tunnel root can come from FR24/PiAware root-absolute links.
 _RE_BARE_HTML_PATH = re.compile(r"^/[^/]+\.html$", re.IGNORECASE)
+# Root-level CSS/JS (e.g. /fr24.css, /jquery.js) may 404 until retried under /fr24/ or /piaware/.
+_RE_BARE_ROOT_ASSET = re.compile(r"^/[^/]+\.(css|js)$", re.IGNORECASE)
+
+
+def _is_fr24_service_path(p: str) -> bool:
+    """True for /fr24/... or exactly /fr24 — not /fr24.css (filename collision)."""
+    return p.startswith("/fr24/") or p == "/fr24"
+
+
+def _is_piaware_service_path(p: str) -> bool:
+    """True for /piaware/... or exactly /piaware — not filenames starting with piaware."""
+    return p.startswith("/piaware/") or p == "/piaware"
 
 # Cache tunnel URL segment -> enriched feeder row (avoids full-table scan every proxied asset)
 _tunnel_feeder_row_cache: dict[str, tuple[dict | None, float]] = {}
@@ -165,7 +177,7 @@ def _infer_tunnel_target(path: str) -> str:
         "/libs/",
         "/images/",
     )
-    if p.startswith("/fr24") or p.startswith("/piaware") or p.startswith("/flightaware"):
+    if _is_fr24_service_path(p) or _is_piaware_service_path(p) or p.startswith("/flightaware/") or p == "/flightaware":
         return "dashboard"
     # FR24 UI can reference origin-root assets outside /fr24.
     if p in ("/logo.png", "/monitor.json"):
@@ -183,15 +195,15 @@ def _infer_tunnel_target(path: str) -> str:
     # commonly appear as /style_xxx.css, /script_xxx.js, /jquery-*.js, /portal.css...
     # Route these to tar1090 unless they clearly belong to feeder dashboard/app paths.
     if re.search(r"\.(css|js|png|jpg|jpeg|gif|svg|ico|map|json|woff2?|ttf|eot)$", p, re.IGNORECASE):
+        # /fr24.css and similar are upstream root files, not the /fr24/ service prefix.
+        if re.match(r"^/fr24\.[^/]+$", p) or re.match(r"^/piaware\.[^/]+$", p):
+            return "dashboard"
         dashboard_roots = (
             "/api/",
             "/static/",
             "/dashboard",
             "/settings",
             "/feeds",
-            "/fr24",
-            "/piaware",
-            "/flightaware",
             "/map",
             "/logs",
             "/about",
@@ -361,7 +373,12 @@ def _normalize_aux_path_for_proxy(path_only: str) -> str:
     p = path_only or "/"
     if not p.startswith("/"):
         p = "/" + p
-    if p.startswith("/fr24/") or p == "/fr24" or p.startswith("/piaware/") or p == "/piaware":
+    # Filename collision: /fr24.css is NOT under /fr24/; nginx expects /fr24/fr24.css -> upstream /fr24.css
+    if re.match(r"^/fr24\.[^/]+$", p):
+        return "/fr24" + p
+    if re.match(r"^/piaware\.[^/]+$", p):
+        return "/piaware" + p
+    if _is_fr24_service_path(p) or _is_piaware_service_path(p):
         return p
     referer = (request.headers.get("Referer") or "").lower()
     if "/fr24/" in referer:
@@ -550,8 +567,9 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     if browser_path_only == "/flightaware" or browser_path_only.startswith("/flightaware/"):
         browser_path_only = "/piaware" + browser_path_only[len("/flightaware"):]
     aux_ui_path = (
-        browser_path_only.startswith("/fr24")
-        or browser_path_only.startswith("/piaware")
+        _is_fr24_service_path(browser_path_only)
+        or _is_piaware_service_path(browser_path_only)
+        or browser_path_only.startswith("/flightaware/") or browser_path_only == "/flightaware"
     )
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
@@ -586,9 +604,12 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
         )
     if status == 504:
         return "Feeder response timeout", 504
-    # FR24/PiAware can emit root-absolute links like /settings.html. In tunnel mode, retry
-    # these under service prefixes if bare-path request returns 404.
-    if status == 404 and _RE_BARE_HTML_PATH.match(path_only):
+    # FR24/PiAware can emit root-absolute links like /settings.html, /fr24.css, /jquery.js.
+    # Retry under /fr24/ and /piaware/ if bare-path request returns 404.
+    if status == 404 and (
+        _RE_BARE_HTML_PATH.match(path_only)
+        or _RE_BARE_ROOT_ASSET.match(path_only)
+    ):
         retry_headers = dict(headers)
         retry_headers["X-Tunnel-Target"] = "dashboard"
         for pref in ("/fr24", "/piaware"):
