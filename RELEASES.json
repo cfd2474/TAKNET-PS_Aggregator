@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.325",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel FR24/PiAware HTML: do not apply double-rewrite skip heuristic when aux_service_prefix is set — FR24 pages repeat feeder paths in JSON and previously skipped <base> and href rewrites, breaking css/js loads."
+    ]
+  },
+  {
     "version": "1.0.324",
     "date": "2026-03-26",
     "notes": [
