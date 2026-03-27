@@ -167,6 +167,11 @@ def _infer_tunnel_target(path: str) -> str:
     # FR24 UI can reference origin-root assets outside /fr24.
     if p in ("/logo.png", "/monitor.json"):
         return "dashboard"
+    # Third-party FR24/PiAware pages may request root-level assets such as
+    # /jquery.min.js, /bootstrap.min.js, etc. Keep those on dashboard side when
+    # the request originates from an FR24/PiAware tunnel page.
+    if "/fr24/" in referer or "/piaware/" in referer or "/flightaware/" in referer:
+        return "dashboard"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
     if any(p.startswith(pref) for pref in tar_prefixes):
