@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.319",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel routing fix for PiAware/FR24 root-level assets: when Referer is a /piaware or /fr24 tunnel page, route ambiguous root static paths (e.g. /jquery.min.js, /bootstrap.min.js) to dashboard target instead of tar1090."
+    ]
+  },
+  {
     "version": "1.0.318",
     "date": "2026-03-26",
     "notes": [
