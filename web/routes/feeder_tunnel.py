@@ -22,6 +22,9 @@ from flask_login import current_user
 from models import FeederModel, user_can_access_feeder
 from routes.auth_utils import login_required_any
 
+# Bare HTML pages at tunnel root can come from FR24/PiAware root-absolute links.
+_RE_BARE_HTML_PATH = re.compile(r"^/[^/]+\.html$", re.IGNORECASE)
+
 # Cache tunnel URL segment -> enriched feeder row (avoids full-table scan every proxied asset)
 _tunnel_feeder_row_cache: dict[str, tuple[dict | None, float]] = {}
 _TUNNEL_FEEDER_CACHE_TTL = 30.0
@@ -583,6 +586,31 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
         )
     if status == 504:
         return "Feeder response timeout", 504
+    # FR24/PiAware can emit root-absolute links like /settings.html. In tunnel mode, retry
+    # these under service prefixes if bare-path request returns 404.
+    if status == 404 and _RE_BARE_HTML_PATH.match(path_only):
+        retry_headers = dict(headers)
+        retry_headers["X-Tunnel-Target"] = "dashboard"
+        for pref in ("/fr24", "/piaware"):
+            retry_path = pref + path_only
+            if request.query_string:
+                retry_path = f"{retry_path}?{request.query_string.decode('utf-8', errors='replace')}"
+            for tunnel_fid in _tunnel_feeder_ids_to_try(feeder_id):
+                r_status, r_headers, r_body = _proxy_to_feeder(
+                    tunnel_fid,
+                    retry_path,
+                    request.method,
+                    retry_headers,
+                    body_b64,
+                )
+                if r_status == 503:
+                    continue
+                if r_status != 404:
+                    status, resp_headers, body_bytes = r_status, r_headers, r_body
+                    path_only = retry_path.split("?", 1)[0]
+                    break
+            if status != 404:
+                break
     # tar1090 optional endpoint: some builds request /upintheair.json but feeder may not provide it.
     # drawUpintheair() expects object with .rings; provide empty rings to avoid runtime errors.
     if status == 404 and path_only in ("/upintheair.json", "/data/upintheair.json"):
