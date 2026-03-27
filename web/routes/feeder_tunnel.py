@@ -348,6 +348,26 @@ def _normalize_tar1090_path_for_proxy(path_only: str) -> str:
     return p
 
 
+def _normalize_aux_path_for_proxy(path_only: str) -> str:
+    """For FR24/PiAware pages, map root-relative requests back under service prefix.
+
+    Third-party UIs can emit links like /settings.html or /jquery.min.js while the page is
+    served under /fr24/ or /piaware/. In tunnel mode these must be forwarded to feeder as
+    /fr24/... or /piaware/... to match nginx locations on port 80.
+    """
+    p = path_only or "/"
+    if not p.startswith("/"):
+        p = "/" + p
+    if p.startswith("/fr24/") or p == "/fr24" or p.startswith("/piaware/") or p == "/piaware":
+        return p
+    referer = (request.headers.get("Referer") or "").lower()
+    if "/fr24/" in referer:
+        return "/fr24" + p
+    if "/piaware/" in referer or "/flightaware/" in referer:
+        return "/piaware" + p
+    return p
+
+
 def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str, origin_no_slash: str = "") -> bytes:
     """Inject <base> and rewrite absolute paths in HTML so assets and API calls hit the proxy.
     origin_no_slash is used for window.location.origin in inline JS (no trailing slash to avoid .../id//path 404s).
@@ -532,6 +552,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     )
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
+    path_only = _normalize_aux_path_for_proxy(path_only)
     is_static_asset = _is_static_asset_path(browser_path_only)
     local_path = path_only
     if request.query_string:
