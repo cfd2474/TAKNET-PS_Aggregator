@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.320",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel FR24/PiAware navigation fix: normalize root-relative requests from /fr24/ and /piaware/ referers to service-prefixed feeder paths (e.g. /settings.html -> /fr24/settings.html) to prevent 404s on auxiliary UI pages."
+    ]
+  },
+  {
     "version": "1.0.319",
     "date": "2026-03-26",
     "notes": [
