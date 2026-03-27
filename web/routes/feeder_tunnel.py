@@ -415,7 +415,13 @@ def _normalize_aux_path_for_proxy(path_only: str) -> str:
     return p
 
 
-def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str, origin_no_slash: str = "") -> bytes:
+def _rewrite_html_body(
+    body: bytes,
+    feeder_id: str,
+    base_url: str,
+    origin_no_slash: str = "",
+    aux_service_prefix: str = "",
+) -> bytes:
     """Inject <base> and rewrite absolute paths in HTML so assets and API calls hit the proxy.
     origin_no_slash is used for window.location.origin in inline JS (no trailing slash to avoid .../id//path 404s).
     """
@@ -427,13 +433,18 @@ def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str, origin_no_sla
     # Avoid double-rewriting
     if prefix + "/" in text and text.count(prefix) > 2:
         return body
-    # Absolute path references: replace only path start so attribute stays valid (e.g. href="/api/foo" -> href="/feeder/id/api/foo")
-    text = text.replace('href="/', 'href="' + prefix + '/')
-    text = text.replace("href='/", "href='" + prefix + "/")
-    text = text.replace('src="/', 'src="' + prefix + '/')
-    text = text.replace("src='/", "src='" + prefix + "/")
-    text = text.replace('url("/', 'url("' + prefix + '/')
-    text = text.replace("url('/", "url='" + prefix + "/")
+    # Absolute path references: replace only path start so attribute stays valid.
+    # For FR24/PiAware documents, scope root-absolute links under service prefix:
+    # e.g. href="/jquery.js" -> href="/feeder/<id>/fr24/jquery.js"
+    html_prefix = prefix + (aux_service_prefix or "")
+    text = text.replace('href="/', 'href="' + html_prefix + '/')
+    text = text.replace("href='/", "href='" + html_prefix + "/")
+    text = text.replace('src="/', 'src="' + html_prefix + '/')
+    text = text.replace("src='/", "src='" + html_prefix + "/")
+    text = text.replace('url("/', 'url("' + html_prefix + '/')
+    text = text.replace("url('/", "url='" + html_prefix + "/")
+    text = text.replace('action="/', 'action="' + html_prefix + '/')
+    text = text.replace("action='/", "action='" + html_prefix + "/")
     # Map/Statistics links: rewrite feeder local URLs so they open through the proxy
     text = _rewrite_feeder_local_urls(text, prefix)
     # Inject <base> so relative URLs (e.g. style.css, api/...) resolve under the feeder path
@@ -700,7 +711,19 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
             if target == "tar1090":
                 body_bytes = _inject_base_only_html(body_bytes, base_url)
             else:
-                body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url, origin_no_slash)
+                aux_service_prefix = ""
+                p_no_qs = (path_only or "/").split("?", 1)[0]
+                if p_no_qs.startswith("/fr24/") or p_no_qs == "/fr24":
+                    aux_service_prefix = "/fr24"
+                elif p_no_qs.startswith("/piaware/") or p_no_qs == "/piaware":
+                    aux_service_prefix = "/piaware"
+                body_bytes = _rewrite_html_body(
+                    body_bytes,
+                    feeder_id,
+                    base_url,
+                    origin_no_slash,
+                    aux_service_prefix,
+                )
             we_rewrote = True
         elif "javascript" in content_type:
             # Do not rewrite third-party FR24/PiAware JS bundles; generic string rewrites can
