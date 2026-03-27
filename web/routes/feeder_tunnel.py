@@ -22,48 +22,6 @@ from flask_login import current_user
 from models import FeederModel, user_can_access_feeder
 from routes.auth_utils import login_required_any
 
-# Bare HTML pages at tunnel root can come from FR24/PiAware root-absolute links.
-_RE_BARE_HTML_PATH = re.compile(r"^/[^/]+\.html$", re.IGNORECASE)
-# Root-level CSS/JS (e.g. /fr24.css, /jquery.js) may 404 until retried under /fr24/ or /piaware/.
-_RE_BARE_ROOT_ASSET = re.compile(r"^/[^/]+\.(css|js)$", re.IGNORECASE)
-
-
-def _is_fr24_service_path(p: str) -> bool:
-    """True for /fr24/... or exactly /fr24 — not /fr24.css (filename collision)."""
-    return p.startswith("/fr24/") or p == "/fr24"
-
-
-def _is_piaware_service_path(p: str) -> bool:
-    """True for /piaware/... or exactly /piaware — not filenames starting with piaware."""
-    return p.startswith("/piaware/") or p == "/piaware"
-
-
-# Last URL path segment looks like a file (not a directory); strip for <base href> directory.
-_RE_BASE_LAST_SEGMENT_FILE = re.compile(
-    r"\.(html|htm|xhtml|css|js|mjs|json|map|xml|txt|svg|ico|png|jpg|jpeg|gif|webp|woff2?|ttf|eot)$",
-    re.IGNORECASE,
-)
-
-
-def _base_href_path_suffix(path_only: str) -> str:
-    """Directory part of path for <base href> — strip filename so relative assets resolve correctly.
-
-    If we set base to .../settings.html/, relative fr24.css resolves to .../settings.html/fr24.css (404).
-    Correct base is .../fr24/ or .../ when the document is settings.html.
-    """
-    p = (path_only or "/").split("?", 1)[0].rstrip("/")
-    if not p or p == "/":
-        return "/"
-    parts = [x for x in p.split("/") if x]
-    if not parts:
-        return "/"
-    last = parts[-1]
-    if _RE_BASE_LAST_SEGMENT_FILE.search(last):
-        parts = parts[:-1]
-    if not parts:
-        return "/"
-    return "/" + "/".join(parts) + "/"
-
 # Cache tunnel URL segment -> enriched feeder row (avoids full-table scan every proxied asset)
 _tunnel_feeder_row_cache: dict[str, tuple[dict | None, float]] = {}
 _TUNNEL_FEEDER_CACHE_TTL = 30.0
@@ -204,15 +162,10 @@ def _infer_tunnel_target(path: str) -> str:
         "/libs/",
         "/images/",
     )
-    if _is_fr24_service_path(p) or _is_piaware_service_path(p) or p.startswith("/flightaware/") or p == "/flightaware":
+    if p.startswith("/fr24") or p.startswith("/piaware") or p.startswith("/flightaware"):
         return "dashboard"
     # FR24 UI can reference origin-root assets outside /fr24.
     if p in ("/logo.png", "/monitor.json"):
-        return "dashboard"
-    # Third-party FR24/PiAware pages may request root-level assets such as
-    # /jquery.min.js, /bootstrap.min.js, etc. Keep those on dashboard side when
-    # the request originates from an FR24/PiAware tunnel page.
-    if "/fr24/" in referer or "/piaware/" in referer or "/flightaware/" in referer:
         return "dashboard"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
@@ -222,15 +175,15 @@ def _infer_tunnel_target(path: str) -> str:
     # commonly appear as /style_xxx.css, /script_xxx.js, /jquery-*.js, /portal.css...
     # Route these to tar1090 unless they clearly belong to feeder dashboard/app paths.
     if re.search(r"\.(css|js|png|jpg|jpeg|gif|svg|ico|map|json|woff2?|ttf|eot)$", p, re.IGNORECASE):
-        # /fr24.css and similar are upstream root files, not the /fr24/ service prefix.
-        if re.match(r"^/fr24\.[^/]+$", p) or re.match(r"^/piaware\.[^/]+$", p):
-            return "dashboard"
         dashboard_roots = (
             "/api/",
             "/static/",
             "/dashboard",
             "/settings",
             "/feeds",
+            "/fr24",
+            "/piaware",
+            "/flightaware",
             "/map",
             "/logs",
             "/about",
@@ -390,38 +343,7 @@ def _normalize_tar1090_path_for_proxy(path_only: str) -> str:
     return p
 
 
-def _normalize_aux_path_for_proxy(path_only: str) -> str:
-    """For FR24/PiAware pages, map root-relative requests back under service prefix.
-
-    Third-party UIs can emit links like /settings.html or /jquery.min.js while the page is
-    served under /fr24/ or /piaware/. In tunnel mode these must be forwarded to feeder as
-    /fr24/... or /piaware/... to match nginx locations on port 80.
-    """
-    p = path_only or "/"
-    if not p.startswith("/"):
-        p = "/" + p
-    # Filename collision: /fr24.css is NOT under /fr24/; nginx expects /fr24/fr24.css -> upstream /fr24.css
-    if re.match(r"^/fr24\.[^/]+$", p):
-        return "/fr24" + p
-    if re.match(r"^/piaware\.[^/]+$", p):
-        return "/piaware" + p
-    if _is_fr24_service_path(p) or _is_piaware_service_path(p):
-        return p
-    referer = (request.headers.get("Referer") or "").lower()
-    if "/fr24/" in referer:
-        return "/fr24" + p
-    if "/piaware/" in referer or "/flightaware/" in referer:
-        return "/piaware" + p
-    return p
-
-
-def _rewrite_html_body(
-    body: bytes,
-    feeder_id: str,
-    base_url: str,
-    origin_no_slash: str = "",
-    aux_service_prefix: str = "",
-) -> bytes:
+def _rewrite_html_body(body: bytes, feeder_id: str, base_url: str, origin_no_slash: str = "") -> bytes:
     """Inject <base> and rewrite absolute paths in HTML so assets and API calls hit the proxy.
     origin_no_slash is used for window.location.origin in inline JS (no trailing slash to avoid .../id//path 404s).
     """
@@ -430,24 +352,16 @@ def _rewrite_html_body(
     except Exception:
         return body
     prefix = _feeder_prefix(feeder_id)
-    # Avoid double-rewriting on dashboard HTML. Do NOT use this for FR24/PiAware: those
-    # pages often embed the feeder id or /feeder/... many times in JSON/scripts, which
-    # would skip <base> injection and break relative assets (fr24.css, jquery.js).
-    if not aux_service_prefix:
-        if prefix + "/" in text and text.count(prefix) > 2:
-            return body
-    # Absolute path references: replace only path start so attribute stays valid.
-    # For FR24/PiAware documents, scope root-absolute links under service prefix:
-    # e.g. href="/jquery.js" -> href="/feeder/<id>/fr24/jquery.js"
-    html_prefix = prefix + (aux_service_prefix or "")
-    text = text.replace('href="/', 'href="' + html_prefix + '/')
-    text = text.replace("href='/", "href='" + html_prefix + "/")
-    text = text.replace('src="/', 'src="' + html_prefix + '/')
-    text = text.replace("src='/", "src='" + html_prefix + "/")
-    text = text.replace('url("/', 'url("' + html_prefix + '/')
-    text = text.replace("url('/", "url='" + html_prefix + "/")
-    text = text.replace('action="/', 'action="' + html_prefix + '/')
-    text = text.replace("action='/", "action='" + html_prefix + "/")
+    # Avoid double-rewriting
+    if prefix + "/" in text and text.count(prefix) > 2:
+        return body
+    # Absolute path references: replace only path start so attribute stays valid (e.g. href="/api/foo" -> href="/feeder/id/api/foo")
+    text = text.replace('href="/', 'href="' + prefix + '/')
+    text = text.replace("href='/", "href='" + prefix + "/")
+    text = text.replace('src="/', 'src="' + prefix + '/')
+    text = text.replace("src='/", "src='" + prefix + "/")
+    text = text.replace('url("/', 'url("' + prefix + '/')
+    text = text.replace("url('/", "url='" + prefix + "/")
     # Map/Statistics links: rewrite feeder local URLs so they open through the proxy
     text = _rewrite_feeder_local_urls(text, prefix)
     # Inject <base> so relative URLs (e.g. style.css, api/...) resolve under the feeder path
@@ -608,13 +522,11 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     if browser_path_only == "/flightaware" or browser_path_only.startswith("/flightaware/"):
         browser_path_only = "/piaware" + browser_path_only[len("/flightaware"):]
     aux_ui_path = (
-        _is_fr24_service_path(browser_path_only)
-        or _is_piaware_service_path(browser_path_only)
-        or browser_path_only.startswith("/flightaware/") or browser_path_only == "/flightaware"
+        browser_path_only.startswith("/fr24")
+        or browser_path_only.startswith("/piaware")
     )
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
-    path_only = _normalize_aux_path_for_proxy(path_only)
     is_static_asset = _is_static_asset_path(browser_path_only)
     local_path = path_only
     if request.query_string:
@@ -645,34 +557,6 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
         )
     if status == 504:
         return "Feeder response timeout", 504
-    # FR24/PiAware can emit root-absolute links like /settings.html, /fr24.css, /jquery.js.
-    # Retry under /fr24/ and /piaware/ if bare-path request returns 404.
-    if status == 404 and (
-        _RE_BARE_HTML_PATH.match(path_only)
-        or _RE_BARE_ROOT_ASSET.match(path_only)
-    ):
-        retry_headers = dict(headers)
-        retry_headers["X-Tunnel-Target"] = "dashboard"
-        for pref in ("/fr24", "/piaware"):
-            retry_path = pref + path_only
-            if request.query_string:
-                retry_path = f"{retry_path}?{request.query_string.decode('utf-8', errors='replace')}"
-            for tunnel_fid in _tunnel_feeder_ids_to_try(feeder_id):
-                r_status, r_headers, r_body = _proxy_to_feeder(
-                    tunnel_fid,
-                    retry_path,
-                    request.method,
-                    retry_headers,
-                    body_b64,
-                )
-                if r_status == 503:
-                    continue
-                if r_status != 404:
-                    status, resp_headers, body_bytes = r_status, r_headers, r_body
-                    path_only = retry_path.split("?", 1)[0]
-                    break
-            if status != 404:
-                break
     # tar1090 optional endpoint: some builds request /upintheair.json but feeder may not provide it.
     # drawUpintheair() expects object with .rings; provide empty rings to avoid runtime errors.
     if status == 404 and path_only in ("/upintheair.json", "/data/upintheair.json"):
@@ -702,31 +586,18 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     if body_bytes and content_type and not skip_body_rewrite:
         if "text/html" in content_type:
             body_bytes = _decompress_body_best_effort(body_bytes, content_encoding)
-            # Base URL must be the document directory (path_only), not path + "/" for filenames.
-            # Use path_only so 404 retry to /fr24/settings.html yields base .../fr24/ not .../settings.html/
-            dir_suffix = _base_href_path_suffix(path_only)
-            if dir_suffix == "/":
+            # Base URL must reflect current subpath directory so relative assets resolve correctly.
+            # Example: /feeder/<id>/graphs1090/?... must use base /feeder/<id>/graphs1090/
+            if browser_path_only == "/":
                 base_suffix = _feeder_prefix(feeder_id) + "/"
             else:
-                base_suffix = _feeder_prefix(feeder_id) + dir_suffix.lstrip("/")
+                base_suffix = _feeder_prefix(feeder_id) + browser_path_only.rstrip("/") + "/"
             base_url = request.url_root.rstrip("/") + base_suffix
             origin_no_slash = base_url.rstrip("/")
             if target == "tar1090":
                 body_bytes = _inject_base_only_html(body_bytes, base_url)
             else:
-                aux_service_prefix = ""
-                p_no_qs = (path_only or "/").split("?", 1)[0]
-                if p_no_qs.startswith("/fr24/") or p_no_qs == "/fr24":
-                    aux_service_prefix = "/fr24"
-                elif p_no_qs.startswith("/piaware/") or p_no_qs == "/piaware":
-                    aux_service_prefix = "/piaware"
-                body_bytes = _rewrite_html_body(
-                    body_bytes,
-                    feeder_id,
-                    base_url,
-                    origin_no_slash,
-                    aux_service_prefix,
-                )
+                body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url, origin_no_slash)
             we_rewrote = True
         elif "javascript" in content_type:
             # Do not rewrite third-party FR24/PiAware JS bundles; generic string rewrites can

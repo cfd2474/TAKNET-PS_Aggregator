@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.326",
+    "date": "2026-03-27",
+    "notes": [
+      "Revert feeder tunnel proxy (web/routes/feeder_tunnel.py) to pre–FR24-settings work state (git 3f5c55f): removes auxiliary path normalization, bare-path 404 retries, base-href filename stripping, FR24/PiAware HTML service-prefix rewrites, and related routing helpers added for settings.html and root assets."
+    ]
+  },
+  {
     "version": "1.0.325",
     "date": "2026-03-26",
     "notes": [
