@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.323",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel HTML <base href> fix: use document directory (strip filename like settings.html) so relative FR24 assets (fr24.css, jquery.js) resolve under /feeder/<id>/fr24/ instead of .../settings.html/."
+    ]
+  },
+  {
     "version": "1.0.322",
     "date": "2026-03-26",
     "notes": [
