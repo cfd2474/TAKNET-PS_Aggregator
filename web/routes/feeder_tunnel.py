@@ -164,6 +164,9 @@ def _infer_tunnel_target(path: str) -> str:
     )
     if p.startswith("/fr24") or p.startswith("/piaware") or p.startswith("/flightaware"):
         return "dashboard"
+    # FR24 UI can reference origin-root assets outside /fr24.
+    if p in ("/logo.png", "/monitor.json"):
+        return "dashboard"
     if p == "/" or p.startswith("/graphs1090"):
         return "tar1090"
     if any(p.startswith(pref) for pref in tar_prefixes):
@@ -178,11 +181,17 @@ def _infer_tunnel_target(path: str) -> str:
             "/dashboard",
             "/settings",
             "/feeds",
+            "/fr24",
+            "/piaware",
+            "/flightaware",
+            "/map",
             "/logs",
             "/about",
             "/taknet-ps-status",
             "/setup",
             "/loading",
+            "/logo.png",
+            "/monitor.json",
         )
         if not any(p.startswith(r) for r in dashboard_roots):
             return "tar1090"
