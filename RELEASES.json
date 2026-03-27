@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.317",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel proxy hardening for PiAware/FR24 UI rendering: request uncompressed upstream payloads (Accept-Encoding: identity) and add best-effort gzip decompression fallback when Content-Encoding metadata is missing, preventing garbled binary text pages."
+    ]
+  },
+  {
     "version": "1.0.316",
     "date": "2026-03-26",
     "notes": [
