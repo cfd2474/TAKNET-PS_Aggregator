@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.321",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel fallback for FR24/PiAware root HTML links: when bare /<name>.html requests return 404 (e.g. /settings.html), retry through feeder as /fr24/<name>.html then /piaware/<name>.html on dashboard target."
+    ]
+  },
+  {
     "version": "1.0.320",
     "date": "2026-03-26",
     "notes": [
