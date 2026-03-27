@@ -216,6 +216,9 @@ def _request_headers_for_proxy(feeder_id: str = "", path: str = "/"):
     # Hint feeder tunnel client which local backend should receive this request.
     # Feeder can use this to route map/stats paths to :8080 tar1090 web stack.
     out["X-Tunnel-Target"] = _infer_tunnel_target(path)
+    # Avoid compressed upstream payloads so HTML/JS rewriting never receives encoded bytes
+    # with missing/mismatched Content-Encoding metadata.
+    out["Accept-Encoding"] = "identity"
     if feeder_id:
         out["Host"] = _get_feeder_host_for_proxy(feeder_id)
     return out
@@ -242,6 +245,27 @@ def _decompress_body(body: bytes, content_encoding: str) -> bytes:
                 return body
     except Exception:
         return body
+    return body
+
+
+def _decompress_body_best_effort(body: bytes, content_encoding: str) -> bytes:
+    """Decompress by declared encoding, then fall back to gzip magic sniffing.
+
+    Some feeder upstreams may return compressed bytes while dropping the
+    Content-Encoding header. This keeps the proxy from treating compressed
+    payloads as plain text and rendering gibberish.
+    """
+    out = _decompress_body(body, content_encoding)
+    if out is not body:
+        return out
+    if not body:
+        return body
+    # gzip magic: 1f 8b
+    if body.startswith(b"\x1f\x8b"):
+        try:
+            return gzip.decompress(body)
+        except Exception:
+            return body
     return body
 
 
@@ -557,8 +581,7 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     skip_body_rewrite = is_static_asset and target == "tar1090"
     if body_bytes and content_type and not skip_body_rewrite:
         if "text/html" in content_type:
-            if content_encoding:
-                body_bytes = _decompress_body(body_bytes, content_encoding)
+            body_bytes = _decompress_body_best_effort(body_bytes, content_encoding)
             # Base URL must reflect current subpath directory so relative assets resolve correctly.
             # Example: /feeder/<id>/graphs1090/?... must use base /feeder/<id>/graphs1090/
             if browser_path_only == "/":
@@ -574,15 +597,13 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
             we_rewrote = True
         elif "javascript" in content_type:
             if target != "tar1090":
-                if content_encoding:
-                    body_bytes = _decompress_body(body_bytes, content_encoding)
+                body_bytes = _decompress_body_best_effort(body_bytes, content_encoding)
                 origin_no_slash = request.url_root.rstrip("/") + _feeder_prefix(feeder_id)
                 body_bytes = _rewrite_js_body(body_bytes, feeder_id, origin_no_slash)
                 we_rewrote = True
         elif "text/css" in content_type:
             if target != "tar1090":
-                if content_encoding:
-                    body_bytes = _decompress_body(body_bytes, content_encoding)
+                body_bytes = _decompress_body_best_effort(body_bytes, content_encoding)
                 body_bytes = _rewrite_css_body(body_bytes, feeder_id)
                 we_rewrote = True
 
