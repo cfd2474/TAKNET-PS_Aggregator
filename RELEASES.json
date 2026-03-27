@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.316",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel routing alignment: classify /fr24, /piaware, /flightaware and FR24 root assets (/logo.png, /monitor.json) as dashboard-target traffic to prevent tar1090 misrouting and feeder-side 404s."
+    ]
+  },
+  {
     "version": "1.0.315",
     "date": "2026-03-26",
     "notes": [
