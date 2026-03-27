@@ -430,9 +430,12 @@ def _rewrite_html_body(
     except Exception:
         return body
     prefix = _feeder_prefix(feeder_id)
-    # Avoid double-rewriting
-    if prefix + "/" in text and text.count(prefix) > 2:
-        return body
+    # Avoid double-rewriting on dashboard HTML. Do NOT use this for FR24/PiAware: those
+    # pages often embed the feeder id or /feeder/... many times in JSON/scripts, which
+    # would skip <base> injection and break relative assets (fr24.css, jquery.js).
+    if not aux_service_prefix:
+        if prefix + "/" in text and text.count(prefix) > 2:
+            return body
     # Absolute path references: replace only path start so attribute stays valid.
     # For FR24/PiAware documents, scope root-absolute links under service prefix:
     # e.g. href="/jquery.js" -> href="/feeder/<id>/fr24/jquery.js"
