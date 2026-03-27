@@ -521,6 +521,10 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     # Backward-compat alias: old rewrites may still point to /flightaware.
     if browser_path_only == "/flightaware" or browser_path_only.startswith("/flightaware/"):
         browser_path_only = "/piaware" + browser_path_only[len("/flightaware"):]
+    aux_ui_path = (
+        browser_path_only.startswith("/fr24")
+        or browser_path_only.startswith("/piaware")
+    )
     target_hint = _infer_tunnel_target(browser_path_only)
     path_only = _normalize_tar1090_path_for_proxy(browser_path_only)
     is_static_asset = _is_static_asset_path(browser_path_only)
@@ -596,13 +600,16 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
                 body_bytes = _rewrite_html_body(body_bytes, feeder_id, base_url, origin_no_slash)
             we_rewrote = True
         elif "javascript" in content_type:
-            if target != "tar1090":
+            # Do not rewrite third-party FR24/PiAware JS bundles; generic string rewrites can
+            # corrupt minified regex literals (e.g., jquery/bootstrap) and break the page.
+            if target != "tar1090" and not aux_ui_path:
                 body_bytes = _decompress_body_best_effort(body_bytes, content_encoding)
                 origin_no_slash = request.url_root.rstrip("/") + _feeder_prefix(feeder_id)
                 body_bytes = _rewrite_js_body(body_bytes, feeder_id, origin_no_slash)
                 we_rewrote = True
         elif "text/css" in content_type:
-            if target != "tar1090":
+            # Keep FR24/PiAware CSS byte-identical for compatibility with bundled assets.
+            if target != "tar1090" and not aux_ui_path:
                 body_bytes = _decompress_body_best_effort(body_bytes, content_encoding)
                 body_bytes = _rewrite_css_body(body_bytes, feeder_id)
                 we_rewrote = True
