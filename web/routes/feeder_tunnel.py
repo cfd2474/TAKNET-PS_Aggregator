@@ -37,6 +37,33 @@ def _is_piaware_service_path(p: str) -> bool:
     """True for /piaware/... or exactly /piaware — not filenames starting with piaware."""
     return p.startswith("/piaware/") or p == "/piaware"
 
+
+# Last URL path segment looks like a file (not a directory); strip for <base href> directory.
+_RE_BASE_LAST_SEGMENT_FILE = re.compile(
+    r"\.(html|htm|xhtml|css|js|mjs|json|map|xml|txt|svg|ico|png|jpg|jpeg|gif|webp|woff2?|ttf|eot)$",
+    re.IGNORECASE,
+)
+
+
+def _base_href_path_suffix(path_only: str) -> str:
+    """Directory part of path for <base href> — strip filename so relative assets resolve correctly.
+
+    If we set base to .../settings.html/, relative fr24.css resolves to .../settings.html/fr24.css (404).
+    Correct base is .../fr24/ or .../ when the document is settings.html.
+    """
+    p = (path_only or "/").split("?", 1)[0].rstrip("/")
+    if not p or p == "/":
+        return "/"
+    parts = [x for x in p.split("/") if x]
+    if not parts:
+        return "/"
+    last = parts[-1]
+    if _RE_BASE_LAST_SEGMENT_FILE.search(last):
+        parts = parts[:-1]
+    if not parts:
+        return "/"
+    return "/" + "/".join(parts) + "/"
+
 # Cache tunnel URL segment -> enriched feeder row (avoids full-table scan every proxied asset)
 _tunnel_feeder_row_cache: dict[str, tuple[dict | None, float]] = {}
 _TUNNEL_FEEDER_CACHE_TTL = 30.0
@@ -661,12 +688,13 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     if body_bytes and content_type and not skip_body_rewrite:
         if "text/html" in content_type:
             body_bytes = _decompress_body_best_effort(body_bytes, content_encoding)
-            # Base URL must reflect current subpath directory so relative assets resolve correctly.
-            # Example: /feeder/<id>/graphs1090/?... must use base /feeder/<id>/graphs1090/
-            if browser_path_only == "/":
+            # Base URL must be the document directory (path_only), not path + "/" for filenames.
+            # Use path_only so 404 retry to /fr24/settings.html yields base .../fr24/ not .../settings.html/
+            dir_suffix = _base_href_path_suffix(path_only)
+            if dir_suffix == "/":
                 base_suffix = _feeder_prefix(feeder_id) + "/"
             else:
-                base_suffix = _feeder_prefix(feeder_id) + browser_path_only.rstrip("/") + "/"
+                base_suffix = _feeder_prefix(feeder_id) + dir_suffix.lstrip("/")
             base_url = request.url_root.rstrip("/") + base_suffix
             origin_no_slash = base_url.rstrip("/")
             if target == "tar1090":
