@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.318",
+    "date": "2026-03-26",
+    "notes": [
+      "Tunnel compatibility fix for PiAware/FR24 UI: skip JS/CSS rewrite transforms on /piaware and /fr24 paths to avoid corrupting third-party minified bundles (jquery/bootstrap regex parse errors). Keep HTML path-prefix rewrites for tunnel routing."
+    ]
+  },
+  {
     "version": "1.0.317",
     "date": "2026-03-26",
     "notes": [
