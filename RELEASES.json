@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.327",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT push outputs: TLS only in the UI (remove plain TCP); server address field strips http/https (and tcp/tls) prefixes on blur and when saving; backend parses tls:// endpoints and rejects tcp://; cot_pipeline normalizes mistaken nested schemes in stored cot_url."
+    ]
+  },
+  {
     "version": "1.0.326",
     "date": "2026-03-27",
     "notes": [

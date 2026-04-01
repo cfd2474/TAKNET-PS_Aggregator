@@ -150,26 +150,22 @@
                 </div>
             </div>
 
-            <!-- CoT push config: protocol, server address, port; certs only for TLS -->
+            <!-- CoT push config: TLS only (PyTAK tls://); server address + port -->
             <div id="cot-dest-config" style="display:none;margin-top:4px;">
-                <div class="form-group">
-                    <label>Connection</label>
-                    <select class="form-control" id="modal-cot-protocol">
-                        <option value="tcp">TCP (unencrypted)</option>
-                        <option value="tls">TLS (encrypted; requires client certificate)</option>
-                    </select>
-                </div>
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;line-height:1.45;">
+                    <strong style="color:var(--text-primary);">TLS only</strong> — encrypted connection to your TAK Server (client certificate required). Do not include <code>http://</code> or <code>https://</code> in the server address; use hostname or IP and set the port below.
+                </p>
                 <div class="form-group">
                     <label>Server address</label>
-                    <input type="text" class="form-control" id="modal-cot-host" placeholder="takserver.example.com or 10.0.0.5">
+                    <input type="text" class="form-control" id="modal-cot-host" placeholder="takserver.example.com or 10.0.0.5" autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label>Port</label>
-                    <input type="number" class="form-control" id="modal-cot-port" placeholder="8087" min="1" max="65535" step="1" style="max-width:120px;">
+                    <input type="number" class="form-control" id="modal-cot-port" placeholder="8089" min="1" max="65535" step="1" style="max-width:120px;">
                 </div>
             </div>
 
-            <!-- CoT push TLS certificates — shown only when protocol is TLS -->
+            <!-- CoT push TLS certificates -->
             <div id="cot-certs-section" style="display:none;margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
                 <h4 style="font-size:13px;margin:0 0 8px;">Client certificate and private key</h4>
                 <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">Get these from your TAK Server. When you are assigned to a group or channel, the server may give you a <code>.p12</code> (or <code>.pfx</code>) file — that file contains both the certificate and the private key. You can upload the .p12 here (we extract cert and key), or upload two separate .pem files:</p>
@@ -536,15 +532,47 @@ function syncElevationMaxFromInput() {
     document.getElementById('filter-elevation-max-slider').value = v;
 }
 
+function normalizeCotHostInput(raw) {
+    var s = (raw || '').trim();
+    for (var i = 0; i < 8; i++) {
+        var before = s;
+        s = s.replace(/^https?:\/\//i, '');
+        s = s.replace(/^(tcp|tls):\/\//i, '');
+        var slash = s.indexOf('/');
+        if (slash >= 0) s = s.slice(0, slash);
+        s = s.trim();
+        if (s === before) break;
+    }
+    return s;
+}
+
+function parseStoredCotUrl(cotUrl) {
+    var host = '';
+    var port = '8089';
+    var u = (cotUrl || '').trim();
+    if (!u) return { host: host, port: port };
+    var rest = u.replace(/^(tcp|tls):\/\//i, '');
+    rest = rest.replace(/^https?:\/\//i, '');
+    var pathIdx = rest.indexOf('/');
+    if (pathIdx >= 0) rest = rest.slice(0, pathIdx);
+    rest = rest.trim();
+    var colon = rest.lastIndexOf(':');
+    if (colon > 0 && /^\d{1,5}$/.test(rest.slice(colon + 1))) {
+        host = normalizeCotHostInput(rest.slice(0, colon));
+        port = rest.slice(colon + 1);
+    } else {
+        host = normalizeCotHostInput(rest);
+    }
+    return { host: host, port: port };
+}
+
 function cotProtocolChange() {
-    const protocol = document.getElementById('modal-cot-protocol').value;
     const portEl = document.getElementById('modal-cot-port');
-    const defaultPort = protocol === 'tls' ? '8089' : '8087';
-    portEl.placeholder = defaultPort;
-    if (!portEl.value || portEl.value === '8087' || portEl.value === '8089') portEl.value = defaultPort;
+    portEl.placeholder = '8089';
+    if (!portEl.value || portEl.value === '8087' || portEl.value === '8089') portEl.value = '8089';
     const certSection = document.getElementById('cot-certs-section');
     const showCerts = document.getElementById('modal-type').value === 'cot' &&
-        document.getElementById('modal-mode').value === 'push' && protocol === 'tls';
+        document.getElementById('modal-mode').value === 'push';
     certSection.style.display = showCerts ? 'block' : 'none';
     if (showCerts) {
         const outputId = document.getElementById('modal-output-id').value;
@@ -819,10 +847,9 @@ function openCreateModal() {
     document.getElementById('modal-mode').value = 'api';
     document.getElementById('modal-key-type').value = 'single_use';
     document.getElementById('modal-push-url').value = '';
-    document.getElementById('modal-cot-protocol').value = 'tcp';
     document.getElementById('modal-cot-host').value = '';
-    document.getElementById('modal-cot-port').value = '8087';
-    document.getElementById('modal-cot-port').placeholder = '8087';
+    document.getElementById('modal-cot-port').value = '8089';
+    document.getElementById('modal-cot-port').placeholder = '8089';
     document.getElementById('modal-push-interval').value = '5';
     document.getElementById('modal-notes').value = '';
     document.getElementById('modal-enabled').checked = true;
@@ -870,18 +897,10 @@ async function openEditModal(id) {
     document.getElementById('modal-mode').value = o.mode;
     document.getElementById('modal-push-url').value = cfg.push_url || '';
     (function() {
-        const url = (cfg.cot_url || '').trim();
-        let protocol = 'tcp', host = '', port = '8087';
-        const m = url.match(/^(tcp|tls):\/\/([^:\/]+):(\d+)$/);
-        if (m) {
-            protocol = m[1];
-            host = m[2];
-            port = String(m[3]);
-        }
-        document.getElementById('modal-cot-protocol').value = protocol;
-        document.getElementById('modal-cot-host').value = host;
-        document.getElementById('modal-cot-port').value = port;
-        document.getElementById('modal-cot-port').placeholder = protocol === 'tls' ? '8089' : '8087';
+        const parsed = parseStoredCotUrl(cfg.cot_url || '');
+        document.getElementById('modal-cot-host').value = parsed.host;
+        document.getElementById('modal-cot-port').value = parsed.port;
+        document.getElementById('modal-cot-port').placeholder = '8089';
     })();
     document.getElementById('modal-push-interval').value = cfg.push_interval || 5;
     document.getElementById('modal-notes').value = o.notes || '';
@@ -904,7 +923,7 @@ async function openEditModal(id) {
     filterElevationEnableChange();
 
     // Lock fields if key exists — name/type/mode are frozen
-    const lockFields = ['modal-name', 'modal-type', 'modal-json-mode', 'modal-mode', 'modal-push-url', 'modal-push-interval', 'modal-cot-protocol', 'modal-cot-host', 'modal-cot-port'];
+    const lockFields = ['modal-name', 'modal-type', 'modal-json-mode', 'modal-mode', 'modal-push-url', 'modal-push-interval', 'modal-cot-host', 'modal-cot-port'];
     lockFields.forEach(fid => {
         const el = document.getElementById(fid);
         if (el) el.disabled = locked;
@@ -1075,12 +1094,12 @@ async function saveOutput() {
     const id = document.getElementById('modal-output-id').value;
     const locked = document.getElementById('modal-name').disabled;
     function buildCotUrl() {
-        const protocol = document.getElementById('modal-cot-protocol').value;
-        const host = document.getElementById('modal-cot-host').value.trim();
+        const host = normalizeCotHostInput(document.getElementById('modal-cot-host').value);
+        document.getElementById('modal-cot-host').value = host;
         const port = parseInt(document.getElementById('modal-cot-port').value, 10);
         if (!host) return null;
         if (isNaN(port) || port < 1 || port > 65535) return null;
-        return protocol + '://' + host + ':' + port;
+        return 'tls://' + host + ':' + port;
     }
 
     let payload;
@@ -1264,7 +1283,9 @@ function closeOutputModal() {
     document.getElementById('output-modal').classList.remove('show');
 }
 
-document.getElementById('modal-cot-protocol').addEventListener('change', cotProtocolChange);
+document.getElementById('modal-cot-host').addEventListener('blur', function() {
+    this.value = normalizeCotHostInput(this.value);
+});
 document.getElementById('filter-range-enable').addEventListener('change', filterRangeEnableChange);
 document.getElementById('filter-elevation-enable').addEventListener('change', filterElevationEnableChange);
 document.getElementById('filter-elevation-no-min').addEventListener('change', filterElevationNoMinMaxChange);

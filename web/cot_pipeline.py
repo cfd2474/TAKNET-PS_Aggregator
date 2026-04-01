@@ -5,11 +5,11 @@ Outputs with output_type='cot' can send aircraft as CoT to a TAK Server or multi
 When use_cotproxy is True, transform rules (per ICAO hex) are applied from the cot_transforms
 table — same concept as COTProxy known_craft / COTProxyWeb.
 
-Push protocol (no call API): send CoT over TCP or TLS to cot_url. PyTAK-compliant format:
-  - URL: tcp://host:port or tls://host:port (see PyTAK protocol_factory).
+Push protocol (no call API): send CoT over TLS to cot_url. PyTAK-compliant format:
+  - URL: tls://host:port only (see PyTAK protocol_factory). Plain TCP is not supported.
   - CoT: XML <event> with version, type, uid, how, time, start, stale, <point>, optional <detail>.
   - Framing: each message on the wire must be CoT XML UTF-8 bytes followed by a single space (0x20).
-  - TLS: client cert + key (aggregator stores per-output; use for tls:// only).
+  - TLS: client cert + key (aggregator stores per-output).
 See COT_PUSH_COMPLIANCE.md in the project root for full details.
 
 The dashboard runs a background job (run_cot_sender_cycle) that fetches aircraft, applies
@@ -198,6 +198,53 @@ def _aircraft_is_distress(aircraft: dict) -> bool:
 COT_STALE_SECONDS = 30
 # ft/min per knot (for track slope from baro_rate and gs)
 FT_PER_MIN_PER_KNOT = 101.268
+
+
+def _parse_tls_cot_endpoint(cot_url: str) -> tuple[str, int] | None:
+    """
+    Parse cot_url for outbound CoT push. Only tls:// is accepted.
+    Strips accidental http(s):// or nested scheme prefixes in the host section
+    (e.g. tls://https://host:port from UI mistakes).
+    Returns (host, port) or None if invalid or tcp:// (unsupported).
+    """
+    u = (cot_url or "").strip()
+    if not u:
+        return None
+    low = u.lower()
+    if low.startswith("tcp://"):
+        return None
+    if not low.startswith("tls://"):
+        return None
+    rest = u[6:].strip()
+    for _ in range(8):
+        lr = rest.lower()
+        if lr.startswith("https://"):
+            rest = rest[8:].strip()
+        elif lr.startswith("http://"):
+            rest = rest[7:].strip()
+        elif lr.startswith("tls://"):
+            rest = rest[6:].strip()
+        elif lr.startswith("tcp://"):
+            rest = rest[6:].strip()
+        else:
+            break
+    if "/" in rest:
+        rest = rest.split("/")[0]
+    rest = rest.strip()
+    if not rest:
+        return None
+    host_port = rest.rsplit(":", 1)
+    host = host_port[0].strip()
+    if not host:
+        return None
+    default_port = 8089
+    if len(host_port) > 1 and str(host_port[1]).strip().isdigit():
+        port = int(host_port[1])
+    else:
+        port = default_port
+    if port < 1 or port > 65535:
+        return None
+    return (host, port)
 
 
 def get_cot_push_outputs():
@@ -773,6 +820,7 @@ def _run_cot_sender_cycle_impl(requests):
     with_pos = [a for a in aircraft_raw if _parse_float(a.get("lat")) is not None and _parse_float(a.get("lon")) is not None]
     if not with_pos:
         log.debug("CoT sender: no aircraft with position (total %d)", len(aircraft_raw))
+    from models import OutputCotCertModel
     for out in output_list:
         output_id = out["output_id"]
         name = out.get("name") or ("output-%s" % output_id)
@@ -841,23 +889,23 @@ def _run_cot_sender_cycle_impl(requests):
                 name, pass_all, use_cotproxy, len(aircraft),
             )
             continue
-        is_tls = cot_url.lower().startswith("tls://")
-        rest = cot_url.split("://", 1)[-1].strip()
-        if "/" in rest:
-            rest = rest.split("/")[0]
-        host_port = rest.rsplit(":", 1)
-        host = host_port[0] if host_port else ""
-        port = int(host_port[1]) if len(host_port) > 1 and str(host_port[1]).isdigit() else (8089 if is_tls else 8087)
-        if not host:
-            log.warning("CoT sender: %s — invalid cot_url (no host): %s", name, cot_url)
+        parsed = _parse_tls_cot_endpoint(cot_url)
+        if parsed is None:
+            cul = (cot_url or "").strip().lower()
+            if cul.startswith("tcp://"):
+                log.warning(
+                    "CoT sender: %s — plain TCP is no longer supported; set cot_url to tls://host:port and upload a client certificate.",
+                    name,
+                )
+            else:
+                log.warning("CoT sender: %s — invalid or non-TLS cot_url (expected tls://host:port): %s", name, cot_url)
             continue
-        cert_key = None
-        if is_tls:
-            from models import OutputCotCertModel
-            cert_key = OutputCotCertModel.get_decrypted(output_id)
-            if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
-                log.warning("CoT sender: %s — TLS required but no client cert/key for output_id %s", name, output_id)
-                continue
+        host, port = parsed
+        is_tls = True
+        cert_key = OutputCotCertModel.get_decrypted(output_id)
+        if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
+            log.warning("CoT sender: %s — TLS required but no client cert/key for output_id %s", name, output_id)
+            continue
         # Reuse persistent socket to avoid connect+TLS every cycle (saves 100–500ms+)
         sock = _persistent_sockets.get(output_id)
         if sock is None:
