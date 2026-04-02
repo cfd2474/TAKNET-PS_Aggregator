@@ -385,6 +385,22 @@ def filter_aircraft_for_output(aircraft_list, config):
         range_nm = 250
     range_nm = min(250, range_nm)
 
+    # Fast reject for range filter:
+    # `_haversine_nm()` is relatively expensive and we call it per aircraft.
+    # We precheck with a conservative lat/lon bounding box that fully contains
+    # the circle of radius `range_nm`, then run haversine only for survivors.
+    range_lat_deg = None
+    range_lon_deg = None
+    if range_enabled and range_lat is not None and range_lon is not None:
+        range_lat_deg = range_nm / 60.0
+        # Longitude degrees per NM depends on latitude; use a conservative
+        # latitude bound so we don't create false negatives.
+        lat_max = min(89.9, abs(range_lat) + range_lat_deg)
+        cos_lat = math.cos(math.radians(lat_max))
+        if cos_lat < 1e-6:
+            cos_lat = 1e-6
+        range_lon_deg = range_nm / (60.0 * cos_lat)
+
     elev_enabled = config.get("elevation_filter_enabled")
     elev_min = _parse_float(config.get("elevation_min_ft")) if elev_enabled else None
     elev_max = _parse_float(config.get("elevation_max_ft")) if elev_enabled else None
@@ -405,6 +421,16 @@ def filter_aircraft_for_output(aircraft_list, config):
         if lat is None or lon is None:
             continue
         if range_enabled and (range_lat is not None and range_lon is not None):
+            # Bounding-box quick reject (fast).
+            if range_lat_deg is not None and range_lon_deg is not None:
+                if abs(lat - range_lat) > range_lat_deg:
+                    continue
+                dlon = lon - range_lon
+                # Handle wrap-around at +/- 180 degrees.
+                dlon = (dlon + 180.0) % 360.0 - 180.0
+                if abs(dlon) > range_lon_deg:
+                    continue
+            # Exact distance check (correct).
             if _haversine_nm(range_lat, range_lon, lat, lon) > range_nm:
                 continue
         alt = _parse_float(ac.get("alt_baro") or ac.get("altitude"))

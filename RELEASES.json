@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.338",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT sender: optimize per-output range filter by adding conservative lat/lon bounding-box reject before `_haversine_nm()` (reduces expensive distance checks on outputs where range limits exclude most aircraft)."
+    ]
+  },
+  {
     "version": "1.0.337",
     "date": "2026-04-01",
     "notes": [
