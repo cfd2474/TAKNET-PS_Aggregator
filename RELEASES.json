@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.337",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT sender performance: speed up COTProxy transform lookup by using `hex IN (...)` first (lets SQLite use index on (output_id, hex)), with fallback to legacy `UPPER(TRIM(hex)) IN (...)` only when no matches found. Reduces transforms_ms on outputs like id=79."
+    ]
+  },
+  {
     "version": "1.0.336",
     "date": "2026-04-01",
     "notes": [

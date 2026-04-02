@@ -1538,10 +1538,24 @@ class CotTransformModel:
                 ph = ",".join("?" * len(part))
                 sql = (
                     f"SELECT {cols} FROM cot_transforms "
-                    f"WHERE output_id = ? AND UPPER(TRIM(hex)) IN ({ph})"
+                    # Fast path: `hex` values are stored normalized (strip + upper) on insert/update,
+                    # so we can match directly and let SQLite use the (output_id, hex) index.
+                    f"WHERE output_id = ? AND hex IN ({ph})"
                 )
                 rows = conn.execute(sql, (output_id, *part)).fetchall()
                 out_rows.extend(rows)
+            # Compatibility fallback: if there are legacy rows where `hex` wasn't normalized,
+            # retry with the case-insensitive trimmed compare. This preserves correctness.
+            if not out_rows:
+                for i in range(0, len(norm), chunk):
+                    part = norm[i : i + chunk]
+                    ph = ",".join("?" * len(part))
+                    sql = (
+                        f"SELECT {cols} FROM cot_transforms "
+                        f"WHERE output_id = ? AND UPPER(TRIM(hex)) IN ({ph})"
+                    )
+                    rows = conn.execute(sql, (output_id, *part)).fetchall()
+                    out_rows.extend(rows)
             return [dict(r) for r in out_rows]
         finally:
             conn.close()
