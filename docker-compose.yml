@@ -162,6 +162,7 @@ services:
       - GITHUB_REPO=${GITHUB_REPO:-cfd2474/TAKNET-PS_Aggregator}
       - INSTALL_DIR=/opt/taknet-aggregator
       - AIRCRAFT_JSON_URL=${AIRCRAFT_JSON_URL:-http://aircraft-merger:8090/data/aircraft.json}
+      - COT_PHASE_TIMING=${COT_PHASE_TIMING:-}
       - ADSBHUB_STATUS_PATH=/app/adsbhub-status
       - TUNNEL_SERVICE_URL=http://tunnel:5001
     volumes:

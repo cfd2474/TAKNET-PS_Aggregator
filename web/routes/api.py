@@ -13,6 +13,7 @@ import requests as http_requests
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 
 from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel, OutputCotCertModel
+from models import SETTINGS_KEY_COT_PHASE_TIMING_UI, get_setting, set_setting
 from models import enrich_feeder_mlat_display
 from models import filter_feeders_for_user, feeder_stats_from_rows, user_can_access_feeder
 from services.docker_service import (get_containers, restart_container, get_logs,
@@ -1261,6 +1262,50 @@ def health_history():
     minutes = min(max(minutes, 5), 120)
     points = get_health_history(minutes=minutes)
     return jsonify({"points": points})
+
+
+def _cot_phase_timing_env_active():
+    v = (os.environ.get("COT_PHASE_TIMING") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _parse_bool_setting(val):
+    if val is None:
+        return False
+    return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+
+@bp.route("/health/cot-timing", methods=["GET", "POST"])
+@admin_required
+def health_cot_timing():
+    """CoT phase timing toggle and line buffer for System Health page (admin only)."""
+    from cot_pipeline import clear_cot_phase_timing_lines, get_cot_phase_timing_lines_snapshot
+
+    if request.method == "GET":
+        ui_on = _parse_bool_setting(get_setting(SETTINGS_KEY_COT_PHASE_TIMING_UI))
+        return jsonify(
+            {
+                "enabled": ui_on,
+                "env_forces": _cot_phase_timing_env_active(),
+                "lines": get_cot_phase_timing_lines_snapshot(),
+            }
+        )
+
+    data = request.get_json(silent=True) or {}
+    want = data.get("enabled")
+    if not isinstance(want, bool):
+        return jsonify({"error": "JSON body must include enabled: true or false"}), 400
+    set_setting(SETTINGS_KEY_COT_PHASE_TIMING_UI, "1" if want else "0")
+    if not want:
+        clear_cot_phase_timing_lines()
+    return jsonify(
+        {
+            "ok": True,
+            "enabled": want,
+            "env_forces": _cot_phase_timing_env_active(),
+            "lines": get_cot_phase_timing_lines_snapshot(),
+        }
+    )
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────

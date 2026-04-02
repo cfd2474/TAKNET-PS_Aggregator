@@ -1,5 +1,20 @@
 [
   {
+    "version": "1.0.329",
+    "date": "2026-04-01",
+    "notes": [
+      "System Health: CoT push phase timing card with toggle (persists settings cot_phase_timing_ui); lines buffer on the page, refreshed every 5s; API GET/POST /api/health/cot-timing (admin). models: get_setting/set_setting. COT_PHASE_TIMING env still forces timings and gunicorn logs; UI checkbox disabled when env is set."
+    ]
+  },
+  {
+    "version": "1.0.328",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT sender: optional COT_PHASE_TIMING env (1/true/yes/on) logs per-cycle phase milliseconds (outputs DB, HTTP+JSON, per-output filter/transforms/build_loop, cert, TLS connect, encode+send, buf_bytes) to gunicorn.error for bottleneck analysis.",
+      "docker-compose: pass COT_PHASE_TIMING into the dashboard service from .env."
+    ]
+  },
+  {
     "version": "1.0.327",
     "date": "2026-04-01",
     "notes": [

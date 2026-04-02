@@ -38,6 +38,21 @@
         <p id="capacity-note" style="margin-top:8px;font-size:11px;color:var(--text-muted);display:none;"></p>
     </div>
 
+    <!-- CoT phase timing (bottleneck analysis on this page) -->
+    <div class="card" id="card-cot-timing" style="margin-bottom:16px;">
+        <div class="card-header"><h3>CoT push phase timing</h3></div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Per-cycle breakdown (HTTP fetch, filter, transforms, XML build, cert, TLS connect, encode+send) to find bottlenecks. Output stays on this page. When <code>COT_PHASE_TIMING</code> is set in the environment, timings also go to gunicorn logs.</p>
+        <p id="cot-timing-env-note" style="display:none;font-size:12px;color:var(--text-secondary);margin-bottom:10px;"><strong>Environment:</strong> <code>COT_PHASE_TIMING</code> is set — timings always run and are logged to the dashboard container; the toggle below only persists the UI preference when the env var is removed.</p>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+            <label id="cot-timing-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                <input type="checkbox" id="cot-timing-toggle" />
+                Record timings on this page
+            </label>
+        </div>
+        <pre id="cot-timing-output" style="margin:0;max-height:280px;overflow:auto;font-size:11px;line-height:1.35;background:var(--bg-input);padding:12px;border-radius:6px;white-space:pre-wrap;word-break:break-word;"></pre>
+        <p id="cot-timing-empty" style="font-size:12px;color:var(--text-muted);margin-top:8px;display:none;">No lines yet. Enable above and wait for the next CoT cycle (about every 2s when CoT push outputs are active).</p>
+    </div>
+
     <!-- Capacity calculator -->
     <div class="card" style="margin-bottom:16px;">
         <div class="card-header"><h3>Capacity calculator</h3></div>
@@ -113,6 +128,48 @@
 
 {% block extra_scripts %}
 <script>
+let _cotTimingSuppressChange = false;
+async function loadCotTiming() {
+    const out = document.getElementById('cot-timing-output');
+    const empty = document.getElementById('cot-timing-empty');
+    const envNote = document.getElementById('cot-timing-env-note');
+    const toggle = document.getElementById('cot-timing-toggle');
+    const label = document.getElementById('cot-timing-label');
+    if (!out || !toggle) return;
+    try {
+        const r = await fetch('/api/health/cot-timing', { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) return;
+        envNote.style.display = d.env_forces ? 'block' : 'none';
+        _cotTimingSuppressChange = true;
+        toggle.checked = !!(d.enabled || d.env_forces);
+        toggle.disabled = !!d.env_forces;
+        label.style.opacity = d.env_forces ? '0.85' : '';
+        label.style.cursor = d.env_forces ? 'default' : 'pointer';
+        const lines = d.lines || [];
+        out.textContent = lines.length ? lines.join('\n') : '';
+        empty.style.display = lines.length ? 'none' : 'block';
+        out.scrollTop = out.scrollHeight;
+    } catch (e) { /* ignore */ }
+    _cotTimingSuppressChange = false;
+}
+document.getElementById('cot-timing-toggle').addEventListener('change', async function() {
+    if (_cotTimingSuppressChange) return;
+    const on = this.checked;
+    try {
+        const r = await fetch('/api/health/cot-timing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: on }),
+            cache: 'no-store'
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Failed');
+        await loadCotTiming();
+    } catch (e) {
+        this.checked = !on;
+    }
+});
 function progressColor(pct) {
     if (pct >= 90) return 'fill-red';
     if (pct >= 70) return 'fill-yellow';
@@ -166,6 +223,7 @@ async function loadHealth() {
         content.style.display = 'block';
         loading.style.display = 'none';
         document.getElementById('health-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+        await loadCotTiming();
     } catch (e) {
         if (!isBackgroundRefresh) {
             loading.style.display = 'none';
@@ -347,6 +405,7 @@ loadHealth();
 loadHistory();
 setInterval(loadHealth, 5000);   // refresh every 5s while viewing (like top)
 setInterval(loadHistory, 30000);
+setInterval(loadCotTiming, 5000);
 document.getElementById('cap-target').addEventListener('input', updateCapacityEstimate);
 document.getElementById('cap-target').addEventListener('change', updateCapacityEstimate);
 </script>

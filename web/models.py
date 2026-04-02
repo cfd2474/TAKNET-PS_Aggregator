@@ -8,6 +8,9 @@ from datetime import datetime, timezone
 
 DB_PATH = os.environ.get("DB_PATH", "/data/aggregator.db")
 
+# settings.key for System Health UI: CoT phase timing on this page
+SETTINGS_KEY_COT_PHASE_TIMING_UI = "cot_phase_timing_ui"
+
 _initialized = False
 
 
@@ -156,6 +159,32 @@ def get_db():
         _initialized = True
 
     return conn
+
+
+def get_setting(key, default=None):
+    """Read a value from the settings table, or default if missing."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        if not row or row["value"] is None:
+            return default
+        return row["value"]
+    finally:
+        conn.close()
+
+
+def set_setting(key, value):
+    """Upsert a settings key (string value)."""
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO settings(key, value, updated_at) VALUES(?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+            (key, str(value)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def dict_row(row):

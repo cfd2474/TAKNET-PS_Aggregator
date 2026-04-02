@@ -14,6 +14,10 @@ See COT_PUSH_COMPLIANCE.md in the project root for full details.
 
 The dashboard runs a background job (run_cot_sender_cycle) that fetches aircraft, applies
 COTProxy transforms and pass_all filtering, builds CoT XML, and pushes to each configured output.
+
+Optional phase timing: set COT_PHASE_TIMING in the environment for gunicorn logs, or enable
+"Record timings on this page" on Config → System Health (persists in settings); lines buffer
+on the Health page (see get_cot_phase_timing_lines_snapshot / API /health/cot-timing).
 """
 
 import json
@@ -21,6 +25,8 @@ import logging
 import math
 import os
 import socket
+import time
+from collections import deque
 import ssl
 import tempfile
 import threading
@@ -33,6 +39,54 @@ if not _logger.handlers:
     _logger = logging.getLogger(__name__)
 log = _logger
 log.setLevel(logging.INFO)
+
+
+def _cot_phase_timing_env():
+    """True when COT_PHASE_TIMING is set — also logs to gunicorn.error (in addition to optional UI buffer)."""
+    v = (os.environ.get("COT_PHASE_TIMING") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+# Ring buffer for System Health page (same process as CoT worker; gunicorn -w 1).
+_COT_TIMING_LINES = deque(maxlen=400)
+_cot_timing_lines_lock = threading.Lock()
+
+
+def _cot_phase_timing_ui_from_db():
+    """True when admin enabled CoT phase timing from System Health (persisted in settings)."""
+    try:
+        from models import SETTINGS_KEY_COT_PHASE_TIMING_UI, get_setting
+
+        v = (get_setting(SETTINGS_KEY_COT_PHASE_TIMING_UI) or "").strip().lower()
+        return v in ("1", "true", "yes", "on")
+    except Exception:
+        return False
+
+
+def clear_cot_phase_timing_lines():
+    """Clear captured phase timing lines (e.g. when turning the Health UI toggle off)."""
+    with _cot_timing_lines_lock:
+        _COT_TIMING_LINES.clear()
+
+
+def get_cot_phase_timing_lines_snapshot():
+    """Return a list of recent phase timing lines (newest last) for the Health API."""
+    with _cot_timing_lines_lock:
+        return list(_COT_TIMING_LINES)
+
+
+def _cot_phase_timing_emit(message: str, log_to_gunicorn: bool):
+    """Append line to Health page buffer; optionally log to gunicorn (env-based)."""
+    with _cot_timing_lines_lock:
+        _COT_TIMING_LINES.append(message)
+    if log_to_gunicorn:
+        log.info(message)
+
+
+def _phase_ms(t0, t1):
+    """Elapsed milliseconds between two perf_counter() samples."""
+    return round((t1 - t0) * 1000.0, 1)
+
 
 # Only one cycle at a time (avoid overlapping fetch/connect from scheduler).
 _cot_sender_lock = threading.Lock()
@@ -802,24 +856,49 @@ def run_cot_sender_cycle():
 
 def _run_cot_sender_cycle_impl(requests):
     """Inner implementation; hold _cot_sender_lock before calling."""
+    timing_gunicorn = _cot_phase_timing_env()
+    timing_emit = timing_gunicorn or _cot_phase_timing_ui_from_db()
+    t_cycle = time.perf_counter()
     log.debug("CoT sender: cycle start")
+    t0 = time.perf_counter()
     output_list = get_cot_push_outputs()
+    db_outputs_ms = _phase_ms(t0, time.perf_counter())
     log.debug("CoT sender: got %d push output(s)", len(output_list))
     if not output_list:
+        if timing_emit:
+            _cot_phase_timing_emit(
+                "CoT phase timing: outputs_db=%.1fms (no active CoT push outputs) cycle=%.1fms"
+                % (db_outputs_ms, _phase_ms(t_cycle, time.perf_counter())),
+                timing_gunicorn,
+            )
         return
     aircraft_url = os.environ.get("AIRCRAFT_JSON_URL", "http://aircraft-merger:8090/data/aircraft.json")
     try:
+        t0 = time.perf_counter()
         r = requests.get(aircraft_url, timeout=(1, 2))
         r.raise_for_status()
         data = r.json()
+        http_ms = _phase_ms(t0, time.perf_counter())
         log.debug("CoT sender: aircraft fetch OK (%d aircraft)", len(data.get("aircraft", [])))
     except Exception as e:
         log.warning("CoT sender: failed to fetch aircraft from %s: %s", aircraft_url, e)
+        if timing_emit:
+            _cot_phase_timing_emit(
+                "CoT phase timing: outputs_db=%.1fms http=failed cycle=%.1fms"
+                % (db_outputs_ms, _phase_ms(t_cycle, time.perf_counter())),
+                timing_gunicorn,
+            )
         return
     aircraft_raw = data.get("aircraft", [])
     with_pos = [a for a in aircraft_raw if _parse_float(a.get("lat")) is not None and _parse_float(a.get("lon")) is not None]
     if not with_pos:
         log.debug("CoT sender: no aircraft with position (total %d)", len(aircraft_raw))
+    if timing_emit:
+        _cot_phase_timing_emit(
+            "CoT phase timing: shared outputs_db=%.1fms http_fetch+json=%.1fms n_raw=%d n_with_pos=%d"
+            % (db_outputs_ms, http_ms, len(aircraft_raw), len(with_pos)),
+            timing_gunicorn,
+        )
     from models import OutputCotCertModel
     for out in output_list:
         output_id = out["output_id"]
@@ -840,9 +919,13 @@ def _run_cot_sender_cycle_impl(requests):
                 stale_seconds = 300
         except (TypeError, ValueError):
             stale_seconds = COT_STALE_SECONDS
+        t0 = time.perf_counter()
         aircraft = filter_aircraft_for_output(with_pos, config)
+        filter_ms = _phase_ms(t0, time.perf_counter())
+        t0 = time.perf_counter()
         # One DB query for all transforms when use_cotproxy (avoids N lookups for large marker counts)
         transforms_by_hex = get_transforms_by_hex(output_id) if use_cotproxy else {}
+        transforms_ms = _phase_ms(t0, time.perf_counter())
         now = _cot_time()
         stale_dt = datetime.now(timezone.utc).timestamp() + stale_seconds
         stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
@@ -850,6 +933,7 @@ def _run_cot_sender_cycle_impl(requests):
         last_sent = dict(_last_sent_state.get(output_id, {}))
         seen_hexes = set()
         to_send = []
+        t0 = time.perf_counter()
         for ac in aircraft:
             hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
             if not hex_code:
@@ -878,6 +962,7 @@ def _run_cot_sender_cycle_impl(requests):
             if xml_str:
                 to_send.append(xml_str)
                 last_sent[hex_code] = state
+        build_loop_ms = _phase_ms(t0, time.perf_counter())
         # Prune cache to hexes seen this cycle; cap size so we don't grow forever
         _last_sent_state[output_id] = {h: last_sent[h] for h in seen_hexes if h in last_sent}
         if len(_last_sent_state[output_id]) > _MAX_LAST_SENT_HEXES:
@@ -888,6 +973,12 @@ def _run_cot_sender_cycle_impl(requests):
                 "CoT sender: %s — no CoT to send this cycle (pass_all=%s, use_cotproxy=%s, aircraft_after_filter=%d, delta may have skipped all).",
                 name, pass_all, use_cotproxy, len(aircraft),
             )
+            if timing_emit:
+                _cot_phase_timing_emit(
+                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=0 filter=%.1fms transforms=%.1fms build_loop=%.1fms (delta: nothing to send)"
+                    % (name, output_id, len(aircraft), filter_ms, transforms_ms, build_loop_ms),
+                    timing_gunicorn,
+                )
             continue
         parsed = _parse_tls_cot_endpoint(cot_url)
         if parsed is None:
@@ -899,32 +990,115 @@ def _run_cot_sender_cycle_impl(requests):
                 )
             else:
                 log.warning("CoT sender: %s — invalid or non-TLS cot_url (expected tls://host:port): %s", name, cot_url)
+            if timing_emit:
+                _cot_phase_timing_emit(
+                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms (invalid cot_url, no send)"
+                    % (name, output_id, len(aircraft), len(to_send), filter_ms, transforms_ms, build_loop_ms),
+                    timing_gunicorn,
+                )
             continue
         host, port = parsed
         is_tls = True
+        t0 = time.perf_counter()
         cert_key = OutputCotCertModel.get_decrypted(output_id)
+        cert_ms = _phase_ms(t0, time.perf_counter())
         if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
             log.warning("CoT sender: %s — TLS required but no client cert/key for output_id %s", name, output_id)
+            if timing_emit:
+                _cot_phase_timing_emit(
+                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms cert=%.1fms (no cert, no send)"
+                    % (
+                        name,
+                        output_id,
+                        len(aircraft),
+                        len(to_send),
+                        filter_ms,
+                        transforms_ms,
+                        build_loop_ms,
+                        cert_ms,
+                    ),
+                    timing_gunicorn,
+                )
             continue
         # Reuse persistent socket to avoid connect+TLS every cycle (saves 100–500ms+)
         sock = _persistent_sockets.get(output_id)
+        connect_ms = 0.0
         if sock is None:
+            t0 = time.perf_counter()
             sock = _connect_cot_socket(name, output_id, host, port, is_tls, cert_key)
+            connect_ms = _phase_ms(t0, time.perf_counter())
             if sock is not None:
                 _persistent_sockets[output_id] = sock
         if sock is None:
+            if timing_emit:
+                _cot_phase_timing_emit(
+                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms cert=%.1fms connect=%.1fms (connect failed)"
+                    % (
+                        name,
+                        output_id,
+                        len(aircraft),
+                        len(to_send),
+                        filter_ms,
+                        transforms_ms,
+                        build_loop_ms,
+                        cert_ms,
+                        connect_ms,
+                    ),
+                    timing_gunicorn,
+                )
             continue
         try:
             send_timeout = max(10, 3 + len(to_send) // 100)
             sock.settimeout(send_timeout)
+            t0 = time.perf_counter()
             buf = (" ".join(to_send) + " ").encode("utf-8")
             sock.sendall(buf)
+            encode_send_ms = _phase_ms(t0, time.perf_counter())
             log.info("CoT sender: %s — sent %d CoT message(s) to %s:%s (connection reused)", name, len(to_send), host, port)
+            if timing_emit:
+                _cot_phase_timing_emit(
+                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d buf_bytes=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms cert=%.1fms connect=%.1fms encode_send=%.1fms"
+                    % (
+                        name,
+                        output_id,
+                        len(aircraft),
+                        len(to_send),
+                        len(buf),
+                        filter_ms,
+                        transforms_ms,
+                        build_loop_ms,
+                        cert_ms,
+                        connect_ms,
+                        encode_send_ms,
+                    ),
+                    timing_gunicorn,
+                )
         except Exception as e:
             log.warning("CoT sender: %s — send failed to %s:%s: %s (will reconnect next cycle)", name, host, port, e)
+            if timing_emit:
+                _cot_phase_timing_emit(
+                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms cert=%.1fms connect=%.1fms encode_send=failed"
+                    % (
+                        name,
+                        output_id,
+                        len(aircraft),
+                        len(to_send),
+                        filter_ms,
+                        transforms_ms,
+                        build_loop_ms,
+                        cert_ms,
+                        connect_ms,
+                    ),
+                    timing_gunicorn,
+                )
             try:
                 sock.close()
             except Exception:
                 pass
             _persistent_sockets.pop(output_id, None)
+    if timing_emit:
+        _cot_phase_timing_emit(
+            "CoT phase timing: cycle_total=%.1fms" % (_phase_ms(t_cycle, time.perf_counter()),),
+            timing_gunicorn,
+        )
     log.debug("CoT sender: cycle done")
