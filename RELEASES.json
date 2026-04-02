@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.335",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT phase timing: split TLS path into join_encode (per-chunk join+UTF-8), sendall, and encode_send (wall total); Health page copy updated."
+    ]
+  },
+  {
     "version": "1.0.334",
     "date": "2026-04-01",
     "notes": [

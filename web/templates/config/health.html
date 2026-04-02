@@ -41,7 +41,7 @@
     <!-- CoT phase timing (bottleneck analysis on this page) -->
     <div class="card" id="card-cot-timing" style="margin-bottom:16px;">
         <div class="card-header"><h3>CoT push phase timing</h3></div>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Per-cycle breakdown (HTTP fetch, filter, transforms, XML build, cert, TLS connect, encode+send) to find bottlenecks. Output stays on this page. When <code>COT_PHASE_TIMING</code> is set in the environment, timings also go to gunicorn logs.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Per-cycle breakdown (HTTP fetch, filter, transforms, XML build, cert, TLS connect, join+encode vs sendall, total encode_send) to find bottlenecks. Output stays on this page. When <code>COT_PHASE_TIMING</code> is set in the environment, timings also go to gunicorn logs.</p>
         <p id="cot-timing-env-note" style="display:none;font-size:12px;color:var(--text-secondary);margin-bottom:10px;"><strong>Environment:</strong> <code>COT_PHASE_TIMING</code> is set — timings always run and are logged to the dashboard container; the toggle below only persists the UI preference when the env var is removed.</p>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
             <label id="cot-timing-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">

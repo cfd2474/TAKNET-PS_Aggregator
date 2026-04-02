@@ -1320,11 +1320,17 @@ def _run_cot_sender_cycle_impl(requests):
             sock.settimeout(send_timeout)
             t0 = time.perf_counter()
             total_buf_bytes = 0
+            join_encode_ms = 0.0
+            sendall_ms = 0.0
             for c0 in range(0, len(to_send), chunk_n):
                 chunk = to_send[c0 : c0 + chunk_n]
+                t_je = time.perf_counter()
                 buf = (" ".join(chunk) + " ").encode("utf-8")
                 total_buf_bytes += len(buf)
+                join_encode_ms += _phase_ms(t_je, time.perf_counter())
+                t_s = time.perf_counter()
                 sock.sendall(buf)
+                sendall_ms += _phase_ms(t_s, time.perf_counter())
             encode_send_ms = _phase_ms(t0, time.perf_counter())
             log.info(
                 "CoT sender: %s — sent %d CoT message(s) to %s:%s (%d chunk(s), connection reused)",
@@ -1336,7 +1342,7 @@ def _run_cot_sender_cycle_impl(requests):
             )
             if timing_emit:
                 _cot_phase_timing_emit(
-                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d buf_bytes=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms cert=%.1fms connect=%.1fms encode_send=%.1fms"
+                    "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d buf_bytes=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms cert=%.1fms connect=%.1fms join_encode=%.1fms sendall=%.1fms encode_send=%.1fms"
                     % (
                         name,
                         output_id,
@@ -1348,6 +1354,8 @@ def _run_cot_sender_cycle_impl(requests):
                         build_loop_ms,
                         cert_ms,
                         connect_ms,
+                        join_encode_ms,
+                        sendall_ms,
                         encode_send_ms,
                     ),
                     timing_gunicorn,
