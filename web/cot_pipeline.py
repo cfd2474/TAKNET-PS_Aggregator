@@ -272,6 +272,8 @@ def _aircraft_is_distress(aircraft: dict) -> bool:
 COT_STALE_SECONDS = 30
 # ft/min per knot (for track slope from baro_rate and gs)
 FT_PER_MIN_PER_KNOT = 101.268
+# CoT <track speed="..."/> is m/s (TAK/ATAK); tar1090/ADSBHub `gs` is knots.
+MPS_PER_KNOT = 1852.0 / 3600.0
 
 
 def _parse_tls_cot_endpoint(cot_url: str) -> tuple[str, int] | None:
@@ -830,7 +832,7 @@ def _compute_cot_xml_parts(
         if track_deg is not None:
             ta["course"] = str(track_deg)
         if gs_kts is not None:
-            ta["speed"] = str(gs_kts)
+            ta["speed"] = "%.2f" % (gs_kts * MPS_PER_KNOT)
         if baro_rate is not None and gs_kts is not None and gs_kts > 0:
             try:
                 gs_ft_min = gs_kts * FT_PER_MIN_PER_KNOT
