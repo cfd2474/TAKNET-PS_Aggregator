@@ -1089,6 +1089,60 @@ def set_mail_settings():
     })
 
 
+# ── CoT send chunk size (Config → Services) ─────────────────────────────────
+
+def _restart_dashboard_background():
+    """Apply .env changes that affect the dashboard container environment."""
+    try:
+        restart_container("taknet-dashboard")
+    except Exception as e:
+        print(f"[api] Background restart taknet-dashboard: {e}")
+
+
+@bp.route("/settings/cot-send-chunk", methods=["GET"])
+@admin_required
+def get_cot_send_chunk_settings():
+    """COT_SEND_CHUNK_MESSAGES from host .env and effective value in this process."""
+    raw = (_read_env_value("COT_SEND_CHUNK_MESSAGES", "") or "").strip()
+    from cot_pipeline import _cot_send_chunk_message_count
+
+    effective = _cot_send_chunk_message_count()
+    try:
+        parsed = int(raw) if raw else None
+    except ValueError:
+        parsed = None
+    if parsed is not None and 1 <= parsed <= 5000:
+        input_value = parsed
+    else:
+        input_value = effective
+    return jsonify({
+        "chunk_messages": input_value,
+        "effective": effective,
+        "from_env_file": bool(raw),
+    })
+
+
+@bp.route("/settings/cot-send-chunk", methods=["POST"])
+@admin_required
+def set_cot_send_chunk_settings():
+    """Persist COT_SEND_CHUNK_MESSAGES (1–5000) to .env; restart dashboard in background."""
+    data = request.get_json() or {}
+    raw = data.get("chunk_messages", data.get("cot_send_chunk_messages"))
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "chunk_messages must be an integer between 1 and 5000"}), 400
+    n = max(1, min(5000, n))
+    _persist_env_var("COT_SEND_CHUNK_MESSAGES", str(n))
+    thread = threading.Thread(target=_restart_dashboard_background, daemon=True)
+    thread.start()
+    return jsonify({
+        "success": True,
+        "chunk_messages": n,
+        "message": "Saved. Dashboard is restarting to apply CoT send chunk size.",
+    })
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _get_aircraft_count():

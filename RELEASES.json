@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.333",
+    "date": "2026-04-01",
+    "notes": [
+      "Config → Services: admin field for CoT TLS send chunk size (COT_SEND_CHUNK_MESSAGES); GET/POST /api/settings/cot-send-chunk; persists host .env and restarts taknet-dashboard."
+    ]
+  },
+  {
     "version": "1.0.332",
     "date": "2026-04-01",
     "notes": [
