@@ -163,6 +163,13 @@
                     <label>Port</label>
                     <input type="number" class="form-control" id="modal-cot-port" placeholder="8089" min="1" max="65535" step="1" style="max-width:120px;">
                 </div>
+                <div id="cot-tls-paused-banner" style="display:none;margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.12);border:1px solid var(--red);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.45;">
+                    <strong style="color:var(--red);">TLS push paused</strong> — the last TCP/TLS attempt failed. This output is skipped until you correct the server, port, or client certificate and run <strong>Test TLS connection</strong> successfully.
+                </div>
+                <div style="margin-top:12px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+                    <button type="button" class="btn btn-primary" id="cot-test-tls-btn" style="font-size:12px;">Test TLS connection</button>
+                    <span id="cot-test-tls-msg" style="font-size:12px;"></span>
+                </div>
             </div>
 
             <!-- CoT push TLS certificates -->
@@ -532,6 +539,64 @@ function syncElevationMaxFromInput() {
     document.getElementById('filter-elevation-max-slider').value = v;
 }
 
+function updateCotTlsPausedBanner() {
+    const banner = document.getElementById('cot-tls-paused-banner');
+    const testBtn = document.getElementById('cot-test-tls-btn');
+    const msg = document.getElementById('cot-test-tls-msg');
+    if (!banner || !testBtn) return;
+    const id = document.getElementById('modal-output-id').value;
+    const destVisible = document.getElementById('cot-dest-config').style.display !== 'none';
+    const cfg = window._outputModalCfg || {};
+    const paused = cfg.cot_tls_paused === true;
+    banner.style.display = (id && destVisible && paused) ? 'block' : 'none';
+    testBtn.disabled = !id;
+    if (msg && !msg.dataset.sticky) msg.textContent = '';
+}
+
+async function testCotTlsConnection() {
+    const id = document.getElementById('modal-output-id').value;
+    const msg = document.getElementById('cot-test-tls-msg');
+    if (!id) {
+        if (msg) { msg.textContent = 'Save the output first.'; msg.style.color = 'var(--yellow)'; }
+        return;
+    }
+    const host = normalizeCotHostInput(document.getElementById('modal-cot-host').value);
+    const port = parseInt(document.getElementById('modal-cot-port').value, 10);
+    let body = {};
+    if (host && !isNaN(port) && port >= 1 && port <= 65535) {
+        body.cot_url = 'tls://' + host + ':' + port;
+    }
+    const btn = document.getElementById('cot-test-tls-btn');
+    if (btn) btn.disabled = true;
+    if (msg) { msg.textContent = 'Testing…'; msg.style.color = 'var(--text-muted)'; msg.dataset.sticky = '1'; }
+    try {
+        const r = await fetch('/api/outputs/' + id + '/cot-test-tls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (msg) delete msg.dataset.sticky;
+        if (r.ok && d.ok) {
+            if (window._outputModalCfg) {
+                window._outputModalCfg.cot_tls_paused = false;
+                if (body.cot_url) window._outputModalCfg.cot_url = body.cot_url;
+            }
+            msg.textContent = (d.message || 'TLS OK') + (d.cot_url_saved ? ' Address saved to this output.' : '');
+            msg.style.color = 'var(--green)';
+            updateCotTlsPausedBanner();
+            loadOutputs();
+        } else {
+            msg.textContent = d.error || 'Test failed';
+            msg.style.color = 'var(--red)';
+        }
+    } catch (e) {
+        if (msg) delete msg.dataset.sticky;
+        if (msg) { msg.textContent = 'Request failed.'; msg.style.color = 'var(--red)'; }
+    }
+    if (btn) btn.disabled = !document.getElementById('modal-output-id').value;
+}
+
 function normalizeCotHostInput(raw) {
     var s = (raw || '').trim();
     for (var i = 0; i < 8; i++) {
@@ -574,6 +639,7 @@ function cotProtocolChange() {
     const showCerts = document.getElementById('modal-type').value === 'cot' &&
         document.getElementById('modal-mode').value === 'push';
     certSection.style.display = showCerts ? 'block' : 'none';
+    updateCotTlsPausedBanner();
     if (showCerts) {
         const outputId = document.getElementById('modal-output-id').value;
         if (outputId) loadCotCertStatus(outputId);
@@ -789,13 +855,21 @@ async function loadOutputs() {
                 ? (new Date(o.created_at)).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
                 : '—';
 
+            let cotTlsPaused = false;
+            try {
+                const oc = JSON.parse(o.config || '{}');
+                cotTlsPaused = oc.cot_tls_paused === true;
+            } catch (e) { /* ignore */ }
             const isActive = (o.status || 'active') === 'active';
             const enableBtn = isActive
                 ? `<button type="button" class="btn" style="font-size:11px;padding:4px 10px;background:rgba(34,197,94,0.15);color:var(--green);" onclick="toggleOutputEnabled(${o.id}, false)" title="Disable output">On</button>`
                 : `<button type="button" class="btn" style="font-size:11px;padding:4px 10px;background:var(--bg-secondary);color:var(--text-muted);" onclick="toggleOutputEnabled(${o.id}, true)" title="Enable output">Off</button>`;
 
             html += '<tr>';
-            html += `<td style="font-weight:500;">${o.name}</td>`;
+            const tlsPausedBadge = (o.output_type === 'cot' && o.mode === 'push' && cotTlsPaused)
+                ? ' <span class="badge badge-offline" style="font-size:10px;vertical-align:middle;" title="TLS handshake failed — open Edit and use Test TLS connection">TLS paused</span>'
+                : '';
+            html += `<td style="font-weight:500;">${o.name}${tlsPausedBadge}</td>`;
             html += `<td>${typeBadge}</td>`;
             html += `<td>${modeBadge}</td>`;
             html += `<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;">${keyCell}</td>`;
@@ -875,6 +949,8 @@ function openCreateModal() {
     var saveBtn = document.getElementById('modal-save-btn');
     saveBtn.textContent = 'Save';
     saveBtn.onclick = saveOutput;
+    window._outputModalCfg = {};
+    updateCotTlsPausedBanner();
     onTypeChange(); onModeChange();
     document.getElementById('output-modal').classList.add('show');
 }
@@ -955,8 +1031,11 @@ async function openEditModal(id) {
     onTypeChange(); onModeChange();
     updateApiKeyDetailDisplay(o);
     updateAdsbDirectUrlDisplay(o, '');
+    updateCotTlsPausedBanner();
     document.getElementById('output-modal').classList.add('show');
 }
+
+document.getElementById('cot-test-tls-btn').addEventListener('click', function() { testCotTlsConnection(); });
 
 function setCotCertsSectionEnabled(enable) {
     const uploadDiv = document.getElementById('cot-certs-upload');
@@ -1076,7 +1155,10 @@ document.getElementById('cot-certs-upload-btn').onclick = async function() {
             document.getElementById('cot-key-file').value = '';
             document.getElementById('cot-p12-file').value = '';
             document.getElementById('cot-p12-password').value = '';
+            if (window._outputModalCfg) window._outputModalCfg.cot_tls_paused = false;
+            updateCotTlsPausedBanner();
             loadCotCertStatus(outputId);
+            loadOutputs();
         } else {
             msgEl.textContent = d.error || 'Upload failed';
             msgEl.style.color = 'var(--red)';

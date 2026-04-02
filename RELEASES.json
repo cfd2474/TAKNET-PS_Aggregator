@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.330",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT push TLS: on TCP/TLS connect failure set config cot_tls_paused and skip the output until cleared; Outputs modal adds Test TLS connection (POST /api/outputs/<id>/cot-test-tls), banner, and TLS paused list badge; successful test clears pause and persists cot_url when the test used form host/port; changing cot_url or uploading certs clears pause; OutputModel.merge_config helper."
+    ]
+  },
+  {
     "version": "1.0.329",
     "date": "2026-04-01",
     "notes": [

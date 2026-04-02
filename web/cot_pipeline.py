@@ -322,6 +322,8 @@ def get_cot_push_outputs():
         cot_url = (cfg.get("cot_url") or "").strip()
         if not cot_url:
             continue
+        if cfg.get("cot_tls_paused") is True:
+            continue
         result.append({
             "output_id": row["id"],
             "name": row["name"],
@@ -798,12 +800,12 @@ def _state_key(ac):
     )
 
 
-def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key):
+def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connect_timeout_sec=3):
     """Create and return a connected socket (plain or TLS), or None on failure."""
     sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)
+        sock.settimeout(float(connect_timeout_sec))
         log.debug("CoT sender: %s — TCP connect to %s:%s", name, host, port)
         sock.connect((host, port))
         if is_tls and cert_key:
@@ -837,6 +839,90 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key):
             except Exception:
                 pass
         return None
+
+
+def drop_cot_persistent_socket(output_id):
+    """Close and remove cached TLS socket for an output (e.g. after cert or URL change)."""
+    sock = _persistent_sockets.pop(output_id, None)
+    if sock:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def _cot_pause_tls_push(output_id, name, reason: str):
+    """Persist cot_tls_paused and drop cached socket so we stop reconnecting until Test TLS clears the flag."""
+    import json as _json
+
+    from models import OutputModel, get_db
+
+    conn = get_db()
+    row = conn.execute("SELECT config FROM outputs WHERE id = ?", (output_id,)).fetchone()
+    conn.close()
+    if not row:
+        return
+    try:
+        cfg = _json.loads(row["config"] or "{}")
+    except (TypeError, ValueError):
+        cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    if cfg.get("cot_tls_paused") is True:
+        drop_cot_persistent_socket(output_id)
+        return
+    OutputModel.merge_config(output_id, {"cot_tls_paused": True})
+    drop_cot_persistent_socket(output_id)
+    log.warning(
+        "CoT sender: %s — TLS push paused (%s). Fix server, port, or certificates, then use Outputs → Test TLS connection.",
+        name,
+        reason,
+    )
+
+
+def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, *, connect_timeout_sec=8) -> tuple[bool, str]:
+    """
+    Verify TCP + TLS client handshake to the CoT endpoint using stored cert/key.
+    cot_url_override: optional tls:// URL to test (e.g. unsaved form values); otherwise uses DB config.
+    Returns (success, message for UI).
+    """
+    import json as _json
+
+    from models import OutputCotCertModel, get_db
+
+    conn = get_db()
+    row = conn.execute("SELECT config FROM outputs WHERE id = ?", (output_id,)).fetchone()
+    conn.close()
+    if not row:
+        return False, "Output not found"
+    try:
+        cfg = _json.loads(row["config"] or "{}")
+    except (TypeError, ValueError):
+        cfg = {}
+    cot_url = (cot_url_override or cfg.get("cot_url") or "").strip()
+    parsed = _parse_tls_cot_endpoint(cot_url)
+    if not parsed:
+        return False, "Set a valid tls:// host:port (TLS only)."
+    host, port = parsed
+    cert_key = OutputCotCertModel.get_decrypted(output_id)
+    if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
+        return False, "Upload a client certificate and private key before testing."
+    sock = _connect_cot_socket(
+        "cot-tls-test",
+        output_id,
+        host,
+        port,
+        True,
+        cert_key,
+        connect_timeout_sec=connect_timeout_sec,
+    )
+    if sock is None:
+        return False, "Could not connect or complete TLS handshake (host, port, firewall, or certificate)."
+    try:
+        sock.close()
+    except Exception:
+        pass
+    return True, "TLS handshake succeeded."
 
 
 def run_cot_sender_cycle():
@@ -1046,6 +1132,7 @@ def _run_cot_sender_cycle_impl(requests):
                     ),
                     timing_gunicorn,
                 )
+            _cot_pause_tls_push(output_id, name, "connect failed")
             continue
         try:
             send_timeout = max(10, 3 + len(to_send) // 100)

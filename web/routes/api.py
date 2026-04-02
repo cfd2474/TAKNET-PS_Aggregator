@@ -1399,7 +1399,18 @@ def output_update(output_id):
     if target_type == "cot":
         data["output_format"] = "cot"
     if "config" in data and isinstance(data["config"], dict):
-        data["config"] = _json.dumps(data["config"])
+        new_c = dict(data["config"])
+        try:
+            old_raw = existing.get("config") or "{}"
+            old_c = _json.loads(old_raw) if isinstance(old_raw, str) else (old_raw if isinstance(old_raw, dict) else {})
+        except (TypeError, ValueError):
+            old_c = {}
+        if not isinstance(old_c, dict):
+            old_c = {}
+        if target_type == "cot" and target_mode == "push":
+            if str(new_c.get("cot_url") or "").strip() != str(old_c.get("cot_url") or "").strip():
+                new_c["cot_tls_paused"] = False
+        data["config"] = _json.dumps(new_c)
     OutputModel.update(output_id, data)
     return jsonify({"success": True})
 
@@ -1670,9 +1681,38 @@ def cot_certs_upload(output_id):
         return jsonify({"error": "Use one option only: upload certificate and key (two files) or a single .p12/.pfx file"}), 400
     try:
         OutputCotCertModel.set(output_id, cert_pem.strip(), key_pem.strip(), (ca_pem or "").strip() or None)
+        from cot_pipeline import drop_cot_persistent_socket
+
+        OutputModel.merge_config(output_id, {"cot_tls_paused": False})
+        drop_cot_persistent_socket(output_id)
         return jsonify({"success": True})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+
+@bp.route("/outputs/<int:output_id>/cot-test-tls", methods=["POST"])
+@network_admin_required
+def cot_test_tls(output_id):
+    """Try TCP+TLS handshake to the CoT server; on success clear cot_tls_paused. Optional JSON { cot_url } for unsaved form."""
+    from flask_login import current_user
+    from cot_pipeline import drop_cot_persistent_socket, test_cot_tls_handshake
+
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    item = OutputModel.get_by_id(output_id, current_user.id, current_user.role)
+    if not item or item.get("output_type") != "cot" or item.get("mode") != "push":
+        return jsonify({"error": "Not a CoT push output"}), 400
+    body = request.get_json(silent=True) or {}
+    override = (body.get("cot_url") or "").strip() or None
+    ok, msg = test_cot_tls_handshake(output_id, override)
+    if ok:
+        patches = {"cot_tls_paused": False}
+        if override:
+            patches["cot_url"] = override.strip()
+        OutputModel.merge_config(output_id, patches)
+        drop_cot_persistent_socket(output_id)
+        return jsonify({"ok": True, "message": msg, "cot_url_saved": bool(override)})
+    return jsonify({"ok": False, "error": msg}), 400
 
 
 @bp.route("/outputs/<int:output_id>/cot-transforms/import", methods=["POST"])

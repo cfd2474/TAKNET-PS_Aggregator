@@ -1121,6 +1121,31 @@ class OutputModel:
         return True
 
     @staticmethod
+    def merge_config(output_id, partial: dict) -> bool:
+        """Merge partial dict into outputs.config JSON. Returns False if output missing."""
+        if not partial:
+            return True
+        conn = get_db()
+        row = conn.execute("SELECT config FROM outputs WHERE id = ?", (output_id,)).fetchone()
+        if not row:
+            conn.close()
+            return False
+        try:
+            cfg = json.loads(row["config"] or "{}")
+        except (TypeError, ValueError):
+            cfg = {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        cfg.update(partial)
+        conn.execute(
+            "UPDATE outputs SET config = ?, updated_at = datetime('now') WHERE id = ?",
+            (json.dumps(cfg), output_id),
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+    @staticmethod
     def delete(output_id):
         conn = get_db()
         conn.execute("DELETE FROM outputs WHERE id = ?", (output_id,))
