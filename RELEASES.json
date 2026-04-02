@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.332",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT push: send TLS payload in chunks of complete messages (default 200 per sendall); env COT_SEND_CHUNK_MESSAGES (1–5000); same space-delimited wire format; docker-compose passes var from .env."
+    ]
+  },
+  {
     "version": "1.0.331",
     "date": "2026-04-01",
     "notes": [

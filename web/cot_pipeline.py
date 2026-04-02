@@ -103,6 +103,16 @@ _MAX_LAST_SENT_HEXES = 15000
 # PyTAK/TAK Server wire format: each CoT message is XML UTF-8 bytes followed by this delimiter.
 COT_MESSAGE_DELIMITER = b" "
 
+
+def _cot_send_chunk_message_count():
+    """Max CoT XML strings per sendall (complete messages only). Env COT_SEND_CHUNK_MESSAGES, default 200."""
+    try:
+        n = int(os.environ.get("COT_SEND_CHUNK_MESSAGES", "200"))
+    except (TypeError, ValueError):
+        n = 200
+    return max(1, min(5000, n))
+
+
 # Default CoT type for aircraft when no transform specifies one.
 # MIL-STD-2525 / FTS CoT table: a = atoms, f = friend, A = Air. See:
 # https://freetakteam.github.io/FreeTAKServer-User-Docs/About/architecture/cot_table/
@@ -1164,13 +1174,27 @@ def _run_cot_sender_cycle_impl(requests):
             _cot_pause_tls_push(output_id, name, "connect failed")
             continue
         try:
-            send_timeout = max(10, 3 + len(to_send) // 100)
+            # Chunked send: complete messages only (space between XML events, trailing space per chunk).
+            # Reduces single giant sendall blocking and peak memory vs one ~MB buffer.
+            chunk_n = _cot_send_chunk_message_count()
+            send_timeout = max(60, 15 + len(to_send) // 60)
             sock.settimeout(send_timeout)
             t0 = time.perf_counter()
-            buf = (" ".join(to_send) + " ").encode("utf-8")
-            sock.sendall(buf)
+            total_buf_bytes = 0
+            for c0 in range(0, len(to_send), chunk_n):
+                chunk = to_send[c0 : c0 + chunk_n]
+                buf = (" ".join(chunk) + " ").encode("utf-8")
+                total_buf_bytes += len(buf)
+                sock.sendall(buf)
             encode_send_ms = _phase_ms(t0, time.perf_counter())
-            log.info("CoT sender: %s — sent %d CoT message(s) to %s:%s (connection reused)", name, len(to_send), host, port)
+            log.info(
+                "CoT sender: %s — sent %d CoT message(s) to %s:%s (%d chunk(s), connection reused)",
+                name,
+                len(to_send),
+                host,
+                port,
+                (len(to_send) + chunk_n - 1) // chunk_n,
+            )
             if timing_emit:
                 _cot_phase_timing_emit(
                     "CoT phase timing:   %s id=%s n_filtered=%d n_to_send=%d buf_bytes=%d filter=%.1fms transforms=%.1fms build_loop=%.1fms cert=%.1fms connect=%.1fms encode_send=%.1fms"
@@ -1179,7 +1203,7 @@ def _run_cot_sender_cycle_impl(requests):
                         output_id,
                         len(aircraft),
                         len(to_send),
-                        len(buf),
+                        total_buf_bytes,
                         filter_ms,
                         transforms_ms,
                         build_loop_ms,
