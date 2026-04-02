@@ -614,10 +614,39 @@ def _transform_row_to_dict(t):
 def get_transforms_by_hex(output_id):
     """
     Return dict of hex (uppercase) -> transform dict for all transforms of this output.
-    Used to avoid N per-aircraft DB lookups when pushing large numbers of markers.
+    Prefer get_transforms_for_aircraft for CoT push (loads only rows for current aircraft hexes).
     """
     from models import CotTransformModel
     rows = CotTransformModel.get_all(output_id)
+    out = {}
+    for r in rows:
+        hex_val = (r.get("hex") or "").strip().upper()
+        if hex_val:
+            out[hex_val] = _transform_row_to_dict(r)
+    return out
+
+
+def get_transforms_for_aircraft(output_id, aircraft_list):
+    """
+    Load COTProxy transforms only for ICAO hexes present in aircraft_list (batched IN queries).
+    Same dict shape as get_transforms_by_hex; duplicate DB hex rows: last row wins (matches full scan).
+    """
+    if not aircraft_list:
+        return {}
+    seen = set()
+    hex_codes = []
+    for ac in aircraft_list:
+        if not isinstance(ac, dict):
+            continue
+        h = (ac.get("hex") or "").strip().upper()
+        if h and h not in seen:
+            seen.add(h)
+            hex_codes.append(h)
+    if not hex_codes:
+        return {}
+    from models import CotTransformModel
+
+    rows = CotTransformModel.get_for_hexes(output_id, hex_codes)
     out = {}
     for r in rows:
         hex_val = (r.get("hex") or "").strip().upper()
@@ -1009,8 +1038,8 @@ def _run_cot_sender_cycle_impl(requests):
         aircraft = filter_aircraft_for_output(with_pos, config)
         filter_ms = _phase_ms(t0, time.perf_counter())
         t0 = time.perf_counter()
-        # One DB query for all transforms when use_cotproxy (avoids N lookups for large marker counts)
-        transforms_by_hex = get_transforms_by_hex(output_id) if use_cotproxy else {}
+        # Transforms only for hexes in this cycle's filtered aircraft (batched IN); avoids full-table scans.
+        transforms_by_hex = get_transforms_for_aircraft(output_id, aircraft) if use_cotproxy else {}
         transforms_ms = _phase_ms(t0, time.perf_counter())
         now = _cot_time()
         stale_dt = datetime.now(timezone.utc).timestamp() + stale_seconds

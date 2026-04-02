@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.331",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT push: load COTProxy transforms with CotTransformModel.get_for_hexes (batched IN on current aircraft hexes) instead of full get_all per output — same behavior, far less I/O for large transform tables."
+    ]
+  },
+  {
     "version": "1.0.330",
     "date": "2026-04-01",
     "notes": [

@@ -1504,6 +1504,48 @@ class CotTransformModel:
         conn.close()
         return [dict(r) for r in rows]
 
+    # Max hex placeholders per query (output_id + N vars; stay under SQLite default 999 variable limit).
+    _COT_TRANSFORMS_HEX_IN_CHUNK = 400
+
+    @staticmethod
+    def get_for_hexes(output_id: int, hex_codes) -> list:
+        """
+        Return transform rows for output_id whose hex (case-insensitive, trimmed) matches any
+        value in hex_codes. Batches IN clauses for large sets. Empty hex_codes returns [].
+        """
+        if not hex_codes:
+            return []
+        seen = set()
+        norm: list[str] = []
+        for h in hex_codes:
+            if h is None:
+                continue
+            u = str(h).strip().upper()
+            if u and u not in seen:
+                seen.add(u)
+                norm.append(u)
+        if not norm:
+            return []
+        cols = (
+            "id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, created_at"
+        )
+        chunk = CotTransformModel._COT_TRANSFORMS_HEX_IN_CHUNK
+        conn = get_db()
+        try:
+            out_rows = []
+            for i in range(0, len(norm), chunk):
+                part = norm[i : i + chunk]
+                ph = ",".join("?" * len(part))
+                sql = (
+                    f"SELECT {cols} FROM cot_transforms "
+                    f"WHERE output_id = ? AND UPPER(TRIM(hex)) IN ({ph})"
+                )
+                rows = conn.execute(sql, (output_id, *part)).fetchall()
+                out_rows.extend(rows)
+            return [dict(r) for r in out_rows]
+        finally:
+            conn.close()
+
     @staticmethod
     def _like_escape(s: str) -> str:
         """Escape % and _ for use in LIKE with ESCAPE '\\'."""
