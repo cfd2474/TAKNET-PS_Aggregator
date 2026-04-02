@@ -957,6 +957,14 @@ def _read_env_bool(key, default=False):
     return default
 
 
+def _read_env_truthy(key, default=False):
+    """True when .env value is 1/true/yes/on (case-insensitive); false when unset or other."""
+    v = (_read_env_value(key, "") or "").strip().lower()
+    if not v:
+        return default
+    return v in ("1", "true", "yes", "on")
+
+
 def _read_env_value(key, default=""):
     """Read a key from the host .env and return the raw value (stripping surrounding quotes)."""
     env_path = os.path.join(INSTALL_DIR, ".env")
@@ -1089,7 +1097,7 @@ def set_mail_settings():
     })
 
 
-# ── CoT send chunk size (Config → Services) ─────────────────────────────────
+# ── CoT push (Config → Services): chunk size + XML template toggle ───────────
 
 def _restart_dashboard_background():
     """Apply .env changes that affect the dashboard container environment."""
@@ -1099,47 +1107,63 @@ def _restart_dashboard_background():
         print(f"[api] Background restart taknet-dashboard: {e}")
 
 
-@bp.route("/settings/cot-send-chunk", methods=["GET"])
+@bp.route("/settings/cot-push", methods=["GET"])
 @admin_required
-def get_cot_send_chunk_settings():
-    """COT_SEND_CHUNK_MESSAGES from host .env and effective value in this process."""
-    raw = (_read_env_value("COT_SEND_CHUNK_MESSAGES", "") or "").strip()
-    from cot_pipeline import _cot_send_chunk_message_count
+def get_cot_push_settings():
+    """COT_SEND_CHUNK_MESSAGES and COT_XML_USE_TEMPLATE from host .env plus effective runtime values."""
+    from cot_pipeline import _cot_send_chunk_message_count, _cot_xml_use_template
 
-    effective = _cot_send_chunk_message_count()
+    raw_chunk = (_read_env_value("COT_SEND_CHUNK_MESSAGES", "") or "").strip()
+    effective_chunk = _cot_send_chunk_message_count()
     try:
-        parsed = int(raw) if raw else None
+        parsed = int(raw_chunk) if raw_chunk else None
     except ValueError:
         parsed = None
     if parsed is not None and 1 <= parsed <= 5000:
-        input_value = parsed
+        chunk_val = parsed
     else:
-        input_value = effective
+        chunk_val = effective_chunk
+    raw_tpl = (_read_env_value("COT_XML_USE_TEMPLATE", "") or "").strip()
     return jsonify({
-        "chunk_messages": input_value,
-        "effective": effective,
-        "from_env_file": bool(raw),
+        "chunk_messages": chunk_val,
+        "effective_chunk": effective_chunk,
+        "chunk_from_env_file": bool(raw_chunk),
+        "use_template": _read_env_truthy("COT_XML_USE_TEMPLATE", False),
+        "effective_template": _cot_xml_use_template(),
+        "template_from_env_file": bool(raw_tpl),
     })
 
 
-@bp.route("/settings/cot-send-chunk", methods=["POST"])
+@bp.route("/settings/cot-push", methods=["POST"])
 @admin_required
-def set_cot_send_chunk_settings():
-    """Persist COT_SEND_CHUNK_MESSAGES (1–5000) to .env; restart dashboard in background."""
+def set_cot_push_settings():
+    """Persist CoT-related .env keys; restart dashboard once when anything changes."""
     data = request.get_json() or {}
-    raw = data.get("chunk_messages", data.get("cot_send_chunk_messages"))
-    try:
-        n = int(raw)
-    except (TypeError, ValueError):
-        return jsonify({"success": False, "error": "chunk_messages must be an integer between 1 and 5000"}), 400
-    n = max(1, min(5000, n))
-    _persist_env_var("COT_SEND_CHUNK_MESSAGES", str(n))
+    did = False
+    if "chunk_messages" in data and data.get("chunk_messages") is not None:
+        raw = data.get("chunk_messages", data.get("cot_send_chunk_messages"))
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "chunk_messages must be an integer between 1 and 5000"}), 400
+        n = max(1, min(5000, n))
+        _persist_env_var("COT_SEND_CHUNK_MESSAGES", str(n))
+        did = True
+    if "use_template" in data:
+        raw = data.get("use_template", data.get("cot_xml_use_template"))
+        if isinstance(raw, str):
+            use = raw.strip().lower() in ("1", "true", "yes", "on")
+        else:
+            use = bool(raw)
+        _persist_env_var("COT_XML_USE_TEMPLATE", "true" if use else "false")
+        did = True
+    if not did:
+        return jsonify({"success": False, "error": "Provide chunk_messages and/or use_template"}), 400
     thread = threading.Thread(target=_restart_dashboard_background, daemon=True)
     thread.start()
     return jsonify({
         "success": True,
-        "chunk_messages": n,
-        "message": "Saved. Dashboard is restarting to apply CoT send chunk size.",
+        "message": "Saved. Dashboard is restarting to apply CoT settings.",
     })
 
 

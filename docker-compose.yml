@@ -164,6 +164,7 @@ services:
       - AIRCRAFT_JSON_URL=${AIRCRAFT_JSON_URL:-http://aircraft-merger:8090/data/aircraft.json}
       - COT_PHASE_TIMING=${COT_PHASE_TIMING:-}
       - COT_SEND_CHUNK_MESSAGES=${COT_SEND_CHUNK_MESSAGES:-}
+      - COT_XML_USE_TEMPLATE=${COT_XML_USE_TEMPLATE:-}
       - ADSBHUB_STATUS_PATH=/app/adsbhub-status
       - TUNNEL_SERVICE_URL=http://tunnel:5001
     volumes:

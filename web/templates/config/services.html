@@ -81,20 +81,27 @@
     </div>
 </div>
 
-<!-- CoT push (TLS send chunk size) -->
+<!-- CoT push (TLS chunk size + optional fast XML builder) -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
         <div>
             <h3>CoT push</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">Max CoT XML messages per TLS <code>sendall</code> (default 200, range 1–5000). Larger payloads split across multiple writes without changing wire format.</p>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">TLS send chunking and optional string-template CoT XML (same semantics as the default builder; can lower CPU on large feeds). One save updates <code>.env</code> and restarts the dashboard once.</p>
         </div>
-        <button class="btn btn-primary" id="cot-chunk-save-btn" onclick="saveCotSendChunk()" style="white-space:nowrap;">Save</button>
+        <button class="btn btn-primary" id="cot-push-save-btn" onclick="saveCotPushSettings()" style="white-space:nowrap;">Save</button>
     </div>
     <div style="padding:0 20px 20px;">
         <label for="cot-send-chunk-messages" style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Messages per send (<code>COT_SEND_CHUNK_MESSAGES</code>)</label>
         <input type="number" id="cot-send-chunk-messages" class="form-control" min="1" max="5000" step="1"
                style="max-width:160px;font-family:monospace;font-size:14px;" autocomplete="off">
-        <p id="cot-chunk-msg" style="font-size:12px;color:var(--text-muted);margin-top:10px;margin-bottom:0;"></p>
+        <div style="margin-top:14px;">
+            <label class="toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="cot-xml-use-template" class="toggle">
+                <span>Fast XML template builder (<code>COT_XML_USE_TEMPLATE</code>)</span>
+            </label>
+            <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0 28px;">Off = ElementTree (default). On = same wire format; COTProxy transforms, remarks, icons, and video URLs are supported.</p>
+        </div>
+        <p id="cot-push-msg" style="font-size:12px;color:var(--text-muted);margin-top:12px;margin-bottom:0;"></p>
     </div>
 </div>
 
@@ -341,37 +348,40 @@ async function saveResendMail() {
     }
 }
 
-async function loadCotSendChunkSettings() {
-    const msgEl = document.getElementById('cot-chunk-msg');
+async function loadCotPushSettings() {
+    const msgEl = document.getElementById('cot-push-msg');
     const inp = document.getElementById('cot-send-chunk-messages');
+    const tpl = document.getElementById('cot-xml-use-template');
     try {
-        const r = await fetch('/api/settings/cot-send-chunk');
+        const r = await fetch('/api/settings/cot-push');
         const d = await r.json();
         inp.value = String(d.chunk_messages != null ? d.chunk_messages : 200);
+        tpl.checked = !!d.use_template;
         msgEl.textContent = '';
     } catch (e) {
-        msgEl.textContent = 'Could not load CoT send chunk settings.';
+        msgEl.textContent = 'Could not load CoT push settings.';
     }
 }
 
-async function saveCotSendChunk() {
-    const btn = document.getElementById('cot-chunk-save-btn');
-    const msgEl = document.getElementById('cot-chunk-msg');
+async function saveCotPushSettings() {
+    const btn = document.getElementById('cot-push-save-btn');
+    const msgEl = document.getElementById('cot-push-msg');
     const raw = document.getElementById('cot-send-chunk-messages').value.trim();
     const n = parseInt(raw, 10);
     if (!Number.isFinite(n) || n < 1 || n > 5000) {
-        msgEl.textContent = 'Enter an integer from 1 to 5000.';
+        msgEl.textContent = 'Enter an integer from 1 to 5000 for messages per send.';
         msgEl.style.color = 'var(--red)';
         return;
     }
+    const useTemplate = document.getElementById('cot-xml-use-template').checked;
     btn.disabled = true;
     msgEl.textContent = 'Saving and restarting dashboard...';
     msgEl.style.color = 'var(--accent)';
     try {
-        const r = await fetch('/api/settings/cot-send-chunk', {
+        const r = await fetch('/api/settings/cot-push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chunk_messages: n }),
+            body: JSON.stringify({ chunk_messages: n, use_template: useTemplate }),
         });
         const d = await r.json();
         if (d.success) {
@@ -516,7 +526,7 @@ document.getElementById('logs-modal').addEventListener('click', function(e) {
 
 loadAdsbhubSettings();
 loadResendMailSettings();
-loadCotSendChunkSettings();
+loadCotPushSettings();
 loadContainers();
 setInterval(loadContainers, 30000);
 </script>

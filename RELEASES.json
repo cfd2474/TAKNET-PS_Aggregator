@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.334",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT XML: optional fast string-template builder gated by COT_XML_USE_TEMPLATE (shared payload with ElementTree; parity-tested). ElementTree path now assigns raw text/attributes so TAK receives correct single escaping for &, etc. Config → Services: one CoT card save for chunk size + template toggle; GET/POST /api/settings/cot-push (replaces /api/settings/cot-send-chunk); docker-compose passes COT_XML_USE_TEMPLATE."
+    ]
+  },
+  {
     "version": "1.0.333",
     "date": "2026-04-01",
     "notes": [

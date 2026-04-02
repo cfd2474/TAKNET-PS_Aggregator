@@ -14,6 +14,8 @@ See COT_PUSH_COMPLIANCE.md in the project root for full details.
 
 The dashboard runs a background job (run_cot_sender_cycle) that fetches aircraft, applies
 COTProxy transforms and pass_all filtering, builds CoT XML, and pushes to each configured output.
+Optional fast path: COT_XML_USE_TEMPLATE (1/true/yes/on) uses a string template with the same
+payload logic as ElementTree; toggle from Config → Services (COT push).
 
 Optional phase timing: set COT_PHASE_TIMING in the environment for gunicorn logs, or enable
 "Record timings on this page" on Config → System Health (persists in settings); lines buffer
@@ -27,6 +29,8 @@ import os
 import socket
 import time
 from collections import deque
+from dataclasses import dataclass
+from typing import Optional
 import ssl
 import tempfile
 import threading
@@ -111,6 +115,12 @@ def _cot_send_chunk_message_count():
     except (TypeError, ValueError):
         n = 200
     return max(1, min(5000, n))
+
+
+def _cot_xml_use_template():
+    """When true, build CoT XML via string template (faster bulk); false uses ElementTree (default). Env COT_XML_USE_TEMPLATE."""
+    v = (os.environ.get("COT_XML_USE_TEMPLATE") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
 
 
 # Default CoT type for aircraft when no transform specifies one.
@@ -677,7 +687,29 @@ def _xml_escape(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def build_cot_xml(
+@dataclass
+class _CotXmlParts:
+    """Intermediate CoT event fields; shared by ElementTree and template serializers."""
+
+    cot_type: str
+    hex_code: str
+    now: str
+    stale: str
+    lat: str
+    lon: str
+    le: str
+    hae: str
+    ce: str
+    callsign_raw: str
+    reg_name_raw: Optional[str]
+    include_icon_in_cot: bool
+    icon_path_raw: Optional[str]
+    rem_text_raw: str
+    track_attrib: Optional[dict]
+    video_url_raw: Optional[str]
+
+
+def _compute_cot_xml_parts(
     aircraft,
     transform=None,
     include_icon_in_cot=True,
@@ -687,11 +719,8 @@ def build_cot_xml(
     distress_hostile: bool = False,
 ):
     """
-    Build a single CoT <event> XML string for one aircraft.
-    aircraft: dict with hex, lat, lon, optional alt_baro/altitude, optional flight (callsign).
-    transform: optional dict from get_transform_for_aircraft (callsign, type, cot, etc.).
-    include_icon_in_cot: when False, do not add <usericon> (avoids ATAK label sitting too high above icon).
-    now, stale: optional precomputed time strings (W3C dateTime UTC); if None, computed per call (slower for bulk).
+    Compute fields for one CoT event from aircraft + optional COTProxy transform.
+    Returns None when the aircraft cannot be encoded (missing hex or position).
     """
     hex_code = (aircraft.get("hex") or "").strip().upper()
     if not hex_code:
@@ -711,20 +740,15 @@ def build_cot_xml(
             cot_type = (transform["cot"] or "").strip() or _cot_type_from_aircraft(aircraft)
         if transform.get("callsign"):
             callsign = (transform["callsign"] or "").strip() or callsign
-    # TIS-B: force unknown air track (MIL-STD-2525: a-f-A-U)
     if is_tisb:
         cot_type = COT_TYPE_UNKNOWN_AIR
 
-    # Optional distress override: emergency / squawk 7700 => use hostile CoT variant.
-    # This intentionally overrides any COTProxy-provided `transform["cot"]` so distress aircraft are always hostile.
     if distress:
         base_type = _cot_type_from_aircraft(aircraft)
-        # If base type is unknown, keep it as-is (hostile conversion is not meaningful there).
         if base_type != COT_TYPE_UNKNOWN_AIR:
             cot_type = _cot_type_hostile_variant(base_type)
         else:
             cot_type = base_type
-        # Also mark the callsign in TAK/clients for rapid identification.
         callsign = "*ALERT* - " + (callsign or "")
 
     if now is None:
@@ -736,39 +760,18 @@ def build_cot_xml(
     alt_ft = _parse_float(aircraft.get("alt_baro") or aircraft.get("altitude"))
     hae_m = (alt_ft * 0.3048) if alt_ft is not None else 0.0
     hae = str(hae_m)
-    # le = linear error (vertical accuracy in meters); ce = circular error (horizontal). Use 50m when we have alt, 9999999 for unknown (PyTAK/node-cot/TAK).
     le = "50" if alt_ft is not None else "9999999.0"
     ce = "10"
 
-    root = ET.Element("event", attrib={
-        "version": "2.0",
-        "type": cot_type,
-        "uid": hex_code,
-        "how": "m-g",
-        "time": now,
-        "start": now,
-        "stale": stale,
-    })
-    ET.SubElement(root, "point", attrib={
-        "lat": str(lat),
-        "lon": str(lon),
-        "le": le,
-        "hae": hae,
-        "ce": ce,
-    })
-    detail = ET.SubElement(root, "detail")
-    # COTProxy/compatibility: some clients read detail@callsign as well as contact@callsign
-    detail.set("callsign", _xml_escape(callsign)[:128])
-    contact_attrib = {"callsign": _xml_escape(callsign)[:128]}
     reg = (transform or {}).get("reg") if transform else None
-    if reg and isinstance(reg, str) and reg.strip():
-        contact_attrib["name"] = _xml_escape(reg.strip())[:128]
-    ET.SubElement(detail, "contact", attrib=contact_attrib)
+    reg_name_raw = reg.strip() if reg and isinstance(reg, str) and reg.strip() else None
+
+    icon_path_raw = None
     if include_icon_in_cot:
-        icon_path = (transform or {}).get("icon")
+        icon_path = (transform or {}).get("icon") if transform else None
         if icon_path and isinstance(icon_path, str) and icon_path.strip():
-            ET.SubElement(detail, "usericon", attrib={"iconsetpath": _xml_escape(icon_path.strip())})
-    # Remarks: always include source (taknet-ps, feed type), CoT-Proxy when transformed, TIS-B squawk when TIS-B, then transform text or ADS-B info
+            icon_path_raw = icon_path.strip()
+
     feed_type = "ADSBHub" if (aircraft.get("source") or "").strip().lower() == "adsbhub" else "direct feed"
     rem_parts = ["taknet-ps", feed_type, f"Hex: {hex_code}"]
     if distress_desc:
@@ -790,37 +793,173 @@ def build_cot_xml(
             adsb_parts.append("Category: %s" % str(category).strip()[:32])
         if adsb_parts:
             rem_parts.append(" | ".join(adsb_parts))
-    rem_text = " | ".join(rem_parts)
-    if rem_text:
-        rem_el = ET.SubElement(detail, "remarks")
-        rem_el.text = _xml_escape(rem_text)[:2048]
-    # Track (speed/course/slope) from aircraft when available — standard CoT detail, ATAK TrackDetailHandler
+    rem_text_raw = " | ".join(rem_parts)
+
+    track_attrib = None
     track_deg = _parse_float(aircraft.get("track"))
     gs_kts = _parse_float(aircraft.get("gs"))
-    baro_rate = _parse_float(aircraft.get("baro_rate"))  # ft/min
+    baro_rate = _parse_float(aircraft.get("baro_rate"))
     if track_deg is not None or gs_kts is not None or baro_rate is not None:
-        track_attrib = {}
+        ta = {}
         if track_deg is not None:
-            track_attrib["course"] = str(track_deg)
+            ta["course"] = str(track_deg)
         if gs_kts is not None:
-            track_attrib["speed"] = str(gs_kts)
-        # Slope (climb/descent angle in degrees) when we have baro_rate and gs — adsbcot-style
+            ta["speed"] = str(gs_kts)
         if baro_rate is not None and gs_kts is not None and gs_kts > 0:
             try:
                 gs_ft_min = gs_kts * FT_PER_MIN_PER_KNOT
                 slope_deg = math.degrees(math.atan2(baro_rate, gs_ft_min))
-                track_attrib["slope"] = "%.2f" % slope_deg
+                ta["slope"] = "%.2f" % slope_deg
             except (ValueError, TypeError, ZeroDivisionError):
                 pass
-        if track_attrib:
-            ET.SubElement(detail, "track", attrib=track_attrib)
-    # Video (COTProxy parity): __video as child of event root with url attribute
+        if ta:
+            track_attrib = ta
+
+    video_url_raw = None
     video_url = (transform or {}).get("video") if transform else None
     if video_url is not None and isinstance(video_url, str) and video_url.strip():
+        video_url_raw = video_url.strip()
+
+    return _CotXmlParts(
+        cot_type=cot_type,
+        hex_code=hex_code,
+        now=now,
+        stale=stale,
+        lat=str(lat),
+        lon=str(lon),
+        le=le,
+        hae=hae,
+        ce=ce,
+        callsign_raw=callsign,
+        reg_name_raw=reg_name_raw,
+        include_icon_in_cot=include_icon_in_cot,
+        icon_path_raw=icon_path_raw,
+        rem_text_raw=rem_text_raw,
+        track_attrib=track_attrib,
+        video_url_raw=video_url_raw,
+    )
+
+
+def _serialize_cot_xml_et(parts: _CotXmlParts) -> str:
+    """Build CoT XML using ElementTree (must match _serialize_cot_xml_template byte-for-byte)."""
+    root = ET.Element(
+        "event",
+        attrib={
+            "version": "2.0",
+            "type": parts.cot_type,
+            "uid": parts.hex_code,
+            "how": "m-g",
+            "time": parts.now,
+            "start": parts.now,
+            "stale": parts.stale,
+        },
+    )
+    ET.SubElement(
+        root,
+        "point",
+        attrib={
+            "lat": parts.lat,
+            "lon": parts.lon,
+            "le": parts.le,
+            "hae": parts.hae,
+            "ce": parts.ce,
+        },
+    )
+    detail = ET.SubElement(root, "detail")
+    cs = parts.callsign_raw[:128]
+    detail.set("callsign", cs)
+    contact_attrib = {"callsign": cs}
+    if parts.reg_name_raw:
+        contact_attrib["name"] = parts.reg_name_raw[:128]
+    ET.SubElement(detail, "contact", attrib=contact_attrib)
+    if parts.include_icon_in_cot and parts.icon_path_raw:
+        ET.SubElement(detail, "usericon", attrib={"iconsetpath": parts.icon_path_raw})
+    if parts.rem_text_raw:
+        rem_el = ET.SubElement(detail, "remarks")
+        rem_el.text = parts.rem_text_raw[:2048]
+    if parts.track_attrib:
+        ET.SubElement(detail, "track", attrib=parts.track_attrib)
+    if parts.video_url_raw:
         video_el = ET.Element("__video")
-        video_el.set("url", _xml_escape(video_url.strip())[:2048])
+        video_el.set("url", parts.video_url_raw[:2048])
         root.append(video_el)
     return ET.tostring(root, encoding="unicode", default_namespace=None)
+
+
+def _serialize_cot_xml_template(parts: _CotXmlParts) -> str:
+    """Build the same CoT XML as _serialize_cot_xml_et without ElementTree (faster bulk builds)."""
+    aq = _xml_escape
+    cs = aq(parts.callsign_raw[:128])
+    chunks = [
+        "<event ",
+        f'version="{aq("2.0")}" ',
+        f'type="{aq(parts.cot_type)}" ',
+        f'uid="{aq(parts.hex_code)}" ',
+        f'how="{aq("m-g")}" ',
+        f'time="{aq(parts.now)}" ',
+        f'start="{aq(parts.now)}" ',
+        f'stale="{aq(parts.stale)}">',
+        "<point ",
+        f'lat="{aq(parts.lat)}" ',
+        f'lon="{aq(parts.lon)}" ',
+        f'le="{aq(parts.le)}" ',
+        f'hae="{aq(parts.hae)}" ',
+        f'ce="{aq(parts.ce)}" />',
+        f'<detail callsign="{cs}">',
+        "<contact ",
+        f'callsign="{cs}"',
+    ]
+    if parts.reg_name_raw:
+        chunks.append(f' name="{aq(parts.reg_name_raw[:128])}"')
+    chunks.append(" />")
+    if parts.include_icon_in_cot and parts.icon_path_raw:
+        chunks.append(f'<usericon iconsetpath="{aq(parts.icon_path_raw)}" />')
+    if parts.rem_text_raw:
+        chunks.append("<remarks>")
+        chunks.append(aq(parts.rem_text_raw[:2048]))
+        chunks.append("</remarks>")
+    if parts.track_attrib:
+        chunks.append("<track")
+        for k, v in parts.track_attrib.items():
+            chunks.append(f' {k}="{aq(v)}"')
+        chunks.append(" />")
+    chunks.append("</detail>")
+    if parts.video_url_raw:
+        chunks.append(f'<__video url="{aq(parts.video_url_raw[:2048])}" />')
+    chunks.append("</event>")
+    return "".join(chunks)
+
+
+def build_cot_xml(
+    aircraft,
+    transform=None,
+    include_icon_in_cot=True,
+    now=None,
+    stale=None,
+    *,
+    distress_hostile: bool = False,
+):
+    """
+    Build a single CoT <event> XML string for one aircraft.
+    aircraft: dict with hex, lat, lon, optional alt_baro/altitude, optional flight (callsign).
+    transform: optional dict from get_transform_for_aircraft (callsign, type, cot, etc.).
+    include_icon_in_cot: when False, do not add <usericon> (avoids ATAK label sitting too high above icon).
+    now, stale: optional precomputed time strings (W3C dateTime UTC); if None, computed per call (slower for bulk).
+    When COT_XML_USE_TEMPLATE is set (1/true/yes/on), uses a string template instead of ElementTree.
+    """
+    parts = _compute_cot_xml_parts(
+        aircraft,
+        transform=transform,
+        include_icon_in_cot=include_icon_in_cot,
+        now=now,
+        stale=stale,
+        distress_hostile=distress_hostile,
+    )
+    if parts is None:
+        return None
+    if _cot_xml_use_template():
+        return _serialize_cot_xml_template(parts)
+    return _serialize_cot_xml_et(parts)
 
 
 def _state_key(ac):
