@@ -1186,10 +1186,6 @@ def _run_cot_sender_cycle_impl(requests):
         t0 = time.perf_counter()
         aircraft = filter_aircraft_for_output(with_pos, config)
         filter_ms = _phase_ms(t0, time.perf_counter())
-        t0 = time.perf_counter()
-        # Transforms only for hexes in this cycle's filtered aircraft (batched IN); avoids full-table scans.
-        transforms_by_hex = get_transforms_for_aircraft(output_id, aircraft) if use_cotproxy else {}
-        transforms_ms = _phase_ms(t0, time.perf_counter())
         now = _cot_time()
         stale_dt = datetime.now(timezone.utc).timestamp() + stale_seconds
         stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
@@ -1197,6 +1193,43 @@ def _run_cot_sender_cycle_impl(requests):
         last_sent = dict(_last_sent_state.get(output_id, {}))
         seen_hexes = set()
         to_send = []
+
+        # First pass: compute delta candidates without loading transforms yet.
+        # This lets us dramatically reduce transform DB work on outputs with tiny n_to_send
+        # but large n_filtered (e.g. id=79 in your timings).
+        state_by_hex = {}
+        delta_hexes = set()
+        cached_need_transform_hexes = set()
+        for ac in aircraft:
+            hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
+            if not hex_code:
+                continue
+            is_tisb = _is_tisb(ac)
+            state = _state_key(ac)
+            state_by_hex[hex_code] = state
+            if last_sent.get(hex_code) != state:
+                delta_hexes.add(hex_code)
+            # When pass_all is false, seen_hexes pruning depends on whether a transform exists.
+            # We only need transforms for cached (last_sent) hexes that are NOT TIS-B pass-only.
+            if not pass_all and hex_code in last_sent and not (pass_only_tisb and is_tisb):
+                cached_need_transform_hexes.add(hex_code)
+
+        # Load transforms only for:
+        # - delta-changed hexes (needed to preserve transform overrides in built XML), and
+        # - cached-but-not-TISB hexes (needed to preserve seen_hexes pruning semantics).
+        t0 = time.perf_counter()
+        if use_cotproxy:
+            query_hexes = delta_hexes | cached_need_transform_hexes
+            if query_hexes:
+                dummy_aircraft = [{"hex": h} for h in query_hexes]
+                transforms_by_hex = get_transforms_for_aircraft(output_id, dummy_aircraft)
+            else:
+                transforms_by_hex = {}
+        else:
+            transforms_by_hex = {}
+        transforms_ms = _phase_ms(t0, time.perf_counter())
+
+        # Second pass: inclusion logic + build/send.
         t0 = time.perf_counter()
         for ac in aircraft:
             hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
@@ -1207,7 +1240,10 @@ def _run_cot_sender_cycle_impl(requests):
             if not pass_all and not transform and not (pass_only_tisb and is_tisb):
                 continue
             seen_hexes.add(hex_code)
-            state = _state_key(ac)
+
+            state = state_by_hex.get(hex_code)
+            if state is None:
+                continue
             if last_sent.get(hex_code) == state:
                 continue
             try:

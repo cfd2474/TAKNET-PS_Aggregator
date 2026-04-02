@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.336",
+    "date": "2026-04-01",
+    "notes": [
+      "CoT sender performance: reduce COTProxy transform DB work by loading transforms only for delta-changed hexes plus cached-but-not-TISB hexes (preserves inclusion + seen_hexes pruning semantics). Should cut transforms_ms on outputs like id=79 (high n_filtered, low n_to_send)."
+    ]
+  },
+  {
     "version": "1.0.335",
     "date": "2026-04-01",
     "notes": [
