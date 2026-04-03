@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.342",
+    "date": "2026-04-03",
+    "notes": [
+      "Outputs: added a 'Show Category' toggle for ADSB Direct outputs (defaults off). When off, category and registration (r) fields are actively stripped from the outbound JSON stream to prevent downstream ATAK plugins from concatenating callsign fields (e.g., flight-flight-A1) and forcing clean marker labels."
+    ]
+  },
+  {
     "version": "1.0.341",
     "date": "2026-04-03",
     "notes": [

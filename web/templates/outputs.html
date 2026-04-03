@@ -228,41 +228,7 @@
                     </div>
                     <div id="api-key-detail-copy-msg" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
                 </div>
-                <div id="api-info-json-stream" style="background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-                    <strong style="color:var(--text-primary);">JSON Stream</strong> — External services call:<br>
-                    <code style="color:var(--green);font-size:12px;">GET /api/outputs/stream/&lt;key&gt;</code><br>
-                    Returns current aircraft.json from this aggregator.<br>
-                    <span style="font-size:12px;color:var(--text-muted);">airplanes.live-style private compatibility is also available at <code>/api/outputs/json/&lt;key&gt;/v2/...</code> (all, hex, callsign, reg, type, squawk, mil, ladd, pia, point, health).</span>
-                </div>
-                <div id="api-info-json-range" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-                    <strong style="color:var(--text-primary);">JSON Range API</strong> — Call with center point and radius in the URL. Key in query or header.<br>
-                    <code style="color:var(--green);font-size:12px;">GET /api/outputs/range/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;?key=&lt;key&gt;</code><br>
-                    Max radius 250 nm. Respects &quot;Include Network ADSB Traffic&quot; below.<br>
-                    <span style="font-size:12px;color:var(--text-muted);">airplanes.live-style private compatibility is also available at <code>/api/outputs/json/&lt;key&gt;/v2/...</code>.</span>
-                </div>
-                <div id="api-info-adsb-direct" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-                    <strong style="color:var(--text-primary);">ADSB Direct</strong> — Key is embedded in URL path; query by center point and radius.<br>
-                    <code style="color:var(--green);font-size:12px;">GET /api/outputs/direct/&lt;key&gt;/point</code><br>
-                    Plugin appends center/range path values. Respects Include Network Traffic and ADSB Direct altitude thresholds.
-                </div>
-                <div id="adsb-direct-url-wrap" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-                    <strong style="color:var(--text-primary);">ADSB Direct URL</strong><br>
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;">
-                        <code id="adsb-direct-url-val" style="color:var(--green);font-size:12px;word-break:break-all;"></code>
-                        <button type="button" class="btn btn-sm" id="adsb-direct-url-copy-btn" onclick="copyAdsbDirectUrl()" style="font-size:11px;padding:4px 8px;">Copy</button>
-                    </div>
-                    <div id="adsb-direct-url-copy-msg" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
-                    Base URL only; plugin appends values after <code>/point</code>.
-                </div>
-                <div id="api-info-beast" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-                    <strong style="color:var(--text-primary);">Beast Raw Listener</strong> — Clients connect to:<br>
-                    <code style="color:var(--green);font-size:12px;">TCP port 30005</code><br>
-                    Send key as first line (<code>key\n</code>), then receive beast stream.
-                    Multiple simultaneous connections supported.
-                </div>
-                <div id="api-info-cot" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-                    <strong style="color:var(--text-primary);">CoT output</strong> — Aircraft are sent as Cursor on Target. Use push mode to send to a TAK Server or multicast. When COTProxy is enabled, configure transforms per aircraft (hex) on the COTProxy config page.
-                </div>
+                <div id="api-detailed-instructions" style="background:var(--bg-secondary);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;line-height:1.45;word-break:break-word;"></div>
             </div>
 
             <!-- Data filters: apply to JSON, Beast Raw, and CoT -->
@@ -278,6 +244,13 @@
                 </div>
 
                 <div id="adsb-direct-alt-section" class="form-group" style="display:none;margin-bottom:14px;">
+                    <div style="margin-bottom:12px;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="checkbox" id="adsb-direct-show-category">
+                            <span>Show Category</span>
+                        </label>
+                        <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Category identifies an aircraft's wake vortex hazard and performance characteristics.</p>
+                    </div>
                     <label style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;display:block;">ADSB Direct altitude thresholds (feet MSL)</label>
                     <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px;">Optional: leave blank to disable min/max altitude filtering.</p>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:320px;">
@@ -415,6 +388,7 @@ function applyFilterConfigToPayload(config, errEl) {
         }
         config.direct_alt_min_ft = minVal;
         config.direct_alt_max_ft = maxVal;
+        config.direct_show_category = document.getElementById('adsb-direct-show-category').checked;
         config.range_api = false;
         return true;
     }
@@ -656,10 +630,9 @@ function cotProtocolChange() {
 function onJsonModeChange() {
     const jsonMode = document.getElementById('modal-json-mode').value;
     const isRangeApi = jsonMode === 'range_api';
-    document.getElementById('api-info-json-stream').style.display = isRangeApi ? 'none' : 'block';
-    document.getElementById('api-info-json-range').style.display = isRangeApi ? 'block' : 'none';
     document.getElementById('filter-range-section').style.display = isRangeApi ? 'none' : 'block';
     document.getElementById('filter-elevation-section').style.display = isRangeApi ? 'none' : 'block';
+    updateApiDetailedInstructions(window._outputModalOutput);
 }
 
 function onTypeChange() {
@@ -682,11 +655,6 @@ function onTypeChange() {
         }
     }
     document.getElementById('json-mode-group').style.display = isJson ? 'block' : 'none';
-    document.getElementById('api-info-json-stream').style.display = (isJson && document.getElementById('modal-json-mode').value !== 'range_api') ? 'block' : 'none';
-    document.getElementById('api-info-json-range').style.display = (isJson && document.getElementById('modal-json-mode').value === 'range_api') ? 'block' : 'none';
-    document.getElementById('api-info-adsb-direct').style.display = isAdsbDirect ? 'block' : 'none';
-    document.getElementById('api-info-beast').style.display = (type === 'beast_raw') ? 'block' : 'none';
-    document.getElementById('api-info-cot').style.display    = isCot ? 'block' : 'none';
     document.getElementById('cot-options').style.display     = isCot ? 'block' : 'none';
     const isRangeApi = isJson && document.getElementById('modal-json-mode').value === 'range_api';
     document.getElementById('adsb-direct-alt-section').style.display = isAdsbDirect ? 'block' : 'none';
@@ -703,6 +671,7 @@ function onTypeChange() {
         (type === 'beast_raw' || type === 'cot' || isAdsbDirect) ? 'none' : 'block';
     if (isCot && mode === 'push' && !isAdsbDirect) cotProtocolChange();
     else document.getElementById('cot-certs-section').style.display = 'none';
+    updateApiDetailedInstructions(window._outputModalOutput);
     onModeChange();
 }
 
@@ -931,6 +900,7 @@ function openCreateModal() {
     document.getElementById('filter-include-network-adsb').checked = true;
     document.getElementById('adsb-direct-min-alt').value = '';
     document.getElementById('adsb-direct-max-alt').value = '';
+    document.getElementById('adsb-direct-show-category').checked = false;
     document.getElementById('filter-range-enable').checked = false;
     document.getElementById('filter-range-lat').value = '';
     document.getElementById('filter-range-lon').value = '';
@@ -984,6 +954,7 @@ async function openEditModal(id) {
     document.getElementById('filter-include-network-adsb').checked = cfg.include_network_adsb !== false;
     document.getElementById('adsb-direct-min-alt').value = cfg.direct_alt_min_ft != null ? String(cfg.direct_alt_min_ft) : '';
     document.getElementById('adsb-direct-max-alt').value = cfg.direct_alt_max_ft != null ? String(cfg.direct_alt_max_ft) : '';
+    document.getElementById('adsb-direct-show-category').checked = !!cfg.direct_show_category;
     document.getElementById('filter-range-enable').checked = !!cfg.range_limit_enabled;
     document.getElementById('filter-range-lat').value = cfg.range_limit_lat != null ? String(cfg.range_limit_lat) : '';
     document.getElementById('filter-range-lon').value = cfg.range_limit_lon != null ? String(cfg.range_limit_lon) : '';
@@ -1299,12 +1270,35 @@ async function regenKey(id) {
     }
 }
 
-function showKeyModal(key, outputType, extra) {
-    document.getElementById('key-display').textContent = key;
+function updateApiDetailedInstructions(outputObj) {
+    const type = document.getElementById('modal-type').value;
+    const jsonMode = document.getElementById('modal-json-mode').value;
+    let key = '&lt;key&gt;';
+    if (outputObj && outputObj.key_meta && outputObj.key_meta.key_display) {
+        key = outputObj.key_meta.key_display;
+    }
+    let html = '';
+    if (type !== 'cot') {
+        html = buildConnectionInstructionsHtml(type, jsonMode, key);
+    } else {
+        html = '<strong style="color:var(--text-primary);">CoT output</strong> — Aircraft are sent as Cursor on Target. Use push mode to send to a TAK Server or multicast. When COTProxy is enabled, configure transforms per aircraft (hex) on the COTProxy config page.';
+    }
+    const el = document.getElementById('api-detailed-instructions');
+    if (html && document.getElementById('modal-mode').value === 'api') {
+        el.innerHTML = html;
+        el.style.display = 'block';
+    } else if (type === 'cot') {
+        el.innerHTML = html;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+        el.innerHTML = '';
+    }
+}
 
-    let info = '';
+function buildConnectionInstructionsHtml(outputType, jsonMode, key) {
     if (outputType === 'beast_raw') {
-        info = `
+        return `
             <p style="margin:0 0 10px;"><strong>What this is:</strong> A live stream of raw ADS-B aircraft data in Beast format — the same format used by tools like tar1090, readsb, and most ADS-B decoders.</p>
             <p style="margin:0 0 6px;"><strong>How to connect:</strong></p>
             <ol style="margin:0 0 12px;padding-left:20px;line-height:1.8;">
@@ -1316,8 +1310,8 @@ function showKeyModal(key, outputType, extra) {
                 <li>If rejected (wrong key or already in use), the server responds with <code>REJECTED</code> and closes the connection</li>
             </ol>
             <p style="margin:0;font-size:12px;color:var(--text-muted);">⚠️ The key can only be used for one active connection at a time. If you need to reconnect, regenerate the key first.</p>`;
-    } else if (outputType === 'json' && extra && extra.range_api) {
-        info = `
+    } else if (outputType === 'json' && jsonMode === 'range_api') {
+        return `
             <p style="margin:0 0 10px;"><strong>What this is:</strong> JSON Range API — returns aircraft within a radius of a center point. Center and radius are in the URL; key in query or header.</p>
             <p style="margin:0 0 6px;"><strong>How to call it:</strong></p>
             <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">GET /api/outputs/range/point/&lt;lat&gt;/&lt;lon&gt;/&lt;radius_nm&gt;?key=${key}</code>
@@ -1327,13 +1321,13 @@ function showKeyModal(key, outputType, extra) {
             <p style="margin:0 0 6px;"><strong>airplanes.live-style compatibility base:</strong></p>
             <code style="display:block;margin:0;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">https://adsb.tak-solutions.com/api/outputs/json/${key}/v2/all</code>`;
     } else if (outputType === 'adsb_direct') {
-        info = `
+        return `
             <p style="margin:0 0 10px;"><strong>What this is:</strong> ADSB Direct endpoint with the key embedded in the URL path (unique per output config).</p>
             <p style="margin:0 0 6px;"><strong>How to call it:</strong></p>
             <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">GET /api/outputs/direct/${key}/point</code>
             <p style="margin:0;font-size:12px;color:var(--text-muted);">Base URL only; the ADSB Direct plugin appends center/range values after <code>/point</code>.</p>`;
     } else {
-        info = `
+        return `
             <p style="margin:0 0 10px;"><strong>What this is:</strong> A JSON endpoint that returns the current list of aircraft being tracked by this aggregator — the same data that feeds the live map.</p>
             <p style="margin:0 0 6px;"><strong>How to call it:</strong></p>
             <p style="margin:0 0 8px;">Make an HTTP GET request to this URL from your app or browser:</p>
@@ -1344,7 +1338,13 @@ function showKeyModal(key, outputType, extra) {
             <p style="margin:0 0 6px;"><strong>airplanes.live-style compatibility base:</strong></p>
             <code style="display:block;margin:0;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">https://adsb.tak-solutions.com/api/outputs/json/${key}/v2/all</code>`;
     }
-    document.getElementById('key-usage-info').innerHTML = info;
+}
+
+function showKeyModal(key, outputType, extra) {
+    let jsonMode = 'stream';
+    if (extra && extra.range_api) jsonMode = 'range_api';
+    document.getElementById('key-display').textContent = key;
+    document.getElementById('key-usage-info').innerHTML = buildConnectionInstructionsHtml(outputType, jsonMode, key);
     document.getElementById('key-modal').classList.add('show');
 }
 

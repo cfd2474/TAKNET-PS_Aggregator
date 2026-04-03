@@ -2167,6 +2167,8 @@ def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
 
     v = config.get("include_network_adsb", True)
     include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
+    v_cat = config.get("direct_show_category", False)
+    show_category = bool(v_cat) if not isinstance(v_cat, str) else (v_cat.strip().lower() not in ("false", "0", "no", ""))
     min_alt = _as_int_or_none(config.get("direct_alt_min_ft"))
     max_alt = _as_int_or_none(config.get("direct_alt_max_ft"))
     if min_alt is not None:
@@ -2203,7 +2205,13 @@ def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
                 if max_alt is not None and alt > max_alt:
                     continue
 
-            matched.append({**a, "_distance_nm": round(dist, 2)})
+            ac = {**a, "_distance_nm": round(dist, 2)}
+            ac.pop("r", None)
+            if not show_category:
+                ac.pop("category", None)
+                ac.pop("category_adsb", None)
+            
+            matched.append(ac)
 
         matched.sort(key=lambda x: x.get("_distance_nm", 9999))
         now_ts = data.get("now", time.time())
