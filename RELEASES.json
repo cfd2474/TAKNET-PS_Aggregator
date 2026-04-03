@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.341",
+    "date": "2026-04-03",
+    "notes": [
+      "CoT push TLS: only put outputs into 'TLS Paused' state on explicitly fatal TLS handshake errors (`ssl.SSLError`). Transient TCP connection errors or routing timeouts will clear and retry properly without requiring manual admin intervention via 'Test TLS connection'."
+    ]
+  },
+  {
     "version": "1.0.340",
     "date": "2026-04-03",
     "notes": [
