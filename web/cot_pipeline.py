@@ -1009,7 +1009,10 @@ def _state_key(ac):
 
 
 def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connect_timeout_sec=3):
-    """Create and return a connected socket (plain or TLS), or None on failure."""
+    """
+    Create and return a connected socket (plain or TLS), or None on failure.
+    Returns (sock, is_tls_error) tuple.
+    """
     sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1038,15 +1041,23 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connec
                     os.unlink(key_path)
                 except Exception:
                     pass
-        return sock
-    except Exception as e:
-        log.warning("CoT sender: %s — connect failed to %s:%s: %s", name, host, port, e)
+        return sock, False
+    except ssl.SSLError as e:
+        log.warning("CoT sender: %s — TLS handshake failed to %s:%s: %s", name, host, port, e)
         if sock:
             try:
                 sock.close()
             except Exception:
                 pass
-        return None
+        return None, True
+    except Exception as e:
+        log.warning("CoT sender: %s — TCP connect failed to %s:%s: %s", name, host, port, e)
+        if sock:
+            try:
+                sock.close()
+            except Exception:
+                pass
+        return None, False
 
 
 def drop_cot_persistent_socket(output_id):
@@ -1115,7 +1126,7 @@ def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, 
     cert_key = OutputCotCertModel.get_decrypted(output_id)
     if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
         return False, "Upload a client certificate and private key before testing."
-    sock = _connect_cot_socket(
+    sock, is_tls_error = _connect_cot_socket(
         "cot-tls-test",
         output_id,
         host,
@@ -1125,7 +1136,9 @@ def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, 
         connect_timeout_sec=connect_timeout_sec,
     )
     if sock is None:
-        return False, "Could not connect or complete TLS handshake (host, port, firewall, or certificate)."
+        if is_tls_error:
+            return False, "TLS handshake failed (invalid certificate, wrong protocol, or remote rejection)."
+        return False, "Could not connect to host:port (check network, firewall, or TAK server status)."
     try:
         sock.close()
     except Exception:
@@ -1376,9 +1389,10 @@ def _run_cot_sender_cycle_impl(requests):
         # Reuse persistent socket to avoid connect+TLS every cycle (saves 100–500ms+)
         sock = _persistent_sockets.get(output_id)
         connect_ms = 0.0
+        is_tls_error = False
         if sock is None:
             t0 = time.perf_counter()
-            sock = _connect_cot_socket(name, output_id, host, port, is_tls, cert_key)
+            sock, is_tls_error = _connect_cot_socket(name, output_id, host, port, is_tls, cert_key)
             connect_ms = _phase_ms(t0, time.perf_counter())
             if sock is not None:
                 _persistent_sockets[output_id] = sock
@@ -1399,7 +1413,8 @@ def _run_cot_sender_cycle_impl(requests):
                     ),
                     timing_gunicorn,
                 )
-            _cot_pause_tls_push(output_id, name, "connect failed")
+            if is_tls_error:
+                _cot_pause_tls_push(output_id, name, "TLS handshake failed")
             continue
         try:
             # Chunked send: complete messages only (space between XML events, trailing space per chunk).
