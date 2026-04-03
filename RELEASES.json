@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.340",
+    "date": "2026-04-03",
+    "notes": [
+      "CoT pipeline performance: pre-parse aircraft dictionary fields locally loop iteration once per cycle (instead of per-output), eliminating ~150,000 float conversions during delta/filter stages.",
+      "CoTProxy query: query for delta hexes natively without iterating via dummy dictionary generation."
+    ]
+  },
+  {
     "version": "1.0.339",
     "date": "2026-04-02",
     "notes": [

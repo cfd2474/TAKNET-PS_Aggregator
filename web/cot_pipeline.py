@@ -447,6 +447,8 @@ def filter_aircraft_for_output(aircraft_list, config):
 def _parse_float(v, default=None):
     if v is None:
         return default
+    if type(v) is float:
+        return v
     try:
         return float(v)
     except (TypeError, ValueError):
@@ -750,7 +752,7 @@ def _compute_cot_xml_parts(
     Compute fields for one CoT event from aircraft + optional COTProxy transform.
     Returns None when the aircraft cannot be encoded (missing hex or position).
     """
-    hex_code = (aircraft.get("hex") or "").strip().upper()
+    hex_code = aircraft.get("_norm_hex") or (aircraft.get("hex") or "").strip().upper()
     if not hex_code:
         return None
     lat = _parse_float(aircraft.get("lat"))
@@ -1182,7 +1184,25 @@ def _run_cot_sender_cycle_impl(requests):
             )
         return
     aircraft_raw = data.get("aircraft", [])
-    with_pos = [a for a in aircraft_raw if _parse_float(a.get("lat")) is not None and _parse_float(a.get("lon")) is not None]
+    
+    with_pos = []
+    for a in aircraft_raw:
+        if not isinstance(a, dict):
+            continue
+        lat = _parse_float(a.get("lat"))
+        lon = _parse_float(a.get("lon"))
+        if lat is None or lon is None:
+            continue
+        a["lat"] = lat
+        a["lon"] = lon
+        a["alt_baro"] = _parse_float(a.get("alt_baro") or a.get("altitude"))
+        a["track"] = _parse_float(a.get("track"))
+        a["gs"] = _parse_float(a.get("gs"))
+        a["baro_rate"] = _parse_float(a.get("baro_rate"))
+        a["_norm_hex"] = (a.get("hex") or "").strip().upper()
+        if a["_norm_hex"]:
+            with_pos.append(a)
+
     if not with_pos:
         log.debug("CoT sender: no aircraft with position (total %d)", len(aircraft_raw))
     if timing_emit:
@@ -1229,7 +1249,7 @@ def _run_cot_sender_cycle_impl(requests):
         delta_hexes = set()
         cached_need_transform_hexes = set()
         for ac in aircraft:
-            hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
+            hex_code = ac.get("_norm_hex") if isinstance(ac, dict) else ""
             if not hex_code:
                 continue
             is_tisb = _is_tisb(ac)
@@ -1249,8 +1269,13 @@ def _run_cot_sender_cycle_impl(requests):
         if use_cotproxy:
             query_hexes = delta_hexes | cached_need_transform_hexes
             if query_hexes:
-                dummy_aircraft = [{"hex": h} for h in query_hexes]
-                transforms_by_hex = get_transforms_for_aircraft(output_id, dummy_aircraft)
+                from models import CotTransformModel
+                rows = CotTransformModel.get_for_hexes(output_id, list(query_hexes))
+                transforms_by_hex = {}
+                for r in rows:
+                    hx = (r.get("hex") or "").strip().upper()
+                    if hx:
+                        transforms_by_hex[hx] = _transform_row_to_dict(r)
             else:
                 transforms_by_hex = {}
         else:
@@ -1260,7 +1285,7 @@ def _run_cot_sender_cycle_impl(requests):
         # Second pass: inclusion logic + build/send.
         t0 = time.perf_counter()
         for ac in aircraft:
-            hex_code = (ac.get("hex") or "").strip().upper() if isinstance(ac, dict) else ""
+            hex_code = ac.get("_norm_hex") if isinstance(ac, dict) else ""
             if not hex_code:
                 continue
             transform = transforms_by_hex.get(hex_code) if use_cotproxy else None
