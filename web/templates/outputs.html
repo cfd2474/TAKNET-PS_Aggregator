@@ -563,6 +563,11 @@ async function testCotTlsConnection() {
         } else {
             msg.textContent = d.error || 'Test failed';
             msg.style.color = 'var(--red)';
+            if (d.paused && window._outputModalCfg) {
+                window._outputModalCfg.cot_tls_paused = true;
+                updateCotTlsPausedBanner();
+                loadOutputs();
+            }
         }
     } catch (e) {
         if (msg) delete msg.dataset.sticky;

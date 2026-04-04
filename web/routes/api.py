@@ -1791,11 +1791,15 @@ def cot_test_tls(output_id):
         drop_cot_persistent_socket(output_id)
         return jsonify({"ok": True, "message": msg, "cot_url_saved": bool(override)})
     
-    if is_tls_error:
-        OutputModel.merge_config(output_id, {"cot_tls_paused": True})
-        drop_cot_persistent_socket(output_id)
+    import time
+    OutputModel.merge_config(output_id, {
+        "cot_tls_paused": True,
+        "cot_tls_fail_count": 0,
+        "cot_tls_last_check": time.time()
+    })
+    drop_cot_persistent_socket(output_id)
         
-    return jsonify({"ok": False, "error": msg}), 400
+    return jsonify({"ok": False, "error": msg, "paused": True}), 400
 
 
 @bp.route("/outputs/<int:output_id>/cot-transforms/import", methods=["POST"])
