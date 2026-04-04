@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.343",
+    "date": "2026-04-03",
+    "notes": [
+      "Backend: Fixed a logic bug where TLS connections with bad certificates failed to invoke the 'TLS Paused' safeguard when the TAK server drops the connection using TCP RST (ConnectionResetError/EOFError) rather than an explicit SSLError. Explicit socket layer timeouts and connection refusals are now properly routed to bypass the pause system to ensure compatibility with temporary server updates and reboots."
+    ]
+  },
+  {
     "version": "1.0.342",
     "date": "2026-04-03",
     "notes": [

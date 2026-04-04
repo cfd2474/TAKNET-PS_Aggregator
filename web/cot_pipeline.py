@@ -1019,37 +1019,14 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connec
         sock.settimeout(float(connect_timeout_sec))
         log.debug("CoT sender: %s — TCP connect to %s:%s", name, host, port)
         sock.connect((host, port))
-        if is_tls and cert_key:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:
-                cf.write(cert_key["cert_pem"])
-                cert_path = cf.name
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as kf:
-                kf.write(cert_key["key_pem"])
-                key_path = kf.name
-            try:
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-                context.load_cert_chain(cert_path, key_path)
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
-                sock = context.wrap_socket(sock, server_hostname=host)
-            finally:
-                try:
-                    os.unlink(cert_path)
-                except Exception:
-                    pass
-                try:
-                    os.unlink(key_path)
-                except Exception:
-                    pass
-        return sock, False
-    except ssl.SSLError as e:
-        log.warning("CoT sender: %s — TLS handshake failed to %s:%s: %s", name, host, port, e)
+    except (socket.timeout, TimeoutError, ConnectionRefusedError) as e:
+        log.warning("CoT sender: %s — TCP connect unreachable/timeout to %s:%s: %s", name, host, port, e)
         if sock:
             try:
                 sock.close()
             except Exception:
                 pass
-        return None, True
+        return None, False
     except Exception as e:
         log.warning("CoT sender: %s — TCP connect failed to %s:%s: %s", name, host, port, e)
         if sock:
@@ -1058,6 +1035,47 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connec
             except Exception:
                 pass
         return None, False
+
+    if is_tls and cert_key:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:
+            cf.write(cert_key["cert_pem"])
+            cert_path = cf.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as kf:
+            kf.write(cert_key["key_pem"])
+            key_path = kf.name
+        try:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.load_cert_chain(cert_path, key_path)
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            sock = context.wrap_socket(sock, server_hostname=host)
+        except (socket.timeout, TimeoutError) as e:
+            log.warning("CoT sender: %s — TLS handshake timed out (transient) to %s:%s: %s", name, host, port, e)
+            if sock:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+            return None, False
+        except Exception as e:
+            # Catch SSLError, SSL_ERROR_SYSCALL, ConnectionResetError, EOFError representing bad cert rejection/drop
+            log.warning("CoT sender: %s — TLS handshake failed/rejected to %s:%s: %s", name, host, port, e)
+            if sock:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+            return None, True
+        finally:
+            try:
+                os.unlink(cert_path)
+            except Exception:
+                pass
+            try:
+                os.unlink(key_path)
+            except Exception:
+                pass
+    return sock, False
 
 
 def drop_cot_persistent_socket(output_id):
