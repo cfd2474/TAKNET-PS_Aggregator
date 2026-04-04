@@ -1117,11 +1117,11 @@ def _cot_pause_tls_push(output_id, name, reason: str):
     )
 
 
-def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, *, connect_timeout_sec=8) -> tuple[bool, str]:
+def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, *, connect_timeout_sec=8) -> tuple[bool, str, bool]:
     """
     Verify TCP + TLS client handshake to the CoT endpoint using stored cert/key.
     cot_url_override: optional tls:// URL to test (e.g. unsaved form values); otherwise uses DB config.
-    Returns (success, message for UI).
+    Returns (success, message for UI, is_tls_error).
     """
     import json as _json
 
@@ -1131,7 +1131,7 @@ def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, 
     row = conn.execute("SELECT config FROM outputs WHERE id = ?", (output_id,)).fetchone()
     conn.close()
     if not row:
-        return False, "Output not found"
+        return False, "Output not found", False
     try:
         cfg = _json.loads(row["config"] or "{}")
     except (TypeError, ValueError):
@@ -1139,11 +1139,11 @@ def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, 
     cot_url = (cot_url_override or cfg.get("cot_url") or "").strip()
     parsed = _parse_tls_cot_endpoint(cot_url)
     if not parsed:
-        return False, "Set a valid tls:// host:port (TLS only)."
+        return False, "Set a valid tls:// host:port (TLS only).", False
     host, port = parsed
     cert_key = OutputCotCertModel.get_decrypted(output_id)
     if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
-        return False, "Upload a client certificate and private key before testing."
+        return False, "Upload a client certificate and private key before testing.", False
     sock, is_tls_error = _connect_cot_socket(
         "cot-tls-test",
         output_id,
@@ -1155,13 +1155,13 @@ def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, 
     )
     if sock is None:
         if is_tls_error:
-            return False, "TLS handshake failed (invalid certificate, wrong protocol, or remote rejection)."
-        return False, "Could not connect to host:port (check network, firewall, or TAK server status)."
+            return False, "TLS handshake failed (invalid certificate, wrong protocol, or remote rejection).", True
+        return False, "Could not connect to host:port (check network, firewall, or TAK server status).", False
     try:
         sock.close()
     except Exception:
         pass
-    return True, "TLS handshake succeeded."
+    return True, "TLS handshake succeeded.", False
 
 
 def run_cot_sender_cycle():

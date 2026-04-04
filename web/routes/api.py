@@ -1782,7 +1782,7 @@ def cot_test_tls(output_id):
         return jsonify({"error": "Not a CoT push output"}), 400
     body = request.get_json(silent=True) or {}
     override = (body.get("cot_url") or "").strip() or None
-    ok, msg = test_cot_tls_handshake(output_id, override)
+    ok, msg, is_tls_error = test_cot_tls_handshake(output_id, override)
     if ok:
         patches = {"cot_tls_paused": False}
         if override:
@@ -1790,6 +1790,11 @@ def cot_test_tls(output_id):
         OutputModel.merge_config(output_id, patches)
         drop_cot_persistent_socket(output_id)
         return jsonify({"ok": True, "message": msg, "cot_url_saved": bool(override)})
+    
+    if is_tls_error:
+        OutputModel.merge_config(output_id, {"cot_tls_paused": True})
+        drop_cot_persistent_socket(output_id)
+        
     return jsonify({"ok": False, "error": msg}), 400
 
 

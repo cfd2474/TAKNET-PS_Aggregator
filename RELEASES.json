@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.344",
+    "date": "2026-04-03",
+    "notes": [
+      "Backend API: Updated the manual 'Test TLS Connection' route. Previously, explicitly running the test and receiving a TLS Handshake failure would just alert the UI without proactively applying the 'TLS Paused' state to the config, requiring a user to wait for the background worker to cycle and pause it. Front-end API output tests that encounter bad certificates now proactively and immediately pause the output."
+    ]
+  },
+  {
     "version": "1.0.343",
     "date": "2026-04-03",
     "notes": [
