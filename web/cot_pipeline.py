@@ -344,8 +344,7 @@ def get_cot_push_outputs():
         cot_url = (cfg.get("cot_url") or "").strip()
         if not cot_url:
             continue
-        if cfg.get("cot_tls_paused") is True:
-            continue
+        is_paused = (cfg.get("cot_tls_paused") is True)
         result.append({
             "output_id": row["id"],
             "name": row["name"],
@@ -354,6 +353,7 @@ def get_cot_push_outputs():
             "use_cotproxy": True,
             "pass_all": bool(cfg.get("pass_all")),
             "config": cfg,
+            "paused": is_paused,
         })
     return result
 
@@ -1108,10 +1108,15 @@ def _cot_pause_tls_push(output_id, name, reason: str):
     if cfg.get("cot_tls_paused") is True:
         drop_cot_persistent_socket(output_id)
         return
-    OutputModel.merge_config(output_id, {"cot_tls_paused": True})
+    import time
+    OutputModel.merge_config(output_id, {
+        "cot_tls_paused": True, 
+        "cot_tls_fail_count": 0, 
+        "cot_tls_last_check": time.time()
+    })
     drop_cot_persistent_socket(output_id)
     log.warning(
-        "CoT sender: %s — TLS push paused (%s). Fix server, port, or certificates, then use Outputs → Test TLS connection.",
+        "CoT sender: %s — Connection paused (%s). System will auto-retry in 10 minutes, or you can use Outputs → Test TLS connection.",
         name,
         reason,
     )
@@ -1250,6 +1255,30 @@ def _run_cot_sender_cycle_impl(requests):
         use_cotproxy = out["use_cotproxy"]
         pass_all = out["pass_all"]
         config = out.get("config") or {}
+        is_paused = out.get("paused")
+        
+        if is_paused:
+            last_checked = config.get("cot_tls_last_check") or 0.0
+            if time.time() - last_checked > 600:
+                log.info("CoT sender: auto-rechecking paused output %s", name)
+                parsed = _parse_tls_cot_endpoint(cot_url)
+                if parsed:
+                    host, port = parsed
+                    from models import OutputCotCertModel, OutputModel
+                    cert_key = OutputCotCertModel.get_decrypted(output_id)
+                    sock, is_tls_error = _connect_cot_socket("auto-recheck", output_id, host, port, True, cert_key, connect_timeout_sec=5)
+                    if sock is not None:
+                        try:
+                            sock.close()
+                        except Exception:
+                            pass
+                        log.info("CoT sender: auto-recheck succeeded for %s! Unpausing.", name)
+                        OutputModel.merge_config(output_id, {"cot_tls_paused": False, "cot_tls_fail_count": 0, "cot_tls_last_check": 0})
+                        drop_cot_persistent_socket(output_id)
+                    else:
+                        OutputModel.merge_config(output_id, {"cot_tls_last_check": time.time()})
+            continue
+
         pass_only_tisb = bool(config.get("pass_only_tisb"))
         include_icon_in_cot = config.get("include_icon_in_cot", True)
         # Per-output stale seconds so TAK refreshes/expires markers sooner (e.g. 10–15 when pushing every 2s)
@@ -1363,6 +1392,10 @@ def _run_cot_sender_cycle_impl(requests):
                     % (name, output_id, len(aircraft), filter_ms, transforms_ms, build_loop_ms),
                     timing_gunicorn,
                 )
+            # clear basic failure streak on native no-send success cycle
+            if config.get("cot_tls_fail_count", 0) > 0:
+                from models import OutputModel
+                OutputModel.merge_config(output_id, {"cot_tls_fail_count": 0})
             continue
         parsed = _parse_tls_cot_endpoint(cot_url)
         if parsed is None:
@@ -1414,6 +1447,9 @@ def _run_cot_sender_cycle_impl(requests):
             connect_ms = _phase_ms(t0, time.perf_counter())
             if sock is not None:
                 _persistent_sockets[output_id] = sock
+                if config.get("cot_tls_fail_count", 0) > 0:
+                    from models import OutputModel
+                    OutputModel.merge_config(output_id, {"cot_tls_fail_count": 0})
         if sock is None:
             if timing_emit:
                 _cot_phase_timing_emit(
@@ -1433,11 +1469,19 @@ def _run_cot_sender_cycle_impl(requests):
                 )
             if is_tls_error:
                 _cot_pause_tls_push(output_id, name, "TLS handshake failed")
+            else:
+                fail_streak = config.get("cot_tls_fail_count", 0) + 1
+                from models import OutputModel
+                if fail_streak >= 3:
+                     _cot_pause_tls_push(output_id, name, "TCP timeout/drop limit reached")
+                else:
+                     OutputModel.merge_config(output_id, {"cot_tls_fail_count": fail_streak})
             continue
         try:
             # Chunked send: complete messages only (space between XML events, trailing space per chunk).
             # Reduces single giant sendall blocking and peak memory vs one ~MB buffer.
             chunk_n = _cot_send_chunk_message_count()
+
             send_timeout = max(60, 15 + len(to_send) // 60)
             sock.settimeout(send_timeout)
             t0 = time.perf_counter()

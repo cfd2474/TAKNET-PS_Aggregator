@@ -164,7 +164,7 @@
                     <input type="number" class="form-control" id="modal-cot-port" placeholder="8089" min="1" max="65535" step="1" style="max-width:120px;">
                 </div>
                 <div id="cot-tls-paused-banner" style="display:none;margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.12);border:1px solid var(--red);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.45;">
-                    <strong style="color:var(--red);">TLS push paused</strong> — the last TCP/TLS attempt failed. This output is skipped until you correct the server, port, or client certificate and run <strong>Test TLS connection</strong> successfully.
+                    <strong style="color:var(--red);">Connection paused</strong> — the connection was paused due to bad certificates or repetitive network timeouts. The system will auto-retry in the background every 10 minutes, or you can correct the host/port/cert and run <strong>Test TLS connection</strong> to skip the wait.
                 </div>
                 <div style="margin-top:12px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
                     <button type="button" class="btn btn-primary" id="cot-test-tls-btn" style="font-size:12px;">Test TLS connection</button>
@@ -836,7 +836,7 @@ async function loadOutputs() {
 
             html += '<tr>';
             const tlsPausedBadge = (o.output_type === 'cot' && o.mode === 'push' && cotTlsPaused)
-                ? ' <span class="badge badge-offline" style="font-size:10px;vertical-align:middle;" title="TLS handshake failed — open Edit and use Test TLS connection">TLS paused</span>'
+                ? ' <span class="badge badge-offline" style="font-size:10px;vertical-align:middle;" title="Connection paused (TLS or TCP limit) — open Edit and use Test TLS connection">Connection paused</span>'
                 : '';
             html += `<td style="font-weight:500;">${o.name}${tlsPausedBadge}</td>`;
             html += `<td>${typeBadge}</td>`;

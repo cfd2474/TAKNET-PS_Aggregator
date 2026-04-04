@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.346",
+    "date": "2024-04-03",
+    "features": [
+      "Added CoT pipeline self-healing: Paused connections automatically re-test in the background every 10 minutes.",
+      "Added generalized Connection Pause: Outputs timing out sequentially (3 times) are now paused to preserve pipeline performance.",
+      "Updated Outputs UI to generically reflect Connection Paused state for both invalid TLS and dropped TCP links."
+    ],
+    "fixes": []
+  },
+  {
     "version": "1.0.344",
     "date": "2026-04-03",
     "notes": [
