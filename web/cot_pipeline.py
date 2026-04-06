@@ -927,7 +927,7 @@ def _serialize_cot_xml_et(parts: _CotXmlParts) -> str:
     if parts.video_url_raw:
         video_el = ET.Element("__video")
         video_el.set("url", parts.video_url_raw[:2048])
-        root.append(video_el)
+        detail.append(video_el)
     return ET.tostring(root, encoding="unicode", default_namespace=None)
 
 
@@ -970,9 +970,9 @@ def _serialize_cot_xml_template(parts: _CotXmlParts) -> str:
         chunks.append(" />")
     if parts.link_url_raw:
         chunks.append(f'<link url="{aq(parts.link_url_raw[:2048])}" relation="r-u" mime="text/html" version="1.0" />')
-    chunks.append("</detail>")
     if parts.video_url_raw:
         chunks.append(f'<__video url="{aq(parts.video_url_raw[:2048])}" />')
+    chunks.append("</detail>")
     chunks.append("</event>")
     return "".join(chunks)
 
