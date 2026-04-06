@@ -18,8 +18,8 @@
     "version": "1.0.350",
     "date": "2026-04-06",
     "notes": [
-      "Fixed CoT generation issue where the `<__video>` element was appended outside the `<detail>` root in the XML, preventing video inputs from parsing correctly in ATAK/iTAK.",
-      "Changed `<input type=\"url\">` to `type=\"text\"` for stream inputs to properly support non-HTTP schema validation natively (RTSP/SRT urls)."
+      "Fixed CoT generation issue where the \"__video\" element was appended outside the \"detail\" root in the XML, preventing video inputs from parsing correctly in ATAK/iTAK.",
+      "Changed \"input type=url\" to \"type=text\" for stream inputs to properly support non-HTTP schema validation natively (RTSP/SRT urls)."
     ]
   },
   {
