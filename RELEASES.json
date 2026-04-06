@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.349",
+    "date": "2026-04-06",
+    "fixes": [
+      "Removed accidental local SQLite database references (.db) and runtime IDE properties (.DS_Store) from source control indexing via gitignore."
+    ]
+  },
+  {
     "version": "1.0.348",
     "date": "2026-04-06",
     "features": [
