@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.351",
+    "date": "2026-04-06",
+    "features": [
+      "Added descriptive reference row logic to generated bulk-import CSV templates mapping data structures for users, with internal bypasses to skip accidental header submissions during payload uploads."
+    ]
+  },
+  {
     "version": "1.0.350",
     "date": "2026-04-06",
     "fixes": [

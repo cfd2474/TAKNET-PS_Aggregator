@@ -115,7 +115,8 @@ th.sortable:hover { color: var(--accent); }
                     <th>CoT type</th>
                     <th>Icon</th>
                     <th>Video</th>
-                    <th style="width:100px;"></th>
+                    <th>Link</th>
+                    <th style="min-width:115px;text-align:right;"></th>
                 </tr>
                 <tr class="filter-row">
                     <th><span class="filter-clear" id="filter-clear-btn" title="Clear all filters">Clear</span></th>
@@ -130,14 +131,15 @@ th.sortable:hover { color: var(--accent); }
                     <th></th>
                     <th></th>
                     <th></th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody id="transforms-tbody">
-                <tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
+                <tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
             </tbody>
             <tfoot id="transforms-tfoot" style="display:none;">
                 <tr>
-                    <td colspan="12" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
+                    <td colspan="13" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
                         <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-right:12px;">
                             <input type="checkbox" id="select-all-bottom" title="Select all on page"> Select all
                         </label>
@@ -268,7 +270,7 @@ th.sortable:hover { color: var(--accent); }
                                 </tr>
                             </thead>
                             <tbody id="cot-dup-records-tbody">
-                                <tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>
+                                <tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1022,13 +1024,13 @@ async function loadTransforms() {
         updatePaginationBar();
         updateSortArrows();
         if (!items.length && !totalCount) {
-            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
             document.getElementById('bulk-delete-btn-top').style.display = 'none';
             document.getElementById('delete-all-btn-top').style.display = 'none';
             return;
         }
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">No results for this page.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:24px;">No results for this page.</td></tr>';
         } else {
             tbody.innerHTML = items.map(t => `
                 <tr>
@@ -1055,7 +1057,7 @@ async function loadTransforms() {
         wireSortHeaders();
         updateBulkDeleteVisibility();
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="12" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
         tfoot.style.display = 'none';
         bar.style.display = 'none';
     }
@@ -1231,7 +1233,7 @@ async function openCotDuplicatesModal() {
     document.getElementById('cot-dup-rectify-btn').disabled = true;
     document.getElementById('cot-dup-rectify-status').textContent = '';
     document.getElementById('cot-dup-records-tbody').innerHTML =
-        '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>';
+        '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>';
     document.getElementById('cot-dup-resolve-fields').innerHTML = '';
 
     document.getElementById('cot-dup-modal').classList.add('show');
@@ -1314,7 +1316,7 @@ function cotDupRenderCurrentRectifyGroup() {
 
     if (!grp) {
         subtitle.textContent = 'No mismatched groups to rectify.';
-        recordsTbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>';
+        recordsTbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:18px;">No records loaded.</td></tr>';
         resolveFields.innerHTML = '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;color:var(--text-muted);">Nothing to rectify.</div>';
         statusEl.textContent = '';
         return;

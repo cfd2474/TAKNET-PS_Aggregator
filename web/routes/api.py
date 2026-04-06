@@ -1615,6 +1615,24 @@ def cot_transforms_template():
     buf = io.BytesIO()
     buf.write(b"\xef\xbb\xbf")  # UTF-8 BOM for Excel
     buf.write(",".join(CotTransformModel.CSV_HEADERS).encode("utf-8") + b"\n")
+    
+    # Description headers corresponding to CSV_HEADERS
+    descriptions = [
+        "(ex) CIV or MIL",
+        "(ex) SBDSO",
+        "(ex) N12345",
+        "(ex) 40KING1-SBSO",
+        "(ex) HELICOPTER",
+        "(ex) BELL 407",
+        "(REQUIRED) ICAO 24-bit Hex",
+        "(ex) a-f-A-C-H",
+        "(ex) Public Safety Air/LE.png",
+        "(Optional) text",
+        "(Optional) stream url",
+        "(Optional) link url"
+    ]
+    buf.write(",".join(descriptions).encode("utf-8") + b"\n")
+    
     buf.seek(0)
     return send_file(
         buf,

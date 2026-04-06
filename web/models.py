@@ -1845,6 +1845,11 @@ class CotTransformModel:
                 for i, row in enumerate(reader):
                     row_num = i + 2
                     hex_val = (row.get("HEX") or "").strip().upper()
+                    
+                    # Prevent users from accidentally importing the template descriptions
+                    if i == 0 and hex_val == "(REQUIRED) ICAO 24-BIT HEX":
+                        continue
+                    
                     if not hex_val:
                         errors.append(f"Row {row_num}: HEX is required")
                         continue
