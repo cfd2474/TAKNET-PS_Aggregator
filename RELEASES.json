@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.352",
+    "date": "2026-04-06",
+    "features": [
+      "Introduced a batch CSV staging modal to COTProxy outputs, allowing sequential submission and processing of multiple import files concurrently.",
+      "Redesigned the frontend file-input layer to aggregate distinct file uploads into a dynamic list interface where users can preview payloads and individually remove items before broadcast."
+    ]
+  },
+  {
     "version": "1.0.351",
     "date": "2026-04-06",
     "features": [

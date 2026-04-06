@@ -31,7 +31,7 @@ th.sortable:hover { color: var(--accent); }
     <div style="display:flex;gap:8px;align-items:center;">
         <a href="/api/outputs/cot-transforms/template" class="btn" style="font-size:13px;">Download template CSV</a>
         <label class="btn btn-primary" style="font-size:13px;margin:0;cursor:pointer;">
-            Import CSV <input type="file" id="csv-file" accept=".csv" style="display:none;">
+            Import CSV <input type="file" id="csv-file" accept=".csv" style="display:none;" multiple>
         </label>
         <button class="btn btn-primary" onclick="openAddModal()" style="font-size:13px;">+ Add transform</button>
     </div>
@@ -184,6 +184,27 @@ th.sortable:hover { color: var(--accent); }
             <div id="bulk-delete-failure" style="display:none;padding:20px;">
                 <p style="margin:0 0 12px;color:var(--red);" id="bulk-delete-failure-msg"></p>
                 <button type="button" class="btn btn-primary" onclick="dismissBulkDeleteModal()">Dismiss</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CSV Batch Selection Modal -->
+<div class="modal-overlay" id="csv-batch-modal">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3>Staged CSV Files</h3>
+            <button class="modal-close" onclick="closeCsvBatchModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+            <p style="margin:0;font-size:13px;color:var(--text-secondary);">The following files will be imported sequentially:</p>
+            <div id="csv-batch-list" style="border:1px solid var(--border);border-radius:6px;max-height:250px;overflow-y:auto;background:var(--bg-secondary);">
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+                <label class="btn" style="margin:0;cursor:pointer;">
+                    Choose More <input type="file" id="csv-file-more" accept=".csv" style="display:none;" multiple>
+                </label>
+                <button type="button" class="btn btn-primary" id="csv-batch-submit-btn" onclick="startBatchCsvUpload()">Start Batch Import</button>
             </div>
         </div>
     </div>
@@ -812,39 +833,106 @@ function dismissCsvImportModal() {
     document.getElementById('csv-file').value = '';
 }
 
-document.getElementById('csv-file').addEventListener('change', async function(e) {
-    const f = e.target.files[0];
-    if (!f) return;
-    showCsvImportModal('processing');
-    let text;
-    try {
-        text = await f.text();
-    } catch (err) {
-        showCsvImportModal('failure', 'Could not read file: ' + err.message);
-        e.target.value = '';
+let selectedBatchFiles = [];
+
+function openCsvBatchModal() {
+    renderCsvBatchList();
+    document.getElementById('csv-batch-modal').classList.add('show');
+}
+
+function closeCsvBatchModal() {
+    document.getElementById('csv-batch-modal').classList.remove('show');
+    document.getElementById('csv-file').value = '';
+    const moreInput = document.getElementById('csv-file-more');
+    if (moreInput) moreInput.value = '';
+}
+
+function renderCsvBatchList() {
+    const container = document.getElementById('csv-batch-list');
+    const btn = document.getElementById('csv-batch-submit-btn');
+    if (!selectedBatchFiles.length) {
+        container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px;">No files selected.</div>';
+        btn.disabled = true;
         return;
     }
-    try {
-        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ csv: text }),
-        });
-        const d = await r.json();
-        e.target.value = '';
-        if (d.inserted !== undefined) {
-            loadTransforms();
-            let msg = 'Imported ' + d.inserted + ' row(s).';
-            if (d.errors && d.errors.length) msg += ' Some rows had errors: ' + d.errors.slice(0, 3).join('; ') + (d.errors.length > 3 ? '…' : '');
-            showCsvImportModal('success', msg);
-        } else {
-            showCsvImportModal('failure', d.error || 'Import failed');
-        }
-    } catch (err) {
-        e.target.value = '';
-        showCsvImportModal('failure', 'Request failed: ' + err.message);
+    btn.disabled = false;
+    container.innerHTML = selectedBatchFiles.map((f, i) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid var(--border);">
+            <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:12px;">
+                <strong>${escapeHtml(f.name)}</strong> <span style="color:var(--text-muted);">(${(f.size / 1024).toFixed(1)} KB)</span>
+            </div>
+            <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;min-width:auto;" onclick="removeBatchFile(${i})">Remove</button>
+        </div>
+    `).join('');
+}
+
+function removeBatchFile(index) {
+    selectedBatchFiles.splice(index, 1);
+    renderCsvBatchList();
+}
+
+function handleBatchSelection(e) {
+    if (!e.target.files.length) return;
+    for (let i = 0; i < e.target.files.length; i++) {
+        selectedBatchFiles.push(e.target.files[i]);
     }
-});
+    openCsvBatchModal();
+}
+
+document.getElementById('csv-file').addEventListener('change', handleBatchSelection);
+document.getElementById('csv-file-more').addEventListener('change', handleBatchSelection);
+
+async function startBatchCsvUpload() {
+    if (!selectedBatchFiles.length) return;
+    const filesToUpload = [...selectedBatchFiles];
+    selectedBatchFiles = []; // reset state early
+    closeCsvBatchModal();
+    
+    showCsvImportModal('processing');
+    
+    let totalInserted = 0;
+    let allErrors = [];
+    
+    for (let i = 0; i < filesToUpload.length; i++) {
+        const titleEl = document.getElementById('csv-import-modal-title');
+        if (titleEl) titleEl.textContent = \`Importing CSV \${i + 1} of \${filesToUpload.length}...\`;
+        
+        const f = filesToUpload[i];
+        let text;
+        try {
+            text = await f.text();
+        } catch (err) {
+            allErrors.push(\`[\${f.name}] Could not read file: \${err.message}\`);
+            continue;
+        }
+        
+        try {
+            const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ csv: text }),
+            });
+            const d = await r.json();
+            if (d.inserted !== undefined) {
+                totalInserted += d.inserted;
+                if (d.errors && d.errors.length) {
+                    allErrors.push(...d.errors.map(errStr => \`[\${f.name}] \${errStr}\`));
+                }
+            } else {
+                allErrors.push(\`[\${f.name}] failed: \${d.error || 'Unknown error'}\`);
+            }
+        } catch (err) {
+            allErrors.push(\`[\${f.name}] Request failed: \${err.message}\`);
+        }
+    }
+    
+    loadTransforms();
+    let msg = \`Batch complete. Inserted \${totalInserted} row(s) total across \${filesToUpload.length} file(s).\`;
+    if (allErrors.length) {
+        msg += \` Note: \${allErrors.length} row(s) had errors or duplicates skipped: \` + allErrors.slice(0, 4).join('; ') + (allErrors.length > 4 ? '…' : '');
+    }
+    showCsvImportModal('success', msg);
+}
 
 function updateBulkDeleteVisibility() {
     const allCb = document.querySelectorAll('.transform-cb');
