@@ -9,7 +9,7 @@ alwaysApply: true
 
 1. **Version update**
    - Bump version in: `VERSION`, `web/VERSION`, `RELEASES.json` (new entry at top with version, date, notes), and `env.example` (header comment).
-   - Add a concise entry to `RELEASES.json` describing the change.
+   - Add a concise entry to `RELEASES.json` describing the change. IMPORTANT: Make sure to strictly use the "notes" array key (e.g., `"notes": ["..."]`), rather than "features" or "fixes", because the external updater script specifically targets the "notes" key for display lookup.
 
 2. **Tarball (do not commit)**
    - Build the release tarball locally when you need it (e.g. `tar --exclude='.git' --exclude='v139_work' --exclude='ARCHIVE' -czvf taknet-aggregator-vX.Y.Z.tar.gz .`).

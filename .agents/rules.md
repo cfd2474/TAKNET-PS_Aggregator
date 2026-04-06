@@ -1,1 +1,0 @@
-When an update is pushed, ALWAYS include the release notes with the update in RELEASES.json so the updater process can display the notes. IMPORTANT: Make sure to strictly use the "notes" array key (e.g., `"notes": ["..."]`), rather than "features" or "fixes", because the updater script specifically relies on the "notes" string lookup.

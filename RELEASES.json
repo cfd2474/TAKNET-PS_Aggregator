@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.355",
+    "date": "2026-04-06",
+    "notes": [
+      "Added native CSV export functionality mapping local domain structures directly back to the payload generator templating sequence for automated transfer between instances."
+    ]
+  },
+  {
     "version": "1.0.354",
     "date": "2026-04-06",
     "notes": [

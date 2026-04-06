@@ -1642,6 +1642,75 @@ def cot_transforms_template():
     )
 
 
+@bp.route("/outputs/<int:output_id>/cot-transforms/export")
+@network_admin_required
+def cot_transforms_export(output_id):
+    """Export all cot transforms for a given output as a CSV file matching the import format."""
+    from flask_login import current_user
+    import io
+    import csv
+    import time
+    import re
+    from flask import send_file, jsonify
+
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+
+    out_obj = OutputModel.get_by_id(output_id, current_user.id, current_user.role)
+    if not out_obj:
+        return jsonify({"error": "Output not found"}), 404
+
+    safe_name = re.sub(r'[^A-Za-z0-9_\-]', '_', out_obj.get("name", f"output_{output_id}"))
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"{safe_name}_{timestamp}.csv"
+
+    transforms = CotTransformModel.get_all(output_id)
+    headers = list(CotTransformModel.CSV_HEADERS)
+
+    str_buf = io.StringIO()
+    writer = csv.DictWriter(str_buf, fieldnames=headers)
+    
+    # Write normal excel UTF-8 signature first when converting to bytes later
+    
+    writer.writeheader()
+    
+    # Description headers corresponding to CSV_HEADERS
+    descriptions = {
+        "DOMAIN": "(ex) CIV or MIL",
+        "AGENCY": "(ex) SBDSO",
+        "REG": "(ex) N12345",
+        "CALLSIGN": "(ex) 40KING1-SBSO",
+        "TYPE": "(ex) HELICOPTER",
+        "MODEL": "(ex) BELL 407",
+        "HEX": "(REQUIRED) ICAO 24-bit Hex",
+        "COT": "(ex) a-f-A-C-H",
+        "ICON": "(ex) Public Safety Air/LE.png",
+        "REMARKS": "(Optional) text",
+        "VIDEO": "(Optional) stream url",
+        "LINK": "(Optional) link url"
+    }
+    writer.writerow(descriptions)
+
+    for t in transforms:
+        row = {}
+        for h in headers:
+            val = t.get(h.lower(), "")
+            row[h] = val if val is not None else ""
+        writer.writerow(row)
+
+    buf = io.BytesIO()
+    buf.write(b"\xef\xbb\xbf")  # UTF-8 BOM for Excel
+    buf.write(str_buf.getvalue().encode("utf-8"))
+    buf.seek(0)
+
+    return send_file(
+        buf,
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
 @bp.route("/outputs/<int:output_id>/cot-transforms", methods=["POST"])
 @network_admin_required
 def cot_transform_create(output_id):
