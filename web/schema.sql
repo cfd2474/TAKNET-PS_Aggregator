@@ -168,6 +168,9 @@ CREATE TABLE IF NOT EXISTS cot_transforms (
     hex TEXT NOT NULL,       -- ICAO 24-bit hex (match key)
     cot TEXT,                -- CoT type string (e.g. a-f-A-C-H, a-n-A-M-H-A)
     icon TEXT,
+    remarks TEXT,
+    video TEXT,
+    link TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
 );

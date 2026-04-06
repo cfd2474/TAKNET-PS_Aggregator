@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.348",
+    "date": "2026-04-06",
+    "features": [
+      "Added \"Associated Links\" customizability to COTProxy transforms. Allows users to attach custom URLs formatted into the CoT <detail><link> output schema directly via the UI."
+    ]
+  },
+  {
     "version": "1.0.347",
     "date": "2026-04-03",
     "features": [

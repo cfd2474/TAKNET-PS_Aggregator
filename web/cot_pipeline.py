@@ -658,6 +658,7 @@ def _transform_row_to_dict(t):
         "model": t.get("model"),
         "remarks": t.get("remarks"),
         "video": t.get("video"),
+        "link": t.get("link"),
     }
 
 
@@ -737,6 +738,7 @@ class _CotXmlParts:
     rem_text_raw: str
     track_attrib: Optional[dict]
     video_url_raw: Optional[str]
+    link_url_raw: Optional[str]
 
 
 def _compute_cot_xml_parts(
@@ -850,6 +852,11 @@ def _compute_cot_xml_parts(
     if video_url is not None and isinstance(video_url, str) and video_url.strip():
         video_url_raw = video_url.strip()
 
+    link_url_raw = None
+    link_url = (transform or {}).get("link") if transform else None
+    if link_url is not None and isinstance(link_url, str) and link_url.strip():
+        link_url_raw = link_url.strip()
+
     return _CotXmlParts(
         cot_type=cot_type,
         hex_code=hex_code,
@@ -867,6 +874,7 @@ def _compute_cot_xml_parts(
         rem_text_raw=rem_text_raw,
         track_attrib=track_attrib,
         video_url_raw=video_url_raw,
+        link_url_raw=link_url_raw,
     )
 
 
@@ -909,6 +917,13 @@ def _serialize_cot_xml_et(parts: _CotXmlParts) -> str:
         rem_el.text = parts.rem_text_raw[:2048]
     if parts.track_attrib:
         ET.SubElement(detail, "track", attrib=parts.track_attrib)
+    if parts.link_url_raw:
+        ET.SubElement(detail, "link", attrib={
+            "url": parts.link_url_raw[:2048],
+            "relation": "r-u",
+            "mime": "text/html",
+            "version": "1.0"
+        })
     if parts.video_url_raw:
         video_el = ET.Element("__video")
         video_el.set("url", parts.video_url_raw[:2048])
@@ -953,6 +968,8 @@ def _serialize_cot_xml_template(parts: _CotXmlParts) -> str:
         for k, v in parts.track_attrib.items():
             chunks.append(f' {k}="{aq(v)}"')
         chunks.append(" />")
+    if parts.link_url_raw:
+        chunks.append(f'<link url="{aq(parts.link_url_raw[:2048])}" relation="r-u" mime="text/html" version="1.0" />')
     chunks.append("</detail>")
     if parts.video_url_raw:
         chunks.append(f'<__video url="{aq(parts.video_url_raw[:2048])}" />')

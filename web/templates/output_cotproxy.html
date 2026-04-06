@@ -264,6 +264,7 @@ th.sortable:hover { color: var(--accent); }
                                     <th>Icon</th>
                                     <th>Remarks</th>
                                     <th>Video</th>
+                                    <th>Link</th>
                                 </tr>
                             </thead>
                             <tbody id="cot-dup-records-tbody">
@@ -387,6 +388,10 @@ th.sortable:hover { color: var(--accent); }
                 <div class="form-group" style="grid-column:1/-1;">
                     <label>Video URL (CoT &lt;__video url="..."&gt; — optional)</label>
                     <input class="form-control" id="t-video" type="url" placeholder="https://...">
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label>Associated Link (CoT &lt;link relation="r-u"&gt; — optional)</label>
+                    <input class="form-control" id="t-link" type="url" placeholder="https://...">
                 </div>
             </div>
             <div id="transform-modal-error" style="display:none;background:rgba(239,68,68,0.1);border-radius:6px;padding:10px;font-size:13px;color:var(--red);margin-top:8px;"></div>
@@ -1038,6 +1043,7 @@ async function loadTransforms() {
                     <td style="font-size:12px;" title="${escapeHtml(t.cot || '')}">${cotDisplayName(t.cot)}</td>
                     <td style="max-width:140px;">${renderIconCell(t)}</td>
                     <td style="text-align:center;">${(t.video && String(t.video).trim()) ? 'Yes' : 'No'}</td>
+                    <td style="text-align:center;">${(t.link && String(t.link).trim()) ? 'Yes' : 'No'}</td>
                     <td style="text-align:right;">
                         <button class="btn" style="font-size:11px;padding:4px 8px;" onclick="openEditModal(${t.id})">Edit</button>
                         <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteTransform(${t.id}, '${(t.hex || '').replace(/'/g, "\\'")}')">Delete</button>
@@ -1065,7 +1071,7 @@ function escapeHtml(s) {
 function openAddModal() {
     document.getElementById('transform-modal-title').textContent = 'Add transform';
     document.getElementById('transform-id').value = '';
-    ['hex','callsign','type','domain','agency','reg','model','icon','remarks','video'].forEach(f => {
+    ['hex','callsign','type','domain','agency','reg','model','icon','remarks','video','link'].forEach(f => {
         const el = document.getElementById('t-' + f);
         if (el) el.value = '';
     });
@@ -1092,6 +1098,7 @@ async function openEditModal(id) {
     document.getElementById('t-icon').value = t.icon || '';
     document.getElementById('t-remarks').value = t.remarks || '';
     document.getElementById('t-video').value = t.video || '';
+    document.getElementById('t-link').value = t.link || '';
     document.getElementById('transform-modal-error').style.display = 'none';
     document.getElementById('transform-modal').classList.add('show');
 }
@@ -1116,6 +1123,7 @@ async function saveTransform() {
         icon: document.getElementById('t-icon').value.trim(),
         remarks: document.getElementById('t-remarks').value.trim(),
         video: document.getElementById('t-video').value.trim(),
+        link: document.getElementById('t-link').value.trim(),
     };
     if (!payload.hex) { errEl.textContent = 'HEX is required.'; errEl.style.display = 'block'; return; }
     const btn = document.getElementById('transform-save-btn');
@@ -1330,10 +1338,11 @@ function cotDupRenderCurrentRectifyGroup() {
             <td title="${escapeHtml(r.icon || '')}">${escapeHtml(cotDupTruncate(r.icon || '', 28))}</td>
             <td title="${escapeHtml(r.remarks || '')}">${escapeHtml(cotDupTruncate(r.remarks || '', 28))}</td>
             <td>${(r.video && String(r.video).trim()) ? 'Yes' : ''}</td>
+            <td>${(r.link && String(r.link).trim()) ? 'Yes' : ''}</td>
         </tr>
     `).join('');
 
-    const fieldOrder = ['hex', 'callsign', 'type', 'domain', 'agency', 'reg', 'model', 'cot', 'icon', 'remarks', 'video'];
+    const fieldOrder = ['hex', 'callsign', 'type', 'domain', 'agency', 'reg', 'model', 'cot', 'icon', 'remarks', 'video', 'link'];
     const keepRow = rows[0] || {};
     resolveFields.innerHTML = '';
     fieldOrder.forEach(field => {
@@ -1408,7 +1417,7 @@ async function cotDupMergeCurrentGroup(closeAfter) {
 
     try {
         const overrides = {};
-        ['callsign', 'type', 'domain', 'agency', 'reg', 'model', 'cot', 'icon', 'remarks', 'video'].forEach(f => {
+        ['callsign', 'type', 'domain', 'agency', 'reg', 'model', 'cot', 'icon', 'remarks', 'video', 'link'].forEach(f => {
             const v = cotDupState.resolved[f];
             overrides[f] = (v === null || v === undefined || String(v).trim() === '') ? null : String(v).trim();
         });
