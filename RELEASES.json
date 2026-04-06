@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.353",
+    "date": "2026-04-06",
+    "notes": [
+      "Reverted interactive CSV staging UI while retaining sequential payload iteration capabilities internally, mitigating potential DOM collision rendering bugs during payload generation."
+    ]
+  },
+  {
     "version": "1.0.352",
     "date": "2026-04-06",
     "notes": [
