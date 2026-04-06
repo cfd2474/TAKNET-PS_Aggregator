@@ -824,7 +824,7 @@ document.getElementById('csv-file').addEventListener('change', async function(e)
     for (let i = 0; i < files.length; i++) {
         const titleEl = document.getElementById('csv-import-modal-title');
         if (titleEl && files.length > 1) {
-            titleEl.textContent = \`Importing CSV \${i + 1} of \${files.length}...\`;
+            titleEl.textContent = `Importing CSV ${i + 1} of ${files.length}...`;
         } else if (titleEl) {
             titleEl.textContent = 'Importing CSV';
         }
@@ -834,7 +834,7 @@ document.getElementById('csv-file').addEventListener('change', async function(e)
         try {
             text = await f.text();
         } catch (err) {
-            allErrors.push(\`[\${f.name}] Could not read file: \${err.message}\`);
+            allErrors.push(`[${f.name}] Could not read file: ${err.message}`);
             continue;
         }
         
@@ -848,13 +848,13 @@ document.getElementById('csv-file').addEventListener('change', async function(e)
             if (d.inserted !== undefined) {
                 totalInserted += d.inserted;
                 if (d.errors && d.errors.length) {
-                    allErrors.push(...d.errors.map(errStr => \`[\${f.name}] \${errStr}\`));
+                    allErrors.push(...d.errors.map(errStr => `[${f.name}] ${errStr}`));
                 }
             } else {
-                allErrors.push(\`[\${f.name}] failed: \${d.error || 'Unknown error'}\`);
+                allErrors.push(`[${f.name}] failed: ${d.error || 'Unknown error'}`);
             }
         } catch (err) {
-            allErrors.push(\`[\${f.name}] Request failed: \${err.message}\`);
+            allErrors.push(`[${f.name}] Request failed: ${err.message}`);
         }
     }
     
@@ -862,11 +862,11 @@ document.getElementById('csv-file').addEventListener('change', async function(e)
     loadTransforms();
     
     if (files.length === 1 && allErrors.length === 0) {
-        showCsvImportModal('success', \`Imported \${totalInserted} row(s).\`);
+        showCsvImportModal('success', `Imported ${totalInserted} row(s).`);
     } else {
-        let msg = \`Imported \${totalInserted} row(s) total across \${files.length} file(s).\`;
+        let msg = `Imported ${totalInserted} row(s) total across ${files.length} file(s).`;
         if (allErrors.length) {
-            msg += \` Some rows had errors or duplicates sequentially skipped: \` + allErrors.slice(0, 3).join('; ') + (allErrors.length > 3 ? '…' : '');
+            msg += ` Some rows had errors or duplicates sequentially skipped: ` + allErrors.slice(0, 3).join('; ') + (allErrors.length > 3 ? '…' : '');
         }
         showCsvImportModal('success', msg);
     }
