@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.358",
+    "date": "2026-04-08",
+    "notes": [
+      "Outputs UI: ADSB Direct endpoint instructions securely hardcode https://adsb.tak-solutions.com domain binding."
+    ]
+  },
+  {
     "version": "1.0.357",
     "date": "2026-04-08",
     "notes": [

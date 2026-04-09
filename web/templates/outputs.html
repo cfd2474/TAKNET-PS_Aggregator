@@ -1276,7 +1276,7 @@ function buildConnectionInstructionsHtml(outputType, jsonMode, key) {
         return `
             <p style="margin:0 0 10px;"><strong>What this is:</strong> ADSB Direct endpoint with the key embedded in the URL path (unique per output config).</p>
             <p style="margin:0 0 6px;"><strong>How to call it:</strong></p>
-            <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">GET ${window.location.origin}/api/outputs/direct/${key}/point</code>
+            <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">GET https://adsb.tak-solutions.com/api/outputs/direct/${key}/point</code>
             <p style="margin:0;font-size:12px;color:var(--text-muted);">Base URL only; the ADSB Direct plugin appends center/range values after <code>/point</code>.</p>`;
     } else {
         return `
