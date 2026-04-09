@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.357",
+    "date": "2026-04-08",
+    "notes": [
+      "Outputs UI: ADSB Direct endpoint instructions now display the full absolute URL (including domain) instead of just the relative path."
+    ]
+  },
+  {
     "version": "1.0.356",
     "date": "2026-04-08",
     "notes": [
