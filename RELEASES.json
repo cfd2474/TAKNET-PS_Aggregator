@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.359",
+    "date": "2026-04-09",
+    "notes": [
+      "Outputs UI: Fixed the cotproxy management page configuration toggles so that the checkboxes can only be toggled when clicking specifically on the checkbox itself, preventing errant clicks on the configuration descriptions from accidentally altering the settings."
+    ]
+  },
+  {
     "version": "1.0.358",
     "date": "2026-04-08",
     "notes": [

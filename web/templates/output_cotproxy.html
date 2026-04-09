@@ -44,7 +44,7 @@ th.sortable:hover { color: var(--accent); }
         <h3 style="margin:0;font-size:14px;">Traffic filter &amp; CoT options</h3>
     </div>
     <div style="padding:14px 20px;display:flex;flex-direction:column;gap:16px;">
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
             <input type="checkbox" id="pass-all-toggle" style="margin-top:3px;">
             <div>
                 <span style="font-weight:600;font-size:13px;">Pass all traffic</span>
@@ -53,8 +53,8 @@ th.sortable:hover { color: var(--accent); }
                     Note: enable this if COTProxy transforms are not being used (e.g. you have no per-hex rules), so even network traffic is still forwarded.
                 </p>
             </div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:12px;">
             <input type="checkbox" id="pass-only-tisb-toggle" style="margin-top:3px;">
             <div>
                 <span style="font-weight:600;font-size:13px;">Pass only TIS-B</span>
@@ -63,8 +63,8 @@ th.sortable:hover { color: var(--accent); }
                     Existing TIS-B CoT handling and formatting remain unchanged.
                 </p>
             </div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:12px;">
             <input type="checkbox" id="distress-hostile-toggle" style="margin-top:3px;">
             <div>
                 <span style="font-weight:600;font-size:13px;">Distress -> Hostile CoT</span>
@@ -72,14 +72,14 @@ th.sortable:hover { color: var(--accent); }
                     When enabled, any aircraft with emergency status OR squawk <strong>7700</strong> will be sent using the hostile CoT variant for the same class (instead of friendly).
                 </p>
             </div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:12px;">
             <input type="checkbox" id="include-icon-in-cot-toggle" style="margin-top:3px;">
             <div>
                 <span style="font-weight:600;font-size:13px;">Include transform icon in CoT</span>
                 <p style="font-size:12px;color:var(--text-muted);margin:6px 0 0;line-height:1.45;">Send &lt;usericon&gt; in the CoT message so ATAK/TAK shows the chosen icon. Uncheck if the callsign label appears too high above the icon on the map.</p>
             </div>
-        </label>
+        </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <label for="cot-stale-seconds" style="font-weight:600;font-size:13px;">CoT stale (seconds)</label>
             <input type="number" id="cot-stale-seconds" min="5" max="300" step="1" style="width:80px;padding:6px 10px;font-size:13px;">
