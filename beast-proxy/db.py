@@ -296,22 +296,28 @@ def update_feeder_mlat(feeder_id, mlat_enabled, lat=None, lon=None, alt=None, ml
     """Update MLAT status, coordinates, and name for a feeder."""
     conn = _get_conn()
     ts = now_utc()
+
+    # Always update mlat_enabled and name (if provided) to ensure version info is current.
+    # The name contains the version string (e.g. "MyFeeder | v2.59.33").
+    conn.execute(
+        """UPDATE feeders SET
+            mlat_enabled = ?,
+            name = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
+            updated_at = ?
+        WHERE id = ?""",
+        (1 if mlat_enabled else 0, mlat_name, mlat_name, ts, feeder_id),
+    )
+
+    # Update coordinates separately if they are valid.
     if mlat_enabled and lat is not None and lon is not None:
         conn.execute(
             """UPDATE feeders SET
-                mlat_enabled = 1,
-                name = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
                 latitude = ?,
                 longitude = ?,
                 altitude = ?,
                 updated_at = ?
             WHERE id = ?""",
-            (mlat_name, mlat_name, lat, lon, alt, ts, feeder_id),
-        )
-    else:
-        conn.execute(
-            "UPDATE feeders SET mlat_enabled = ?, updated_at = ? WHERE id = ?",
-            (1 if mlat_enabled else 0, ts, feeder_id),
+            (lat, lon, alt, ts, feeder_id),
         )
     conn.commit()
 

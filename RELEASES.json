@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.360",
+    "date": "2026-04-10",
+    "notes": [
+      "Dashboard: Fixed a bug in `beast-proxy` where feeder version numbers would remain stale in the UI if the feeder had not yet reported GPS coordinates. Version info is now updated immediately upon registration/check-in."
+    ]
+  },
+  {
     "version": "1.0.359",
     "date": "2026-04-09",
     "notes": [
