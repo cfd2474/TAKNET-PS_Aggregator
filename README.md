@@ -1,4 +1,4 @@
-# TAKNET-PS Aggregator v1.0.360
+# TAKNET-PS Aggregator v1.0.362
 
 Distributed ADS-B aircraft tracking aggregation system designed for multi-agency public safety deployments. Collects Beast protocol data from a network of remote feeders connected via NetBird VPN, deduplicates and processes it through readsb, and provides a web dashboard for monitoring feeders, viewing aircraft on a map, and managing the system.
 
@@ -546,4 +546,4 @@ Stops containers, optionally removes data volumes, removes install directory and
 
 ---
 
-*TAKNET-PS Aggregator v1.0.360 — Built for public safety ADS-B operations.*
+*TAKNET-PS Aggregator v1.0.362 — Built for public safety ADS-B operations.*

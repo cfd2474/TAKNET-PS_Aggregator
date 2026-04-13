@@ -661,7 +661,8 @@ def vpn_status():
         netbird_feeders = FeederModel.get_all(conn_type_filter="netbird")
         ip_to_version = {}
         for f in netbird_feeders:
-            _, ver = parse_mlat_client_name(f.get("name") or "")
+            enriched = enrich_feeder_mlat_display(f)
+            ver = enriched.get("software_version")
             if f.get("ip_address") and ver:
                 ip_to_version[f["ip_address"]] = ver
         for p in peers:

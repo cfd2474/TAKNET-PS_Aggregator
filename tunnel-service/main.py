@@ -10,6 +10,8 @@ import asyncio
 import base64
 import json
 import logging
+import os
+import sqlite3
 import uuid
 from typing import Optional
 
@@ -28,6 +30,36 @@ feeder_hosts: dict[str, str] = {}
 # request_id -> (event, holder_list); holder[0] set to result dict when response received
 pending_requests: dict[str, tuple[asyncio.Event, list[Optional[dict]]]] = {}
 _lock = asyncio.Lock()
+DB_PATH = os.environ.get("DB_PATH", "/data/aggregator.db")
+
+
+def update_feeder_db(feeder_id: str, version: Optional[str]):
+    """Update software_version and tunnel_feeder_id in the shared aggregator database."""
+    if not os.path.exists(DB_PATH):
+        logger.warning("Database not found at %s, skipping update", DB_PATH)
+        return
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        # Use feeder_id AS tunnel_feeder_id (the feeder has already sanitized it)
+        # We find the feeder by trying to match tunnel_feeder_id or name/hostname fallback
+        # But most importantly, we set these columns so the dashboard can find it fast next time.
+        
+        # We update software_version if provided.
+        if version:
+            conn.execute(
+                "UPDATE feeders SET software_version = ?, tunnel_feeder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tunnel_feeder_id = ? OR name LIKE ? OR hostname LIKE ?",
+                (version, feeder_id, feeder_id, f"{feeder_id}%", f"{feeder_id}%")
+            )
+        else:
+            conn.execute(
+                "UPDATE feeders SET tunnel_feeder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tunnel_feeder_id = ? OR name LIKE ? OR hostname LIKE ?",
+                (feeder_id, feeder_id, f"{feeder_id}%", f"{feeder_id}%")
+            )
+        conn.commit()
+        conn.close()
+        logger.info("Updated DB for feeder_id=%s version=%s", feeder_id, version or "(none)")
+    except Exception as e:
+        logger.error("Failed to update DB for feeder %s: %s", feeder_id, e)
 
 
 def _headers_for_proxy(in_headers: dict) -> dict:
@@ -66,6 +98,9 @@ async def tunnel_websocket(websocket: WebSocket):
         feeder_id = fid.strip()
         h = msg.get("host")
         host = h.strip() if isinstance(h, str) and h else None
+        version = msg.get("version")
+        version = version.strip() if isinstance(version, str) and version else None
+        
         async with _lock:
             old = feeder_connections.get(feeder_id)
             if old and old != websocket:
@@ -75,7 +110,11 @@ async def tunnel_websocket(websocket: WebSocket):
                     pass
             feeder_connections[feeder_id] = websocket
             feeder_hosts[feeder_id] = host or ""
-        logger.info("Tunnel registered: feeder_id=%s host=%s", feeder_id, host or "(none)")
+        
+        # Update database in the background (non-blocking for the websocket)
+        asyncio.create_task(asyncio.to_thread(update_feeder_db, feeder_id, version))
+        
+        logger.info("Tunnel registered: feeder_id=%s host=%s version=%s", feeder_id, host or "(none)", version or "(none)")
 
         while True:
             raw = await websocket.receive_text()

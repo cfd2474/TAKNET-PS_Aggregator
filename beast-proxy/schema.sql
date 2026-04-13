@@ -1,4 +1,4 @@
--- TAKNET-PS Aggregator Database Schema v1.0.305
+-- TAKNET-PS Aggregator Database Schema v1.0.361
 
 -- Users (authentication)
 CREATE TABLE IF NOT EXISTS users (
@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS feeders (
     notes TEXT,
     owners TEXT NOT NULL DEFAULT '[]',
     owners_locked INTEGER NOT NULL DEFAULT 0,
+    software_version TEXT,
+    tunnel_feeder_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -83,6 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
 CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen);
 CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
 CREATE INDEX IF NOT EXISTS idx_feeders_device_mac ON feeders(device_mac);
+CREATE INDEX IF NOT EXISTS idx_feeders_tunnel_id ON feeders(tunnel_feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_feeder ON connections(feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_connected ON connections(connected_at);
 CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC);

@@ -58,6 +58,17 @@ def get_db():
                 else:
                     raise
             conn.commit()
+
+        # Migration: software_version and tunnel_feeder_id for faster lookups and better versioning
+        for col in ["software_version", "tunnel_feeder_id"]:
+            try:
+                conn.execute(f"ALTER TABLE feeders ADD COLUMN {col} TEXT")
+                conn.commit()
+            except Exception:
+                pass
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_feeders_tunnel_id ON feeders(tunnel_feeder_id)")
+        conn.commit()
+
         # Migration: add status column to users if it doesn't exist
         try:
             conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
@@ -302,8 +313,9 @@ def enrich_feeder_mlat_display(feeder):
     display_name, software_version = parse_mlat_client_name(name)
     feeder = dict(feeder)
     feeder["display_name"] = display_name or name
-    feeder["software_version"] = software_version  # blank when no " | v"
-    feeder["tunnel_feeder_id"] = tunnel_feeder_id(feeder)
+    # Use column value if present, otherwise fall back to parsed version
+    feeder["software_version"] = feeder.get("software_version") or software_version
+    feeder["tunnel_feeder_id"] = feeder.get("tunnel_feeder_id") or tunnel_feeder_id(feeder)
     feeder["owners"] = parse_feeder_owners(feeder.get("owners"))
     ol = feeder.get("owners_locked")
     if ol is None or ol == "":
@@ -349,13 +361,22 @@ class FeederModel:
         return dict_row(row)
 
     @staticmethod
-    def get_by_tunnel_feeder_id(tunnel_id):
-        """Return feeder dict whose tunnel_feeder_id matches (for URL /feeder/<tunnel_id>/)."""
-        if not tunnel_id:
+    def get_by_tunnel_feeder_id(tid):
+        """Return enriched feeder dict whose tunnel_feeder_id matches."""
+        if not tid:
             return None
+        conn = get_db()
+        # Direct lookup on the indexed column
+        row = conn.execute("SELECT * FROM feeders WHERE LOWER(tunnel_feeder_id) = ?", (str(tid).lower(),)).fetchone()
+        conn.close()
+        if row:
+            return enrich_feeder_mlat_display(row)
+        
+        # Legacy fallback: full table scan for older DBs if the column is empty for some rows
+        # (This can be removed once all feeders have check-in)
         for f in FeederModel.get_all():
             enriched = enrich_feeder_mlat_display(f)
-            if (enriched.get("tunnel_feeder_id") or "").lower() == str(tunnel_id).lower():
+            if (enriched.get("tunnel_feeder_id") or "").lower() == str(tid).lower():
                 return enriched
         return None
 

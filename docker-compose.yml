@@ -138,6 +138,10 @@ services:
     restart: unless-stopped
     networks:
       - taknet-internal
+    environment:
+      - DB_PATH=/data/aggregator.db
+    volumes:
+      - db-data:/data
 
   # Flask Dashboard
   dashboard:

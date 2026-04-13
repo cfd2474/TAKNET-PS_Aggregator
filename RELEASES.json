@@ -1,6 +1,13 @@
 [
   {
-    "version": "1.0.360",
+    "version": "1.0.362",
+    "date": "2026-04-12",
+    "notes": [
+      "Improve feeder versioning reliability. Added explicit version reporting via web tunnel. Added database columns (software_version, tunnel_feeder_id) and indexes for better performance. Maintained full backward compatibility with older feeders."
+    ]
+  },
+  {
+    "version": "1.0.361",
     "date": "2026-04-10",
     "notes": [
       "Dashboard: Fixed a bug in `beast-proxy` where feeder version numbers would remain stale in the UI if the feeder had not yet reported GPS coordinates. Version info is now updated immediately upon registration/check-in."
