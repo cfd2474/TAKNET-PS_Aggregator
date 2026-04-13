@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.365",
+    "date": "2026-04-13",
+    "notes": [
+      "Outputs Watchdog: Added an automated email notification system for CoT outputs. When an output feed is automatically paused due to repeated TLS handshake failures, the system now sends an email to the account creator with instructions and a direct link to re-establish the connection."
+    ]
+  },
+  {
     "version": "1.0.364",
     "date": "2026-04-12",
     "notes": [

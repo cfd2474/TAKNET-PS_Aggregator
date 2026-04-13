@@ -16,4 +16,6 @@ alwaysApply: true
    - **Do not commit** tarballs to the repo — they are gitignored (`ARCHIVE/*.tar.gz`). Download or build the tarball and upload it yourself (e.g. as a GitHub Release asset) if needed.
    - Every submission to GitHub is a version change: bump version files. No tarball in the repo.
 
-**Always** include the version bump in the same work as the code change — every feature or fix, without exception.
+**Always** include the version bump in the same work as the code change — every feature or fix, without exception. 
+
+**Pushing**: After all changes (including version bumps) are verified, they must be committed and pushed to the remote git repository for this project.

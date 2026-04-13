@@ -1132,6 +1132,13 @@ def _cot_pause_tls_push(output_id, name, reason: str):
         "cot_tls_last_check": time.time()
     })
     drop_cot_persistent_socket(output_id)
+
+    # Watchdog: notify account creator that feed is paused
+    try:
+        from services.output_watchdog_email import send_output_paused_notification
+        send_output_paused_notification(output_id, name)
+    except Exception as e:
+        log.error("CoT sender: %s — failed to send watchdog notification: %s", name, e)
     log.warning(
         "CoT sender: %s — Connection paused (%s). System will auto-retry in 10 minutes, or you can use Outputs → Test TLS connection.",
         name,
