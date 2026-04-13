@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.364",
+    "date": "2026-04-12",
+    "notes": [
+      "Fix: Resolved a critical 500 error in the tunnel proxy logic caused by an internal data type mismatch during feeder lookup. This ensures stable dashboard-to-feeder connectivity."
+    ]
+  },
+  {
     "version": "1.0.363",
     "date": "2026-04-12",
     "notes": [
