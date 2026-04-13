@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.366",
+    "date": "2026-04-13",
+    "notes": [
+      "Feeders UI: Made the summary stat cards (Active, Stale, Total) interactive. Clicking on these boxes now automatically filters the feeder list to match the selected status."
+    ]
+  },
+  {
     "version": "1.0.365",
     "date": "2026-04-13",
     "notes": [

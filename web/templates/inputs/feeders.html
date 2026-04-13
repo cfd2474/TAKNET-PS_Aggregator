@@ -7,15 +7,15 @@
 {% endif %}
 <!-- Stat Cards -->
 <div class="card-grid card-grid-3" id="feeder-stats">
-    <div class="stat-card">
+    <div class="stat-card" style="cursor:pointer;" onclick="setFilterStatus('active')">
         <div class="label">Active</div>
         <div class="value" id="stat-active" style="color:var(--green)">—</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="cursor:pointer;" onclick="setFilterStatus('stale')">
         <div class="label">Stale</div>
         <div class="value" id="stat-stale" style="color:var(--yellow)">—</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="cursor:pointer;" onclick="setFilterStatus('all')">
         <div class="label">Total</div>
         <div class="value" id="stat-total">—</div>
     </div>
@@ -116,6 +116,14 @@ function feederSortValue(f, key) {
         return '';
     }
     return '';
+}
+
+function setFilterStatus(status) {
+    const el = document.getElementById('filter-status');
+    if (el) {
+        el.value = status;
+        loadFeeders();
+    }
 }
 
 async function loadFeeders() {
