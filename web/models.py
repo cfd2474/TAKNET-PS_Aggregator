@@ -368,7 +368,7 @@ class FeederModel:
         row = conn.execute("SELECT * FROM feeders WHERE LOWER(tunnel_feeder_id) = ?", (str(tid).lower(),)).fetchone()
         conn.close()
         if row:
-            return enrich_feeder_mlat_display(row)
+            return enrich_feeder_mlat_display(dict_row(row))
         
         # Legacy fallback: full table scan for older DBs if the column is empty for some rows
         # (This can be removed once all feeders have check-in)
