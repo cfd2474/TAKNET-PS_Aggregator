@@ -21,15 +21,14 @@ def _get_conn():
     return _local.conn
 
 
-def parse_mlat_client_name(name):
-    """Parse MLAT client name into (display_name, software_version)."""
+def clean_mlat_display_name(name):
+    """Strip version suffixes like ' | v1.0' or '___v1.0' from an MLAT client name."""
     if not name or not isinstance(name, str):
-        return (name or "", "")
+        return name or ""
     for sep in (" | v", "___v"):
         if sep in name:
-            parts = name.split(sep, 1)
-            return (parts[0].strip(), (parts[1].strip() if len(parts) > 1 else ""))
-    return (name.strip(), "")
+            return name.split(sep, 1)[0].strip()
+    return name.strip()
 
 
 def derive_tunnel_feeder_id(feeder_id, display_name):
@@ -318,26 +317,24 @@ def update_feeder_mlat(feeder_id, mlat_enabled, lat=None, lon=None, alt=None, ml
     ts = now_utc()
 
     # Always update mlat_enabled and name (if provided).
-    # Also parse software_version and derive tunnel_feeder_id for the database.
+    # Clean the name but don't parse version from it anymore, 
+    # ensuring software_version stays intact from other sources.
     display_name = None
-    software_version = None
     tid = None
     if mlat_name:
-        display_name, software_version = parse_mlat_client_name(mlat_name)
+        display_name = clean_mlat_display_name(mlat_name)
         tid = derive_tunnel_feeder_id(feeder_id, display_name)
 
     conn.execute(
         """UPDATE feeders SET
             mlat_enabled = ?,
             name = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
-            software_version = CASE WHEN ? IS NOT NULL THEN ? ELSE software_version END,
             tunnel_feeder_id = CASE WHEN ? IS NOT NULL THEN ? ELSE tunnel_feeder_id END,
             updated_at = ?
         WHERE id = ?""",
         (
             1 if mlat_enabled else 0,
             mlat_name, mlat_name,
-            software_version, software_version,
             tid, tid,
             ts, feeder_id
         ),

@@ -653,7 +653,6 @@ def diagnostics_output():
 @admin_required
 def vpn_status():
     """Combined VPN status (Tailscale + NetBird). Enriches NetBird peers with feeder software version by IP."""
-    from models import parse_mlat_client_name
     data = get_combined_status()
     nb = data.get("netbird") or {}
     peers = nb.get("peers") or []

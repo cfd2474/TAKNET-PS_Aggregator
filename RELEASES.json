@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.363",
+    "date": "2026-04-12",
+    "notes": [
+      "Cleanup: Removed all legacy code that parsed software versions from feeder names. The system now strictly uses the explicit software_version column for all displays and API reporting."
+    ]
+  },
+  {
     "version": "1.0.362",
     "date": "2026-04-12",
     "notes": [

@@ -216,20 +216,6 @@ def dict_rows(rows):
     return [dict(r) for r in rows]
 
 
-def parse_mlat_client_name(name):
-    """Parse MLAT client name into (display_name, software_version).
-    Tries separators: ' | v' (e.g. '92882-corona-feeder-1 | v2.59.33'), then '___v' (e.g. '92563-Leckliter___v2.59.34').
-    If none match, return (name, '') with version blank.
-    """
-    if not name or not isinstance(name, str):
-        return (name or "", "")
-    for sep in (" | v", "___v"):
-        if sep in name:
-            parts = name.split(sep, 1)
-            return (parts[0].strip(), (parts[1].strip() if len(parts) > 1 else ""))
-    return (name.strip(), "")
-
-
 def parse_feeder_owners(raw):
     """Parse feeders.owners (JSON array string or list) into a list of usernames."""
     if raw is None or raw == "":
@@ -305,16 +291,28 @@ def tunnel_feeder_id(feeder):
     return s or str(feeder.get("id") or "unknown")
 
 
+def clean_mlat_display_name(name):
+    """Strip version suffixes like ' | v1.0' or '___v1.0' from an MLAT client name."""
+    if not name or not isinstance(name, str):
+        return name or ""
+    for sep in (" | v", "___v"):
+        if sep in name:
+            return name.split(sep, 1)[0].strip()
+    return name.strip()
+
+
 def enrich_feeder_mlat_display(feeder):
-    """Add display_name, software_version, and tunnel_feeder_id to a feeder dict from its name (parsed)."""
+    """Add display_name, software_version, and tunnel_feeder_id to a feeder dict."""
     if not feeder:
         return feeder
     name = feeder.get("name") or ""
-    display_name, software_version = parse_mlat_client_name(name)
+    # Clean the display name but don't parse version from it anymore
+    display_name = clean_mlat_display_name(name)
+    
     feeder = dict(feeder)
     feeder["display_name"] = display_name or name
-    # Use column value if present, otherwise fall back to parsed version
-    feeder["software_version"] = feeder.get("software_version") or software_version
+    # Sole source of truth is the software_version column (from tunnel or beast-proxy manual update)
+    feeder["software_version"] = feeder.get("software_version") or ""
     feeder["tunnel_feeder_id"] = feeder.get("tunnel_feeder_id") or tunnel_feeder_id(feeder)
     feeder["owners"] = parse_feeder_owners(feeder.get("owners"))
     ol = feeder.get("owners_locked")
