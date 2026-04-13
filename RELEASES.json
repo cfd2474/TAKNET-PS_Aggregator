@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.367",
+    "date": "2026-04-13",
+    "notes": [
+      "Diagnostics: Enhanced aircraft lookup to support searching by registration number (e.g., N76265) in addition to hex codes and callsigns."
+    ]
+  },
+  {
     "version": "1.0.366",
     "date": "2026-04-13",
     "notes": [

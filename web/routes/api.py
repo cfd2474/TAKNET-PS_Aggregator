@@ -528,10 +528,11 @@ def diagnostics_aircraft():
             if a_hex == aircraft_q:
                 matches.append(a)
         else:
-            # callsign match (aircraft.json uses `flight` in many feeds)
+            # callsign or registration match (aircraft.json uses `flight` or `callsign` for callsign, `r` for registration)
             flight = (a.get("flight") or "").strip().lower()
             callsign = (a.get("callsign") or "").strip().lower()
-            if flight == callsign_q or callsign == callsign_q:
+            reg = (a.get("r") or "").strip().lower()
+            if flight == callsign_q or callsign == callsign_q or reg == callsign_q:
                 matches.append(a)
 
     if not matches:
@@ -573,7 +574,8 @@ def diagnostics_output():
         else:
             flight = (a.get("flight") or "").strip().lower()
             callsign = (a.get("callsign") or "").strip().lower()
-            if flight == callsign_q or callsign == callsign_q:
+            reg = (a.get("r") or "").strip().lower()
+            if flight == callsign_q or callsign == callsign_q or reg == callsign_q:
                 matches.append(a)
 
     if not matches:
