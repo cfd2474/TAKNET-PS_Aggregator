@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.369",
+    "date": "2026-04-23",
+    "notes": [
+      "Fix: Resolved a routing bug where the tar1090 map UI failed to load aircraft positions because the aircraft-merger service rejected requests containing cache-busting query parameters."
+    ]
+  },
+  {
     "version": "1.0.368",
     "date": "2026-04-23",
     "notes": [
