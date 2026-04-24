@@ -230,7 +230,8 @@ def _merge_loop():
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path.rstrip("/") == "/data/aircraft.json" or self.path.rstrip("/") == "/aircraft.json" or self.path == "/":
+        path = self.path.split("?")[0].rstrip("/")
+        if path == "/data/aircraft.json" or path == "/aircraft.json" or path == "":
             with _lock:
                 out = {"aircraft": _state["aircraft"], "now": _state["now"], "messages": _state["messages"]}
             body = json.dumps(out).encode()
