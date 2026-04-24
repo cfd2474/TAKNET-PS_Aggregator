@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.370",
+    "date": "2026-04-23",
+    "notes": [
+      "Fix: Resolved a startup crash loop in the beast-proxy service caused by schema initialization conflicts with the web dashboard, which was preventing aircraft data from reaching the map."
+    ]
+  },
+  {
     "version": "1.0.369",
     "date": "2026-04-23",
     "notes": [

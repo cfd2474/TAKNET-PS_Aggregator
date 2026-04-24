@@ -85,9 +85,6 @@ CREATE TABLE IF NOT EXISTS update_history (
 CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
 CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen);
 CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
-CREATE INDEX IF NOT EXISTS idx_feeders_device_mac ON feeders(device_mac);
-CREATE INDEX IF NOT EXISTS idx_feeders_feeder_uuid ON feeders(feeder_uuid);
-CREATE INDEX IF NOT EXISTS idx_feeders_tunnel_id ON feeders(tunnel_feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_feeder ON connections(feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_connected ON connections(connected_at);
 CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp DESC);

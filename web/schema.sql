@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     conn_type TEXT NOT NULL DEFAULT 'public',   -- 'tailscale', 'netbird', 'public'
     ip_address TEXT,
     device_mac TEXT,                            -- optional feeder-reported MAC (stable identity across IP changes)
+    feeder_uuid TEXT,                           -- optional feeder-reported UDID
     hostname TEXT,
     location TEXT,
     latitude REAL,
