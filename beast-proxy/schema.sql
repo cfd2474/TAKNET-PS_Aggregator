@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS feeders (
     conn_type TEXT NOT NULL DEFAULT 'public',   -- 'tailscale', 'netbird', 'public'
     ip_address TEXT,
     device_mac TEXT,                            -- optional feeder-reported MAC (stable identity across IP changes)
+    feeder_uuid TEXT,                           -- optional feeder-reported UDID
     hostname TEXT,
     location TEXT,
     latitude REAL,
@@ -85,6 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
 CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen);
 CREATE INDEX IF NOT EXISTS idx_feeders_ip ON feeders(ip_address);
 CREATE INDEX IF NOT EXISTS idx_feeders_device_mac ON feeders(device_mac);
+CREATE INDEX IF NOT EXISTS idx_feeders_feeder_uuid ON feeders(feeder_uuid);
 CREATE INDEX IF NOT EXISTS idx_feeders_tunnel_id ON feeders(tunnel_feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_feeder ON connections(feeder_id);
 CREATE INDEX IF NOT EXISTS idx_connections_connected ON connections(connected_at);

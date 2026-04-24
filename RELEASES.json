@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.368",
+    "date": "2026-04-23",
+    "notes": [
+      "Feeder Tracking: Feeders are now tracked by their unique UDID generated at install instead of IP address. This resolves duplicate feeder entries when a non-NetBird feeder's IP address changes.",
+      "Database Bug Fix: Fixed an issue where the recorded IP address would not update when a known feeder reconnected from a new IP address."
+    ]
+  },
+  {
     "version": "1.0.367",
     "date": "2026-04-13",
     "notes": [

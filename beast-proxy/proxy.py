@@ -44,6 +44,9 @@ _CLAIM_LINE_RE = re.compile(
 _MAC_LINE_RE = re.compile(
     rb"(?i)^TAKNET_FEEDER_MAC[ \t]+([0-9a-fA-F:\-]{11,17})\s*$"
 )
+_UUID_LINE_RE = re.compile(
+    rb"(?i)^TAKNET_FEEDER_UUID[ \t]+([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})\s*$"
+)
 
 
 async def read_optional_feeder_metadata_prefix(reader):
@@ -52,11 +55,12 @@ async def read_optional_feeder_metadata_prefix(reader):
     Supported lines (case-insensitive):
     - TAKNET_FEEDER_CLAIM <uuid>
     - TAKNET_FEEDER_MAC <mac>
+    - TAKNET_FEEDER_UUID <uuid>
 
     Returns (metadata_dict, bytes_to_prepend_to_readsb_stream).
     Unknown/non-metadata content is preserved and forwarded unchanged.
     """
-    metadata = {"claim_key": None, "device_mac": None}
+    metadata = {"claim_key": None, "device_mac": None, "feeder_uuid": None}
     lead = b""
 
     b0 = await reader.read(1)
@@ -88,8 +92,12 @@ async def read_optional_feeder_metadata_prefix(reader):
             if m_mac:
                 metadata["device_mac"] = m_mac.group(1).decode("ascii")
             else:
-                lead += line
-                break
+                m_uuid = _UUID_LINE_RE.match(stripped)
+                if m_uuid:
+                    metadata["feeder_uuid"] = m_uuid.group(1).decode("ascii").lower()
+                else:
+                    lead += line
+                    break
 
         nxt = await reader.read(1)
         if not nxt:
@@ -229,6 +237,7 @@ async def handle_client(reader, writer):
     metadata, lead = await read_optional_feeder_metadata_prefix(reader)
     claim_key = metadata.get("claim_key")
     device_mac = metadata.get("device_mac")
+    feeder_uuid = metadata.get("feeder_uuid")
 
     feeder_id = db.upsert_feeder(
         ip_address,
@@ -238,6 +247,7 @@ async def handle_client(reader, writer):
         lat,
         lon,
         device_mac=device_mac,
+        feeder_uuid=feeder_uuid,
     )
     if claim_key:
         try:
