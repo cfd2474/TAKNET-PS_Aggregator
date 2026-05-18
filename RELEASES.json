@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.371",
+    "date": "2026-05-18",
+    "notes": [
+      "Architecture: Completely replaced the legacy WebSocket reverse web tunnel with direct NGINX proxying over NetBird. The feeder dashboard now securely opens in a full-screen iframe, greatly improving reliability and rendering performance while hiding internal NetBird IPs from the address bar.",
+      "UI: Removed the legacy tunnel link from the feeder detail page."
+    ]
+  },
+  {
     "version": "1.0.370",
     "date": "2026-04-23",
     "notes": [
