@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.372",
+    "date": "2026-05-18",
+    "notes": [
+      "Architecture: Replaced the NGINX NetBird iframe proxy approach with direct HTTP routing through the Python tunnel engine. This restores the crucial HTML/JS path-rewriting capabilities required by the feeder dashboard while still bypassing the legacy WebSocket service for NetBird connections."
+    ]
+  },
+  {
     "version": "1.0.371",
     "date": "2026-05-18",
     "notes": [

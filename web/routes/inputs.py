@@ -37,17 +37,3 @@ def feeder_detail(feeder_id):
         is_admin=(current_user.role == "admin"),
         owner_usernames=owner_usernames,
     )
-
-@bp.route("/feeder/<int:feeder_id>/fullscreen/<view_type>")
-@network_admin_required
-def feeder_fullscreen(feeder_id, view_type):
-    feeder = FeederModel.get_by_id(feeder_id)
-    if not feeder:
-        abort(404)
-    if not user_can_access_feeder(feeder, current_user.username, current_user.role):
-        abort(403)
-    return render_template(
-        "inputs/feeder_fullscreen.html",
-        feeder=feeder,
-        view_type=view_type
-    )

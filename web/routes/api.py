@@ -2551,10 +2551,6 @@ def _feeder_proxy_url(feeder, view_type):
         raw = (feeder.get("tar1090_url") or "").rstrip("/")
     elif view_type == "graphs":
         raw = (feeder.get("graphs1090_url") or "").rstrip("/")
-    elif view_type == "dashboard":
-        if feeder.get("conn_type") == "netbird" and feeder.get("ip_address"):
-            return f"/feeder-view/{feeder.get('ip_address')}:5000/"
-        return None
     else:
         return None
     if not raw:

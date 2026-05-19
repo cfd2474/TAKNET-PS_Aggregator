@@ -33,7 +33,10 @@ def _cached_feeder_for_tunnel(tunnel_id: str) -> dict | None:
     ent = _tunnel_feeder_row_cache.get(k)
     if ent and now - ent[1] < _TUNNEL_FEEDER_CACHE_TTL:
         return ent[0]
-    f = FeederModel.get_by_tunnel_feeder_id(tunnel_id)
+    if k.isdigit():
+        f = FeederModel.get_by_id(int(k))
+    else:
+        f = FeederModel.get_by_tunnel_feeder_id(tunnel_id)
     _tunnel_feeder_row_cache[k] = (f, now)
     return f
 
@@ -458,8 +461,31 @@ def _rewrite_css_body(body: bytes, feeder_id: str) -> bytes:
     return text.encode("utf-8", errors="replace")
 
 
-def _proxy_to_feeder(feeder_id: str, path: str, method: str, headers: dict, body_b64: str):
-    """POST to tunnel service /proxy; returns (status_code, response_headers_dict, body_bytes) or (503, {}, None)."""
+def _proxy_to_feeder(feeder: dict | None, feeder_id: str, path: str, method: str, headers: dict, body_b64: str, raw_body: bytes = b""):
+    """POST to tunnel service /proxy or via direct HTTP; returns (status_code, response_headers_dict, body_bytes) or (503, {}, None)."""
+    
+    if feeder and feeder.get("conn_type") == "netbird" and feeder.get("ip_address"):
+        ip = feeder["ip_address"]
+        target = headers.get("X-Tunnel-Target", "dashboard")
+        port = 8080 if target == "tar1090" else 5000
+        url = f"http://{ip}:{port}{path}"
+        
+        req_headers = dict(headers)
+        req_headers.pop("Host", None)
+        
+        try:
+            r = _TUNNEL_HTTP.request(
+                method=method,
+                url=url,
+                headers=req_headers,
+                data=raw_body,
+                timeout=PROXY_TIMEOUT,
+                allow_redirects=False
+            )
+            return r.status_code, dict(r.headers), r.content
+        except requests.RequestException:
+            return 503, {}, None
+
     url = f"{TUNNEL_SERVICE_URL.rstrip('/')}/proxy"
     payload = {
         "feeder_id": feeder_id,
@@ -540,11 +566,13 @@ def feeder_tunnel_proxy(feeder_id: str, subpath: str = ""):
     status, resp_headers, body_bytes = 503, {}, None
     for tunnel_fid in _tunnel_feeder_ids_to_try(feeder_id):
         status, resp_headers, body_bytes = _proxy_to_feeder(
+            fdb,
             tunnel_fid,
             local_path,
             request.method,
             headers,
             body_b64,
+            body_bytes
         )
         if status != 503:
             break
