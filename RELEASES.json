@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.373",
+    "date": "2026-05-20",
+    "notes": [
+      "ADSBHub enrichment: aircraft-merger now loads the tar1090-db Mictronics aircraft database and applies dbFlags (mil/PIA/LADD), registration, and type to network-only aircraft so keyed JSON /v2/mil and related filters include ADSBHub traffic when Include Network ADSB is enabled."
+    ]
+  },
+  {
     "version": "1.0.372",
     "date": "2026-05-18",
     "notes": [

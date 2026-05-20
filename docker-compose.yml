@@ -207,6 +207,8 @@ services:
       - ADSBHUB_HOST=${ADSBHUB_HOST:-data.adsbhub.org}
       - ADSBHUB_PORT=${ADSBHUB_PORT:-5002}
       - MERGER_PORT=8090
+      - AIRCRAFT_DB_PATH=${AIRCRAFT_DB_PATH:-/app/aircraft.csv.gz}
+      - AIRCRAFT_DB_RELOAD_HOURS=${AIRCRAFT_DB_RELOAD_HOURS:-24}
     volumes:
       - adsbhub-status:/status
     networks:

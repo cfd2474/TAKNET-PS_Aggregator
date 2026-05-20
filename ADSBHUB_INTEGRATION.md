@@ -72,8 +72,11 @@ ADSBHub sends SBS message types 1, 3, and 4. The aircraft-merger parses and merg
 | `squawk` | MSG,6 if present | Transponder code |
 | `on_ground` | MSG,3 | Whether aircraft is on ground |
 | `source` | (set by merger) | `"adsbhub"` for feed aircraft |
+| `dbFlags` | aircraft DB + mil ranges | Bitmask (mil=1, pia=4, ladd=8) from tar1090-db CSV; matches readsb for `/v2/mil` filters |
+| `r` | aircraft DB | Registration when known |
+| `t` | aircraft DB | ICAO type code when known |
 
-Local (feeder) aircraft can include additional fields from readsb/tar1090 (e.g. messages, seen, rssi, type, registration). The Merged map sidebar shows all of the above when you click an aircraft.
+Local (feeder) aircraft can include additional fields from readsb/tar1090 (e.g. messages, seen, rssi, type, registration). ADSBHub-only aircraft are enriched from the same Mictronics database (`aircraft.csv.gz`) used by tar1090 so JSON API flag filters (`/v2/mil`, `/ladd`, `/pia`) include network traffic when enabled. The Merged map sidebar shows all of the above when you click an aircraft.
 
 ## Verification: receive off and 10s staleness
 

@@ -13,6 +13,8 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.request import urlopen
 
+from aircraft_db import enrich_adsbhub_aircraft, init as init_aircraft_db, refresh_if_due
+
 TAR1090_URL = os.environ.get("TAR1090_URL", "http://tar1090:80/data/aircraft.json")
 ADSBHUB_HOST = os.environ.get("ADSBHUB_HOST", "data.adsbhub.org")
 ADSBHUB_PORT = int(os.environ.get("ADSBHUB_PORT", "5002"))
@@ -163,6 +165,7 @@ def _run_sbs_client():
                             for k, v in rec.items():
                                 if k != "hex" and v is not None:
                                     base[k] = v
+                            enrich_adsbhub_aircraft(base)
                             adsbhub_by_hex[hex_] = base
                             _adsbhub_last_seen[hex_] = time.time()
                 with _lock:
@@ -181,7 +184,12 @@ def _run_sbs_client():
 def _merge_loop():
     """Periodically fetch local, merge with ADSBHub state (prefer local), purge stale > STALE_SECONDS, update _state."""
     now_ts = time.time()
+    db_refresh_counter = 0
     while True:
+        db_refresh_counter += 1
+        if db_refresh_counter >= 400:
+            db_refresh_counter = 0
+            refresh_if_due()
         local_aircraft, now_ts, messages = _fetch_local()
         receive_on = _is_receive_enabled()
         with _lock:
@@ -216,6 +224,7 @@ def _merge_loop():
             if _adsbhub_last_seen.get(hex_, 0) < cutoff:
                 continue
             seen_hex.add(hex_)
+            enrich_adsbhub_aircraft(ac)
             merged.append(ac)
         # Purge old entries from _adsbhub_last_seen to avoid unbounded growth
         for hex_ in list(_adsbhub_last_seen.keys()):
@@ -262,6 +271,7 @@ def _write_receive_enabled_file(enabled):
 
 
 def main():
+    init_aircraft_db()
     # Initial fetch so first request has data
     local_aircraft, now_ts, messages = _fetch_local()
     with _lock:
