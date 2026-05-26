@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.374",
+    "date": "2026-05-26",
+    "notes": [
+      "Security: Updated Nginx configuration to point to the correct Let's Encrypt certificate paths for adsb.tak-solutions.com instead of the default netbird domain."
+    ]
+  },
+  {
     "version": "1.0.373",
     "date": "2026-05-20",
     "notes": [
