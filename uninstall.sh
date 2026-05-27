@@ -32,7 +32,7 @@ fi
 read -p "Remove data volumes (database, stats)? [y/N] " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    docker volume rm taknet-db-data taknet-readsb-run taknet-tar1090-data taknet-graphs1090-data 2>/dev/null || true
+    docker volume rm taknet-db-data taknet-readsb-run taknet-tar1090-data taknet-graphs1090-data taknet-caddy-data taknet-caddy-config 2>/dev/null || true
     rm -rf "$DATA_DIR"
     echo -e "${YELLOW}Data volumes removed${NC}"
 fi

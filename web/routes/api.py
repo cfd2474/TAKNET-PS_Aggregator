@@ -18,7 +18,8 @@ from models import enrich_feeder_mlat_display
 from models import filter_feeders_for_user, feeder_stats_from_rows, user_can_access_feeder
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
-                                      disconnect_netbird, get_client as _get_docker_client)
+                                      disconnect_netbird, get_client as _get_docker_client,
+                                      get_caddy_status, get_caddy_certs)
 from services.vpn_service import get_combined_status
 from services.health_snapshot import get_health_history, get_host_snapshot
 from routes.auth_utils import login_required_any, network_admin_required, admin_required
@@ -715,6 +716,16 @@ def netbird_disconnect_route():
 def docker_containers():
     """List all TAKNET containers."""
     return jsonify({"containers": get_containers()})
+
+
+@bp.route("/caddy/status")
+@admin_required
+def caddy_status():
+    """Get Caddy reverse proxy container status and certificate status."""
+    return jsonify({
+        "container": get_caddy_status(),
+        "certs": get_caddy_certs(),
+    })
 
 
 @bp.route("/docker/restart-all", methods=["POST"])

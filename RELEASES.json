@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.375",
+    "date": "2026-05-26",
+    "notes": [
+      "Security & Reliability: Added Caddy as a containerized reverse proxy and SSL certificate manager in docker-compose, replacing Certbot. Caddy automatically handles HTTPS redirection and Let's Encrypt certificate renewals.",
+      "Services Dashboard: Added a dedicated Caddy SSL / TLS Certificate Manager status card in the Services tab, showing active SSL certificates, issuer names, expiration dates, days remaining, and integration with container restart and log modals."
+    ]
+  },
+  {
     "version": "1.0.374",
     "date": "2026-05-26",
     "notes": [

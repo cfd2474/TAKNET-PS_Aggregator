@@ -1,0 +1,40 @@
+# TAKNET-PS Aggregator — Caddyfile
+#
+# Caddy acts as the primary reverse proxy and SSL certificate manager.
+# It automatically handles HTTPS certificates and redirects.
+
+{
+    # Admin API configuration (defaults to localhost:2019)
+    admin localhost:2019
+}
+
+# Main Application Domain
+{$DOMAIN_NAME:adsb.tak-solutions.com} {
+    reverse_proxy nginx:80 {
+        # Keep original headers
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# NetBird Domain (if enabled)
+{$NETBIRD_DOMAIN_NAME:netbird.tak-solutions.com} {
+    reverse_proxy nginx:80 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Fallback for HTTP access (IP address, localhost, or internal testing)
+http:// {
+    reverse_proxy nginx:80 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

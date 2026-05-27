@@ -165,6 +165,8 @@ RESEND_ENABLED=false
 RESEND_API_KEY=
 RESEND_FROM_EMAIL="noreply@notify.tak-solutions.com"
 RESEND_ADMIN_EMAILS=
+DOMAIN_NAME=adsb.tak-solutions.com
+NETBIRD_DOMAIN_NAME=netbird.tak-solutions.com
 ENVEOF
     warn "Created .env with defaults — edit $INSTALL_DIR/.env to customize"
 fi
@@ -173,9 +175,10 @@ fi
 if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld; then
     info "Opening firewall ports..."
     eval "$(grep -E '^(WEB_PORT|BEAST_PORT|SBS_PORT|MLAT_IN_PORT|MLAT_RESULTS_PORT)=' "$INSTALL_DIR/.env" 2>/dev/null)"
-    for port in ${WEB_PORT:-80} ${BEAST_PORT:-30004} ${SBS_PORT:-30003} ${MLAT_IN_PORT:-30105} ${MLAT_RESULTS_PORT:-39001}; do
+    for port in ${WEB_PORT:-80} 443 ${BEAST_PORT:-30004} ${SBS_PORT:-30003} ${MLAT_IN_PORT:-30105} ${MLAT_RESULTS_PORT:-39001}; do
         firewall-cmd --permanent --add-port="${port}/tcp" 2>/dev/null || true
     done
+    firewall-cmd --permanent --add-port="443/udp" 2>/dev/null || true
     firewall-cmd --reload 2>/dev/null || true
     ok "Firewall configured"
 else
@@ -254,7 +257,7 @@ ok "CLI installed: taknet-agg"
 info "Building and starting containers..."
 cd "$INSTALL_DIR"
 # Force-remove any stopped/orphaned containers before compose up
-for cname in taknet-nginx taknet-dashboard taknet-beast-proxy taknet-readsb taknet-tar1090 taknet-mlat taknet-api taknet-netbird-client; do
+for cname in taknet-caddy taknet-nginx taknet-dashboard taknet-beast-proxy taknet-readsb taknet-tar1090 taknet-mlat taknet-api taknet-netbird-client; do
     docker rm -f "$cname" 2>/dev/null || true
 done
 docker compose up -d --build

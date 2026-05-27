@@ -1,5 +1,6 @@
 """Docker service — container management via Docker socket."""
 
+import os
 import docker
 import docker.errors
 
@@ -140,3 +141,84 @@ def disconnect_netbird():
         return True, "NetBird client was not running"
     except Exception as e:
         return False, str(e)
+
+
+def get_caddy_status():
+    """Get status of the taknet-caddy container."""
+    client = get_client()
+    if not client:
+        return {"running": False, "status": "Docker not available"}
+    try:
+        container = client.containers.get("taknet-caddy")
+        started = container.attrs.get("State", {}).get("StartedAt", "")
+        return {
+            "running": container.status == "running",
+            "status": container.status,
+            "started_at": started,
+            "image": container.image.tags[0] if container.image.tags else str(container.image.short_id),
+        }
+    except docker.errors.NotFound:
+        return {"running": False, "status": "not_created"}
+    except Exception as e:
+        return {"running": False, "status": "error", "error": str(e)}
+
+
+def get_caddy_certs():
+    """Read and parse SSL certificates managed by Caddy."""
+    import glob
+    from datetime import datetime, timezone
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.backends import default_backend
+    except ImportError:
+        return []
+
+    caddy_data_path = "/caddy-data"
+    search_path = os.path.join(caddy_data_path, "caddy", "certificates", "**", "*.crt")
+    
+    certs = []
+    for crt_path in glob.glob(search_path, recursive=True):
+        try:
+            with open(crt_path, "rb") as f:
+                cert_data = f.read()
+            cert = x509.load_pem_x509_certificate(cert_data, default_backend())
+            
+            subject = cert.subject
+            common_name = ""
+            for attribute in subject:
+                if attribute.oid._name == "commonName":
+                    common_name = attribute.value
+            
+            sans = []
+            try:
+                ext = cert.extensions.get_extension_for_oid(x509.OID_SUBJECT_ALTERNATIVE_NAME)
+                sans = ext.value.get_values_for_type(x509.DNSName)
+            except Exception:
+                pass
+
+            issuer = ""
+            for attribute in cert.issuer:
+                if attribute.oid._name == "commonName":
+                    issuer = attribute.value
+                    
+            expiry = cert.not_valid_after_utc
+            now = datetime.now(timezone.utc)
+            
+            days_remaining = None
+            if expiry:
+                delta = expiry - now
+                days_remaining = delta.days
+
+            certs.append({
+                "domain": common_name or (sans[0] if sans else "Unknown"),
+                "sans": sans,
+                "issuer": issuer or "Unknown",
+                "expiry": expiry.isoformat() if expiry else None,
+                "days_remaining": days_remaining,
+                "expired": expiry < now if expiry else False,
+            })
+        except Exception as e:
+            print(f"[caddy] Error reading cert {crt_path}: {e}")
+            
+    return sorted(certs, key=lambda x: x["domain"])
+

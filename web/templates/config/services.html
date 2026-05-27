@@ -3,6 +3,54 @@
 
 {% block content %}
 
+<!-- Caddy SSL/TLS Certificate Manager -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+            <h3>Caddy SSL / TLS Certificate Manager</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+                Caddy automatically provisions and renews SSL/TLS certificates for your domains.
+            </p>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-sm" onclick="restartContainer('taknet-caddy')">Restart Caddy</button>
+            <button class="btn btn-sm" onclick="showLogs('taknet-caddy')">Caddy Logs</button>
+            <button class="btn btn-sm" onclick="loadCaddyStatus()">Refresh</button>
+        </div>
+    </div>
+    <div style="padding:0 20px 20px;">
+        <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
+            <span style="font-size:13px; font-weight:500; color:var(--text-secondary);">Container Status:</span>
+            <span id="caddy-status-badge">Loading...</span>
+            <span id="caddy-uptime" style="font-size:12px; color:var(--text-muted);"></span>
+        </div>
+
+        <div style="font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:8px;">
+            Managed Certificates
+        </div>
+        <div class="table-wrap" style="margin:0; border:1px solid rgba(255,255,255,0.05); border-radius:6px; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bg-secondary);">
+                        <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Domain</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Issuer</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Expiration Date</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Time Left</th>
+                        <th style="padding:10px 14px; text-align:right; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="caddy-certs-table">
+                    <tr>
+                        <td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">
+                            Loading certificate status...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <!-- ADSBHub settings -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
@@ -524,10 +572,76 @@ document.getElementById('logs-modal').addEventListener('click', function(e) {
     if (e.target === this) closeLogs();
 });
 
+async function loadCaddyStatus() {
+    const badgeEl = document.getElementById('caddy-status-badge');
+    const uptimeEl = document.getElementById('caddy-uptime');
+    const tbodyEl = document.getElementById('caddy-certs-table');
+    if (!badgeEl || !tbodyEl) return;
+
+    try {
+        const r = await fetch('/api/caddy/status');
+        const d = await r.json();
+
+        // 1. Container status
+        const c = d.container || {};
+        if (c.status === 'running') {
+            badgeEl.className = 'badge badge-live';
+            badgeEl.textContent = 'Running';
+            uptimeEl.textContent = 'Uptime: ' + fmtTime(c.started_at);
+        } else if (c.status === 'not_created') {
+            badgeEl.className = 'badge badge-offline';
+            badgeEl.textContent = 'Not Created';
+            uptimeEl.textContent = '';
+        } else {
+            badgeEl.className = 'badge badge-offline';
+            badgeEl.textContent = c.status || 'Offline';
+            uptimeEl.textContent = '';
+        }
+
+        // 2. Certificates status
+        const certs = d.certs || [];
+        if (certs.length === 0) {
+            tbodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No certificates found. Caddy generates certificates automatically on demand.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        certs.forEach(cert => {
+            let statusBadge = '';
+            if (cert.expired) {
+                statusBadge = '<span class="badge badge-offline">Expired</span>';
+            } else if (cert.days_remaining !== null && cert.days_remaining <= 15) {
+                statusBadge = '<span class="badge badge-offline" style="background:rgba(245,158,11,0.1);color:#f59e0b;border-color:rgba(245,158,11,0.2);">Expiring Soon</span>';
+            } else {
+                statusBadge = '<span class="badge badge-live">Active</span>';
+            }
+
+            const expiryStr = cert.expiry ? new Date(cert.expiry).toLocaleDateString() + ' ' + new Date(cert.expiry).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—';
+            const daysLeft = cert.days_remaining !== null ? cert.days_remaining + ' days' : '—';
+
+            html += '<tr>';
+            html += '<td style="padding:10px 14px;font-weight:500;color:var(--text-primary); border-bottom:1px solid rgba(255,255,255,0.02);">' + cert.domain + '</td>';
+            html += '<td style="padding:10px 14px;color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.02);">' + cert.issuer + '</td>';
+            html += '<td style="padding:10px 14px;color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.02);">' + expiryStr + '</td>';
+            html += '<td style="padding:10px 14px;color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.02);">' + daysLeft + '</td>';
+            html += '<td style="padding:10px 14px;text-align:right; border-bottom:1px solid rgba(255,255,255,0.02);">' + statusBadge + '</td>';
+            html += '</tr>';
+        });
+        tbodyEl.innerHTML = html;
+    } catch (e) {
+        badgeEl.className = 'badge badge-offline';
+        badgeEl.textContent = 'Error';
+        uptimeEl.textContent = '';
+        tbodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);padding:20px;">Failed to load certificate status: ' + e.message + '</td></tr>';
+    }
+}
+
 loadAdsbhubSettings();
 loadResendMailSettings();
 loadCotPushSettings();
 loadContainers();
+loadCaddyStatus();
 setInterval(loadContainers, 30000);
+setInterval(loadCaddyStatus, 30000);
 </script>
 {% endblock %}
