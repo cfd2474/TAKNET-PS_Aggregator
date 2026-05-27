@@ -180,7 +180,7 @@ services:
       - /opt/taknet-aggregator/.env:/opt/taknet-aggregator/.env:rw
       - ${INSTALL_DIR:-/opt/taknet-aggregator}/var:/app/var:ro
       - adsbhub-status:/app/adsbhub-status:rw
-      - caddy-data:/caddy-data:ro
+      - caddy-data:/caddy-data:rw
     networks:
       - taknet-internal
     depends_on:

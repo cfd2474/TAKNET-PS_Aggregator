@@ -222,3 +222,25 @@ def get_caddy_certs():
             
     return sorted(certs, key=lambda x: x["domain"])
 
+
+def force_renew_caddy_cert(domain):
+    """Force renew Caddy certificate by deleting the cert directory and restarting Caddy."""
+    import shutil
+    import glob
+    caddy_data_path = "/caddy-data"
+    
+    search_pattern = os.path.join(caddy_data_path, "caddy", "certificates", "*", domain)
+    for domain_dir in glob.glob(search_pattern):
+        try:
+            if os.path.isdir(domain_dir):
+                shutil.rmtree(domain_dir)
+        except Exception as e:
+            print(f"[caddy] Failed to delete cert dir {domain_dir}: {e}")
+            return False, f"Failed to clean old certificate: {e}"
+            
+    ok, msg = restart_container("taknet-caddy")
+    if ok:
+        return True, "Old certificate removed. Caddy is restarting to issue a new certificate."
+    else:
+        return False, f"Failed to restart Caddy: {msg}"
+

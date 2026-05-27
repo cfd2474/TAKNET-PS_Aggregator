@@ -9,6 +9,7 @@ from flask_login import LoginManager, UserMixin, current_user
 
 from models import mark_stale_feeders, ActivityModel, UserModel
 from services.health_snapshot import collect_health_snapshot
+from services.cert_monitor import check_caddy_certs_job
 
 log = logging.getLogger(__name__)
 
@@ -139,6 +140,7 @@ def create_app():
     scheduler.add_job(lambda: ActivityModel.cleanup(7), "interval", minutes=5, id="cleanup")
     scheduler.add_job(collect_health_snapshot, "interval", seconds=30, id="health_snapshot")
     scheduler.add_job(UserModel.seed_default, "interval", minutes=1, id="seed_user")
+    scheduler.add_job(check_caddy_certs_job, "interval", minutes=15, id="caddy_certs_check")
 
     def _run_cot_sender():
         import threading

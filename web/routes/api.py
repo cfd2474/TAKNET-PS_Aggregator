@@ -19,7 +19,7 @@ from models import filter_feeders_for_user, feeder_stats_from_rows, user_can_acc
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       get_netbird_client_status, enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client,
-                                      get_caddy_status, get_caddy_certs)
+                                      get_caddy_status, get_caddy_certs, force_renew_caddy_cert)
 from services.vpn_service import get_combined_status
 from services.health_snapshot import get_health_history, get_host_snapshot
 from routes.auth_utils import login_required_any, network_admin_required, admin_required
@@ -726,6 +726,22 @@ def caddy_status():
         "container": get_caddy_status(),
         "certs": get_caddy_certs(),
     })
+
+
+@bp.route("/caddy/renew", methods=["POST"])
+@admin_required
+def caddy_renew():
+    """Force renew a Caddy certificate by domain name."""
+    data = request.get_json() or {}
+    domain = (data.get("domain") or "").strip()
+    if not domain:
+        return jsonify({"error": "domain is required"}), 400
+    
+    if "/" in domain or "\\" in domain or ".." in domain:
+        return jsonify({"error": "invalid domain name"}), 400
+
+    ok, msg = force_renew_caddy_cert(domain)
+    return jsonify({"success": ok, "message": msg})
 
 
 @bp.route("/docker/restart-all", methods=["POST"])

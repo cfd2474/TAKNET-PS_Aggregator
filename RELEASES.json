@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.376",
+    "date": "2026-05-26",
+    "notes": [
+      "TLS Certificate Auto-renewal & Alerts: Configured Caddy's auto-renewal window ratio to 0.3333 (renewing 30 days prior to expiry). Added background checking job that runs every 15 minutes, logs renewals to the activity log, and sends email notifications via Resend when certificates are successfully renewed.",
+      "TLS Certificate Expiration Alerts: Implemented daily warning/critical email notifications for certificates expiring in 14 days or less.",
+      "Manual TLS Certificate Renewal: Added a manual 'Renew Cert' button to the Services tab allowing administrators to clear current certificates and trigger an immediate renewal challenge."
+    ]
+  },
+  {
     "version": "1.0.375",
     "date": "2026-05-26",
     "notes": [

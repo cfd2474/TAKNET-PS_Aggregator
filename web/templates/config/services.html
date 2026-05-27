@@ -36,12 +36,13 @@
                         <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Issuer</th>
                         <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Expiration Date</th>
                         <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Time Left</th>
-                        <th style="padding:10px 14px; text-align:right; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Status</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Status</th>
+                        <th style="padding:10px 14px; text-align:right; font-size:12px; font-weight:600; color:var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.05);">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="caddy-certs-table">
                     <tr>
-                        <td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">
+                        <td colspan="6" style="text-align:center; color:var(--text-muted); padding:20px;">
                             Loading certificate status...
                         </td>
                     </tr>
@@ -601,7 +602,7 @@ async function loadCaddyStatus() {
         // 2. Certificates status
         const certs = d.certs || [];
         if (certs.length === 0) {
-            tbodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No certificates found. Caddy generates certificates automatically on demand.</td></tr>';
+            tbodyEl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No certificates found. Caddy generates certificates automatically on demand.</td></tr>';
             return;
         }
 
@@ -624,7 +625,10 @@ async function loadCaddyStatus() {
             html += '<td style="padding:10px 14px;color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.02);">' + cert.issuer + '</td>';
             html += '<td style="padding:10px 14px;color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.02);">' + expiryStr + '</td>';
             html += '<td style="padding:10px 14px;color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.02);">' + daysLeft + '</td>';
-            html += '<td style="padding:10px 14px;text-align:right; border-bottom:1px solid rgba(255,255,255,0.02);">' + statusBadge + '</td>';
+            html += '<td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.02);">' + statusBadge + '</td>';
+            html += '<td style="padding:10px 14px;text-align:right; border-bottom:1px solid rgba(255,255,255,0.02);">';
+            html += '<button class="btn btn-sm" onclick="renewCert(\'' + cert.domain + '\')">Renew Cert</button>';
+            html += '</td>';
             html += '</tr>';
         });
         tbodyEl.innerHTML = html;
@@ -632,7 +636,24 @@ async function loadCaddyStatus() {
         badgeEl.className = 'badge badge-offline';
         badgeEl.textContent = 'Error';
         uptimeEl.textContent = '';
-        tbodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red);padding:20px;">Failed to load certificate status: ' + e.message + '</td></tr>';
+        tbodyEl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red);padding:20px;">Failed to load certificate status: ' + e.message + '</td></tr>';
+    }
+}
+
+async function renewCert(domain) {
+    if (!confirm('Are you sure you want to force renew the certificate for ' + domain + '? Caddy will delete the old certificate and obtain a fresh one.')) return;
+    try {
+        const r = await fetch('/api/caddy/renew', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain: domain })
+        });
+        const d = await r.json();
+        alert(d.message || 'Renewal triggered.');
+        loadCaddyStatus();
+        loadContainers();
+    } catch(e) {
+        alert('Error: ' + e.message);
     }
 }
 

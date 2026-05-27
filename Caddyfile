@@ -6,6 +6,8 @@
 {
     # Admin API configuration (defaults to localhost:2019)
     admin localhost:2019
+    # Explicitly set renewal window ratio to 1/3 (approx 30 days for 90-day certs)
+    renewal_window_ratio 0.3333
 }
 
 # Main Application Domain
