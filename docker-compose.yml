@@ -150,6 +150,8 @@ services:
       dockerfile: Dockerfile
     container_name: taknet-dashboard
     restart: unless-stopped
+    ports:
+      - "9000:9000/tcp"
     environment:
       - TZ=${TZ:-America/Los_Angeles}
       - READSB_HOST=readsb
@@ -171,6 +173,10 @@ services:
       - COT_XML_USE_TEMPLATE=${COT_XML_USE_TEMPLATE:-}
       - ADSBHUB_STATUS_PATH=/app/adsbhub-status
       - TUNNEL_SERVICE_URL=http://tunnel:5001
+      - KLV_INGEST_PORT=9000
+      - NETBIRD_VIDEO_SOURCES_GROUP_ID=${NETBIRD_VIDEO_SOURCES_GROUP_ID:-}
+      - NETBIRD_MANAGEMENT_URL=${NETBIRD_MANAGEMENT_URL:-https://netbird.tak-solutions.com}
+      - KLV_NETBIRD_TARGET_IP=${KLV_NETBIRD_TARGET_IP:-}
     volumes:
       - db-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro

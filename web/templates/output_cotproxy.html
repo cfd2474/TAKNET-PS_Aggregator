@@ -14,6 +14,11 @@ th.sortable:hover { color: var(--accent); }
 .sort-arrow { font-size:10px; color: var(--text-muted); margin-left:2px; }
 .sort-arrow.asc::after { content: ' ▲'; }
 .sort-arrow.desc::after { content: ' ▼'; }
+.klv-badge { display:inline-block;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em; }
+.klv-badge.idle { background:rgba(148,163,184,0.2);color:var(--text-muted); }
+.klv-badge.live { background:rgba(34,197,94,0.2);color:#22c55e; }
+.klv-badge.no_klv { background:rgba(234,179,8,0.2);color:#eab308; }
+.klv-badge.stale { background:rgba(239,68,68,0.15);color:var(--red); }
 .filter-row th { padding: 4px 6px; vertical-align: middle; background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
 .filter-row input, .filter-row select { width: 100%; max-width: 140px; font-size: 12px; padding: 4px 6px; box-sizing: border-box; }
 .filter-row .filter-clear { font-size: 11px; color: var(--accent); cursor: pointer; }
@@ -116,6 +121,7 @@ th.sortable:hover { color: var(--accent); }
                     <th>CoT type</th>
                     <th>Icon</th>
                     <th>Video</th>
+                    <th>KLV</th>
                     <th>Link</th>
                     <th style="min-width:115px;text-align:right;"></th>
                 </tr>
@@ -133,14 +139,15 @@ th.sortable:hover { color: var(--accent); }
                     <th></th>
                     <th></th>
                     <th></th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody id="transforms-tbody">
-                <tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
+                <tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:24px;">Loading…</td></tr>
             </tbody>
             <tfoot id="transforms-tfoot" style="display:none;">
                 <tr>
-                    <td colspan="13" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
+                    <td colspan="14" style="padding:10px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
                         <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-right:12px;">
                             <input type="checkbox" id="select-all-bottom" title="Select all on page"> Select all
                         </label>
@@ -328,7 +335,7 @@ th.sortable:hover { color: var(--accent); }
             <div class="card-grid card-grid-2" style="gap:12px;">
                 <div class="form-group">
                     <label>HEX (ICAO 24-bit) *</label>
-                    <input class="form-control" id="t-hex" placeholder="A1B2C3">
+                    <input class="form-control" id="t-hex" oninput="toggleKlvPanel()" placeholder="A1B2C3">
                 </div>
                 <div class="form-group">
                     <label>Callsign</label>
@@ -390,7 +397,27 @@ th.sortable:hover { color: var(--accent); }
                 </div>
                 <div class="form-group" style="grid-column:1/-1;">
                     <label>Video URL (CoT &lt;__video url="..."&gt; — optional)</label>
-                    <input class="form-control" id="t-video" type="text" placeholder="https://, rtsp://, srt://">
+                    <input class="form-control" id="t-video" type="text" placeholder="https://, rtsp://, srt://" oninput="toggleKlvPanel()">
+                    <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">When set, KLV metadata from a linked MediaMTX feed can drive map position and an SPI point while streaming.</p>
+                </div>
+                <div id="klv-connection-panel" class="form-group" style="grid-column:1/-1;display:none;padding:12px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border);">
+                    <div style="font-weight:600;font-size:13px;margin-bottom:8px;">KLV ingest connection (share with MediaMTX operator)</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+                        <div><span style="color:var(--text-muted);">Target</span><br><code id="klv-target-display">—</code></div>
+                        <div><span style="color:var(--text-muted);">HEX</span><br><code id="klv-hex-display">—</code></div>
+                        <div style="grid-column:1/-1;"><span style="color:var(--text-muted);">Ingest token</span><br>
+                            <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+                                <input class="form-control" id="klv-token-display" type="text" readonly style="font-size:11px;font-family:monospace;">
+                                <button type="button" class="btn" style="font-size:11px;white-space:nowrap;" onclick="copyKlvToken()">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                        <button type="button" class="btn" style="font-size:11px;" onclick="regenerateKlvToken()">Regenerate token</button>
+                        <button type="button" class="btn" style="font-size:11px;" onclick="generateNetbirdSetupKey()">Generate NetBird setup key</button>
+                    </div>
+                    <div id="klv-setup-key-result" style="display:none;margin-top:10px;font-size:12px;"></div>
+                    <p style="font-size:11px;color:var(--text-muted);margin:10px 0 0;">Token is owner-only and not included in CSV export. MediaMTX must send this token in every NDJSON message over NetBird TCP port 9000.</p>
                 </div>
                 <div class="form-group" style="grid-column:1/-1;">
                     <label>Associated Link (CoT &lt;link relation="r-u"&gt; — optional)</label>
@@ -448,6 +475,91 @@ th.sortable:hover { color: var(--accent); }
 {% block extra_scripts %}
 <script>
 const outputId = {{ output.id }};
+let klvConnectionInfo = null;
+let currentTransformId = null;
+
+function renderKlvStatus(t) {
+    if (!t.video || !String(t.video).trim()) return '—';
+    const s = (t.klv_status || 'idle').toLowerCase();
+    const labels = { idle: 'Idle', live: 'Live', no_klv: 'No KLV', stale: 'Stale' };
+    return '<span class="klv-badge ' + escapeHtml(s) + '">' + escapeHtml(labels[s] || s) + '</span>';
+}
+
+async function loadKlvConnectionInfo() {
+    if (klvConnectionInfo) return klvConnectionInfo;
+    try {
+        const r = await fetch('/api/outputs/' + outputId + '/klv/connection-info');
+        const d = await r.json();
+        if (r.ok) klvConnectionInfo = d;
+        return klvConnectionInfo;
+    } catch (e) {
+        return null;
+    }
+}
+
+function toggleKlvPanel() {
+    const video = (document.getElementById('t-video').value || '').trim();
+    const panel = document.getElementById('klv-connection-panel');
+    if (!panel) return;
+    panel.style.display = video ? 'block' : 'none';
+    if (video) {
+        const hex = (document.getElementById('t-hex').value || '').trim().toUpperCase();
+        document.getElementById('klv-hex-display').textContent = hex || '—';
+        loadKlvConnectionInfo().then(info => {
+            if (info && info.netbird_ip) {
+                document.getElementById('klv-target-display').textContent = info.netbird_ip + ':' + (info.port || 9000);
+            } else {
+                document.getElementById('klv-target-display').textContent = '(NetBird IP unavailable — enroll server first)';
+            }
+        });
+    }
+}
+
+async function updateKlvTokenDisplay(transformId) {
+    currentTransformId = transformId || null;
+    const tokenEl = document.getElementById('klv-token-display');
+    if (!tokenEl) return;
+    if (!transformId) {
+        tokenEl.value = '(save transform to generate token)';
+        return;
+    }
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + transformId);
+    const d = await r.json();
+    const t = d.transform;
+    tokenEl.value = (t && t.klv_ingest_token) ? t.klv_ingest_token : '(no token — save with video URL)';
+}
+
+function copyKlvToken() {
+    const el = document.getElementById('klv-token-display');
+    if (!el || !el.value || el.value.startsWith('(')) return;
+    navigator.clipboard.writeText(el.value).catch(() => {});
+}
+
+async function regenerateKlvToken() {
+    if (!currentTransformId) { alert('Save the transform first.'); return; }
+    if (!confirm('Regenerate ingest token? MediaMTX must be updated with the new token.')) return;
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + currentTransformId + '/klv/regenerate-token', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) { alert(d.error || 'Failed'); return; }
+    document.getElementById('klv-token-display').value = d.klv_ingest_token || '';
+}
+
+async function generateNetbirdSetupKey() {
+    const r = await fetch('/api/outputs/' + outputId + '/klv/netbird-setup-key', { method: 'POST' });
+    const d = await r.json();
+    const el = document.getElementById('klv-setup-key-result');
+    if (!r.ok) {
+        el.style.display = 'block';
+        el.style.color = 'var(--red)';
+        el.textContent = d.error || 'Failed to generate setup key';
+        return;
+    }
+    el.style.display = 'block';
+    el.style.color = 'var(--text)';
+    el.innerHTML = '<strong>NetBird setup key</strong> (one-time — copy now):<br>'
+        + '<code style="word-break:break-all;">' + escapeHtml(d.setup_key) + '</code><br>'
+        + '<span style="color:var(--text-muted);">Management URL: ' + escapeHtml(d.management_url || '') + '</span>';
+}
 
 // Civil / Military ref icons: cot, name, icon filename (cot_ref_icons)
 var CIVIL_REF_ICONS = [
@@ -1051,13 +1163,13 @@ async function loadTransforms() {
         updatePaginationBar();
         updateSortArrows();
         if (!items.length && !totalCount) {
-            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:24px;">No transforms. Add one or import CSV.</td></tr>';
             document.getElementById('bulk-delete-btn-top').style.display = 'none';
             document.getElementById('delete-all-btn-top').style.display = 'none';
             return;
         }
         if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:24px;">No results for this page.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:24px;">No results for this page.</td></tr>';
         } else {
             tbody.innerHTML = items.map(t => `
                 <tr>
@@ -1072,6 +1184,7 @@ async function loadTransforms() {
                     <td style="font-size:12px;" title="${escapeHtml(t.cot || '')}">${cotDisplayName(t.cot)}</td>
                     <td style="max-width:140px;">${renderIconCell(t)}</td>
                     <td style="text-align:center;">${(t.video && String(t.video).trim()) ? 'Yes' : 'No'}</td>
+                    <td style="text-align:center;">${renderKlvStatus(t)}</td>
                     <td style="text-align:center;">${(t.link && String(t.link).trim()) ? 'Yes' : 'No'}</td>
                     <td style="text-align:right;">
                         <button class="btn" style="font-size:11px;padding:4px 8px;" onclick="openEditModal(${t.id})">Edit</button>
@@ -1084,7 +1197,7 @@ async function loadTransforms() {
         wireSortHeaders();
         updateBulkDeleteVisibility();
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="13" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" style="color:var(--red);text-align:center;padding:20px;">Failed to load</td></tr>';
         tfoot.style.display = 'none';
         bar.style.display = 'none';
     }
@@ -1106,6 +1219,10 @@ function openAddModal() {
     });
     setCotValueInForm('');
     document.getElementById('transform-modal-error').style.display = 'none';
+    document.getElementById('klv-setup-key-result').style.display = 'none';
+    currentTransformId = null;
+    toggleKlvPanel();
+    updateKlvTokenDisplay(null);
     document.getElementById('transform-modal').classList.add('show');
 }
 
@@ -1129,6 +1246,10 @@ async function openEditModal(id) {
     document.getElementById('t-video').value = t.video || '';
     document.getElementById('t-link').value = t.link || '';
     document.getElementById('transform-modal-error').style.display = 'none';
+    document.getElementById('klv-setup-key-result').style.display = 'none';
+    currentTransformId = t.id;
+    toggleKlvPanel();
+    document.getElementById('klv-token-display').value = t.klv_ingest_token || '';
     document.getElementById('transform-modal').classList.add('show');
 }
 
@@ -1519,5 +1640,8 @@ loadFacets();
 loadCivilMilitaryRefs();
 loadPsAirIcons();
 loadTransforms();
+setInterval(function() {
+    if (document.visibilityState === 'visible') loadTransforms();
+}, 5000);
 </script>
 {% endblock %}

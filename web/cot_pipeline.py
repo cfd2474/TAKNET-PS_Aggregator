@@ -95,6 +95,13 @@ def _phase_ms(t0, t1):
 # Only one cycle at a time (avoid overlapping fetch/connect from scheduler).
 _cot_sender_lock = threading.Lock()
 
+# KLV overlay: hexes that were driven by KLV last cycle (for ADS-B failback resync).
+_last_klv_active: dict[int, set[str]] = {}
+# SPI point delta cache per output_id -> hex -> (lat, lon, elev_m)
+_last_sent_spi_state: dict[int, dict[str, tuple]] = {}
+
+COT_TYPE_SPI = "b-m-p-s-p-i"
+
 # Persistent sockets per output_id so we don't connect+TLS every cycle (saves 100–500ms+ per run).
 # Cleared on send failure; next cycle reconnects. Single-threaded per cycle so no lock needed.
 _persistent_sockets = {}
@@ -659,6 +666,7 @@ def _transform_row_to_dict(t):
         "remarks": t.get("remarks"),
         "video": t.get("video"),
         "link": t.get("link"),
+        "klv_ingest_token": t.get("klv_ingest_token"),
     }
 
 
@@ -1009,6 +1017,76 @@ def build_cot_xml(
     return _serialize_cot_xml_et(parts)
 
 
+def _spi_state_key(spi: dict) -> tuple:
+    lat = _parse_float(spi.get("lat"))
+    lon = _parse_float(spi.get("lon"))
+    elev = _parse_float(spi.get("elev_m"))
+    return (
+        round(lat, 5) if lat is not None else None,
+        round(lon, 5) if lon is not None else None,
+        round(elev, 1) if elev is not None else None,
+    )
+
+
+def build_spi_cot_xml(hex_code: str, spi: dict, *, now=None, stale=None, callsign: str | None = None):
+    """Build a CoT SPI point (b-m-p-s-p-i) from KLV frame-center metadata."""
+    lat = _parse_float(spi.get("lat"))
+    lon = _parse_float(spi.get("lon"))
+    if lat is None or lon is None:
+        return None
+    elev_m = _parse_float(spi.get("elev_m"))
+    hae_m = elev_m if elev_m is not None else 0.0
+    if now is None:
+        now = _cot_time()
+    if stale is None:
+        stale_dt = datetime.now(timezone.utc).timestamp() + COT_STALE_SECONDS
+        stale = datetime.fromtimestamp(stale_dt, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+    uid = f"{hex_code}-spi"
+    cs = (callsign or hex_code)[:128]
+    if _cot_xml_use_template():
+        aq = _xml_escape
+        return (
+            "<event "
+            f'version="{aq("2.0")}" '
+            f'type="{aq(COT_TYPE_SPI)}" '
+            f'uid="{aq(uid)}" '
+            f'how="{aq("m-g")}" '
+            f'time="{aq(now)}" '
+            f'start="{aq(now)}" '
+            f'stale="{aq(stale)}">'
+            "<point "
+            f'lat="{aq(str(lat))}" '
+            f'lon="{aq(str(lon))}" '
+            f'le="50" '
+            f'hae="{aq(str(hae_m))}" '
+            f'ce="10" />'
+            f'<detail callsign="{aq(cs)}">'
+            f'<contact callsign="{aq(cs)}" />'
+            "</detail></event>"
+        )
+    root = ET.Element(
+        "event",
+        attrib={
+            "version": "2.0",
+            "type": COT_TYPE_SPI,
+            "uid": uid,
+            "how": "m-g",
+            "time": now,
+            "start": now,
+            "stale": stale,
+        },
+    )
+    ET.SubElement(
+        root,
+        "point",
+        attrib={"lat": str(lat), "lon": str(lon), "le": "50", "hae": str(hae_m), "ce": "10"},
+    )
+    detail = ET.SubElement(root, "detail")
+    detail.set("callsign", cs)
+    ET.SubElement(detail, "contact", attrib={"callsign": cs})
+    return ET.tostring(root, encoding="unicode", default_namespace=None)
+
+
 def _state_key(ac):
     """Return a comparable state tuple for delta updates: (lat, lon, alt_baro, track, gs). Rounded to avoid float noise."""
     lat = _parse_float(ac.get("lat"))
@@ -1348,10 +1426,17 @@ def _run_cot_sender_cycle_impl(requests):
 
         # Load transforms only for:
         # - delta-changed hexes (needed to preserve transform overrides in built XML), and
-        # - cached-but-not-TISB hexes (needed to preserve seen_hexes pruning semantics).
+        # - cached-but-not-TISB hexes (needed to preserve seen_hexes pruning semantics), and
+        # - hexes with active KLV ingest for this output.
         t0 = time.perf_counter()
         if use_cotproxy:
-            query_hexes = delta_hexes | cached_need_transform_hexes
+            try:
+                from klv_ingest import get_klv_hexes_for_output
+
+                klv_hexes = get_klv_hexes_for_output(output_id)
+            except Exception:
+                klv_hexes = set()
+            query_hexes = delta_hexes | cached_need_transform_hexes | klv_hexes
             if query_hexes:
                 from models import CotTransformModel
                 rows = CotTransformModel.get_for_hexes(output_id, list(query_hexes))
@@ -1368,6 +1453,18 @@ def _run_cot_sender_cycle_impl(requests):
 
         # Second pass: inclusion logic + build/send.
         t0 = time.perf_counter()
+        try:
+            from klv_ingest import apply_klv_platform, get_stream_state, is_klv_live, is_spi_live
+        except Exception:
+            apply_klv_platform = None
+            get_stream_state = None
+            is_klv_live = None
+            is_spi_live = None
+
+        klv_active_now: set[str] = set()
+        last_spi_sent = dict(_last_sent_spi_state.get(output_id, {}))
+        spi_seen: set[str] = set()
+
         for ac in aircraft:
             hex_code = ac.get("_norm_hex") if isinstance(ac, dict) else ""
             if not hex_code:
@@ -1378,15 +1475,42 @@ def _run_cot_sender_cycle_impl(requests):
                 continue
             seen_hexes.add(hex_code)
 
-            state = state_by_hex.get(hex_code)
-            if state is None:
-                continue
-            if last_sent.get(hex_code) == state:
+            ac_send = ac
+            token = (transform or {}).get("klv_ingest_token") if transform else None
+            token = (token or "").strip() if token else ""
+            klv_live = bool(
+                token and apply_klv_platform and is_klv_live and is_klv_live(token)
+            )
+            if klv_live:
+                klv_active_now.add(hex_code)
+                ac_send = apply_klv_platform(ac, token)
+
+            state = _state_key(ac_send)
+            prev_klv = hex_code in _last_klv_active.get(output_id, set())
+            force_adsb_resync = prev_klv and not klv_live
+            if not force_adsb_resync and last_sent.get(hex_code) == state:
+                # Still emit SPI when only the sensor point moved.
+                if transform and token and is_spi_live and is_spi_live(token):
+                    st = get_stream_state(token) if get_stream_state else None
+                    if st and st.spi:
+                        spi_key = _spi_state_key(st.spi)
+                        if last_spi_sent.get(hex_code) != spi_key:
+                            spi_xml = build_spi_cot_xml(
+                                hex_code,
+                                st.spi,
+                                now=now,
+                                stale=stale,
+                                callsign=(transform.get("callsign") or hex_code),
+                            )
+                            if spi_xml:
+                                to_send.append(spi_xml)
+                                last_spi_sent[hex_code] = spi_key
+                                spi_seen.add(hex_code)
                 continue
             try:
                 distress_hostile = bool(config.get("distress_hostile"))
                 xml_str = build_cot_xml(
-                    ac,
+                    ac_send,
                     transform,
                     include_icon_in_cot=include_icon_in_cot,
                     now=now,
@@ -1399,6 +1523,26 @@ def _run_cot_sender_cycle_impl(requests):
             if xml_str:
                 to_send.append(xml_str)
                 last_sent[hex_code] = state
+
+            if transform and token and is_spi_live and is_spi_live(token):
+                st = get_stream_state(token) if get_stream_state else None
+                if st and st.spi:
+                    spi_key = _spi_state_key(st.spi)
+                    if last_spi_sent.get(hex_code) != spi_key:
+                        spi_xml = build_spi_cot_xml(
+                            hex_code,
+                            st.spi,
+                            now=now,
+                            stale=stale,
+                            callsign=(transform.get("callsign") or hex_code),
+                        )
+                        if spi_xml:
+                            to_send.append(spi_xml)
+                            last_spi_sent[hex_code] = spi_key
+                            spi_seen.add(hex_code)
+
+        _last_klv_active[output_id] = klv_active_now
+        _last_sent_spi_state[output_id] = {h: last_spi_sent[h] for h in spi_seen if h in last_spi_sent}
         build_loop_ms = _phase_ms(t0, time.perf_counter())
         # Prune cache to hexes seen this cycle; cap size so we don't grow forever
         _last_sent_state[output_id] = {h: last_sent[h] for h in seen_hexes if h in last_sent}

@@ -162,6 +162,13 @@ def create_app():
 
     scheduler.start()
 
+    try:
+        from klv_ingest import start_klv_listener
+
+        start_klv_listener()
+    except Exception:
+        log.exception("Failed to start KLV ingest listener")
+
     return app
 
 

@@ -1615,6 +1615,19 @@ def cot_transforms_list(output_id):
         filter_model=_cot_filter_arg("model"),
         filter_cot=request.args.get("filter_cot"),  # allow empty string for "Default"
     )
+    try:
+        from klv_ingest import klv_status_for_token
+
+        video_ids = [t["id"] for t in items if t.get("video") and str(t.get("video")).strip()]
+        token_map = CotTransformModel.get_tokens_for_ids(output_id, video_ids)
+        for t in items:
+            if t.get("video") and str(t.get("video")).strip():
+                t["klv_status"] = klv_status_for_token(token_map.get(t["id"], ""))
+            else:
+                t["klv_status"] = None
+    except Exception:
+        for t in items:
+            t["klv_status"] = None
     total_pages = max(1, (total + pp - 1) // pp) if total else 1
     return jsonify({
         "transforms": items,
@@ -1763,6 +1776,13 @@ def cot_transform_get(output_id, transform_id):
     t = CotTransformModel.get_by_id(transform_id, output_id)
     if not t:
         return jsonify({"error": "Not found"}), 404
+    try:
+        from klv_ingest import klv_status_for_token
+
+        token = (t.get("klv_ingest_token") or "").strip()
+        t["klv_status"] = klv_status_for_token(token) if t.get("video") and str(t.get("video")).strip() else None
+    except Exception:
+        t["klv_status"] = None
     return jsonify({"transform": t})
 
 
@@ -1936,6 +1956,12 @@ def cot_transforms_import(output_id):
         return jsonify({"error": "No CSV data (send file or JSON { csv: \"...\" } or raw body)"}), 400
     # Single transaction in import_from_csv to avoid 504 on large CSVs; if behind nginx, consider proxy_read_timeout.
     inserted, errors = CotTransformModel.import_from_csv(output_id, csv_text)
+    try:
+        from klv_ingest import reload_token_index
+
+        reload_token_index()
+    except Exception:
+        pass
     return jsonify({"success": True, "inserted": inserted, "errors": errors})
 
 
@@ -1978,6 +2004,58 @@ def cot_transforms_duplicates_merge(output_id):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/outputs/<int:output_id>/klv/connection-info")
+@network_admin_required
+def klv_connection_info(output_id):
+    """NetBird target and port for MediaMTX KLV ingest (output owner only)."""
+    from flask_login import current_user
+    from klv_ingest import KLV_PORT
+    from services.netbird_setup_key import get_netbird_self_ip, NETBIRD_MANAGEMENT_URL
+
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    return jsonify({
+        "netbird_ip": get_netbird_self_ip(),
+        "port": KLV_PORT,
+        "management_url": NETBIRD_MANAGEMENT_URL,
+        "protocol": "tcp",
+    })
+
+
+@bp.route("/outputs/<int:output_id>/cot-transforms/<int:transform_id>/klv/regenerate-token", methods=["POST"])
+@network_admin_required
+def klv_regenerate_token(output_id, transform_id):
+    from flask_login import current_user
+
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    try:
+        token = CotTransformModel.regenerate_klv_token(transform_id, output_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    if not token:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"success": True, "klv_ingest_token": token})
+
+
+@bp.route("/outputs/<int:output_id>/klv/netbird-setup-key", methods=["POST"])
+@network_admin_required
+def klv_netbird_setup_key(output_id):
+    from flask_login import current_user
+    from services.netbird_setup_key import create_video_source_setup_key
+
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    ok, result = create_video_source_setup_key(
+        user_id=current_user.id,
+        username=current_user.username or "user",
+        output_id=output_id,
+    )
+    if not ok:
+        return jsonify({"error": result}), 400
+    return jsonify({"success": True, **result})
 
 
 def _extract_output_key():

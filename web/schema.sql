@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS cot_transforms (
     remarks TEXT,
     video TEXT,
     link TEXT,
+    klv_ingest_token TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (output_id) REFERENCES outputs(id) ON DELETE CASCADE
 );

@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.377",
+    "date": "2026-06-08",
+    "notes": [
+      "KLV video ingest: TCP NDJSON listener on port 9000 receives MISB KLV metadata from external MediaMTX boxes over NetBird. Per-transform ingest tokens route samples to the correct COTProxy output owner.",
+      "CoT map overlay: when a video feed with KLV is live, platform position is driven from KLV (ADS-B failback after ~5s). SPI point CoT (b-m-p-s-p-i) emitted at frame-center when present.",
+      "COTProxy UI: KLV status column (Idle/Live/No KLV/Stale), connection info panel with ingest token, regenerate token, and NetBird setup key generation for MediaMTX operators."
+    ]
+  },
+  {
     "version": "1.0.376",
     "date": "2026-05-26",
     "notes": [

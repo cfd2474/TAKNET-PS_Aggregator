@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -121,6 +122,12 @@ def get_db():
         # Migration: link on cot_transforms (CoT <link relation="r-u">)
         try:
             conn.execute("ALTER TABLE cot_transforms ADD COLUMN link TEXT")
+            conn.commit()
+        except Exception:
+            pass
+        # Migration: KLV ingest token (per-transform auth for MediaMTX metadata feed)
+        try:
+            conn.execute("ALTER TABLE cot_transforms ADD COLUMN klv_ingest_token TEXT")
             conn.commit()
         except Exception:
             pass
@@ -1287,6 +1294,14 @@ class OutputKeyModel:
         conn.close()
 
 
+def _generate_klv_ingest_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _video_url_set(video) -> bool:
+    return bool(video and isinstance(video, str) and video.strip())
+
+
 class CotTransformModel:
     """COTProxy-style transform rules per output (hex -> callsign, type, icon, etc.)."""
 
@@ -1522,12 +1537,80 @@ class CotTransformModel:
     def get_all(output_id: int):
         conn = get_db()
         rows = conn.execute(
-            """SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, created_at
+            """SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link,
+                      klv_ingest_token, created_at
                FROM cot_transforms WHERE output_id = ? ORDER BY hex""",
             (output_id,),
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+    @staticmethod
+    def get_all_with_tokens():
+        """All transforms with a KLV ingest token (for klv_ingest listener routing)."""
+        conn = get_db()
+        rows = conn.execute(
+            """SELECT id, output_id, hex, klv_ingest_token
+               FROM cot_transforms
+               WHERE klv_ingest_token IS NOT NULL AND TRIM(klv_ingest_token) != ''""",
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    @staticmethod
+    def _sync_klv_token(conn, transform_id: int, video) -> str | None:
+        """Ensure token exists when video URL is set; clear when removed. Returns new token or None."""
+        row = conn.execute(
+            "SELECT klv_ingest_token FROM cot_transforms WHERE id = ?",
+            (transform_id,),
+        ).fetchone()
+        existing = (row["klv_ingest_token"] or "").strip() if row else ""
+        if _video_url_set(video):
+            token = existing or _generate_klv_ingest_token()
+            conn.execute(
+                "UPDATE cot_transforms SET klv_ingest_token = ? WHERE id = ?",
+                (token, transform_id),
+            )
+            return token
+        if existing:
+            conn.execute(
+                "UPDATE cot_transforms SET klv_ingest_token = NULL WHERE id = ?",
+                (transform_id,),
+            )
+        return None
+
+    @staticmethod
+    def regenerate_klv_token(transform_id: int, output_id: int) -> str | None:
+        """Generate a new ingest token when transform has a video URL. Returns token or None."""
+        conn = get_db()
+        row = conn.execute(
+            "SELECT video, hex, klv_ingest_token FROM cot_transforms WHERE id = ? AND output_id = ?",
+            (transform_id, output_id),
+        ).fetchone()
+        if not row:
+            conn.close()
+            return None
+        if not _video_url_set(row["video"]):
+            conn.close()
+            raise ValueError("Video URL is required to generate a KLV ingest token")
+        old_token = (row["klv_ingest_token"] or "").strip()
+        hex_code = (row["hex"] or "").strip().upper()
+        token = _generate_klv_ingest_token()
+        conn.execute(
+            "UPDATE cot_transforms SET klv_ingest_token = ? WHERE id = ? AND output_id = ?",
+            (token, transform_id, output_id),
+        )
+        conn.commit()
+        conn.close()
+        try:
+            from klv_ingest import register_token, unregister_token
+
+            if old_token:
+                unregister_token(old_token)
+            register_token(token, output_id, hex_code, transform_id)
+        except Exception:
+            pass
+        return token
 
     # Max hex placeholders per query (output_id + N vars; stay under SQLite default 999 variable limit).
     _COT_TRANSFORMS_HEX_IN_CHUNK = 400
@@ -1552,7 +1635,7 @@ class CotTransformModel:
         if not norm:
             return []
         cols = (
-            "id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, created_at"
+            "id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, klv_ingest_token, created_at"
         )
         chunk = CotTransformModel._COT_TRANSFORMS_HEX_IN_CHUNK
         conn = get_db()
@@ -1655,13 +1738,16 @@ class CotTransformModel:
             offset = (page - 1) * per_page
             q_params = params + [per_page, offset]
             rows = conn.execute(
-                f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, created_at
+                f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, klv_ingest_token, created_at
                     FROM cot_transforms WHERE {where_sql}
                     ORDER BY {sort_by} {order}
                     LIMIT ? OFFSET ?""",
                 tuple(q_params),
             ).fetchall()
-            return [dict(r) for r in rows], total
+            items = [dict(r) for r in rows]
+            for item in items:
+                item.pop("klv_ingest_token", None)
+            return items, total
         finally:
             conn.close()
 
@@ -1706,6 +1792,19 @@ class CotTransformModel:
         return dict_row(row)
 
     @staticmethod
+    def get_tokens_for_ids(output_id: int, transform_ids: list[int]) -> dict[int, str]:
+        if not transform_ids:
+            return {}
+        conn = get_db()
+        ph = ",".join("?" * len(transform_ids))
+        rows = conn.execute(
+            f"SELECT id, klv_ingest_token FROM cot_transforms WHERE output_id = ? AND id IN ({ph})",
+            (output_id, *[int(i) for i in transform_ids]),
+        ).fetchall()
+        conn.close()
+        return {r["id"]: (r["klv_ingest_token"] or "").strip() for r in rows}
+
+    @staticmethod
     def create(output_id: int, data: dict) -> int:
         hex_val = (data.get("hex") or "").strip().upper()
         if not hex_val:
@@ -1724,6 +1823,7 @@ class CotTransformModel:
             raise ValueError(
                 f"Duplicate HEX {hex_val}: transform already exists for this output (id={existing_id})."
             )
+        video_val = (data.get("video") or "").strip() or None
         cursor = conn.execute(
             """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -1739,13 +1839,21 @@ class CotTransformModel:
                 (data.get("cot") or "").strip() or None,
                 (data.get("icon") or "").strip() or None,
                 (data.get("remarks") or "").strip() or None,
-                (data.get("video") or "").strip() or None,
+                video_val,
                 (data.get("link") or "").strip() or None,
             ),
         )
         tid = cursor.lastrowid
+        token = CotTransformModel._sync_klv_token(conn, tid, video_val)
         conn.commit()
         conn.close()
+        if token:
+            try:
+                from klv_ingest import register_token
+
+                register_token(token, output_id, hex_val, tid)
+            except Exception:
+                pass
         return tid
 
     @staticmethod
@@ -1774,6 +1882,12 @@ class CotTransformModel:
                 raise ValueError(
                     f"Duplicate HEX {new_hex}: another transform already exists for this output (id={dupe_id})."
                 )
+        video_val = (data.get("video") or "").strip() or None
+        old_row = conn.execute(
+            "SELECT klv_ingest_token FROM cot_transforms WHERE id = ? AND output_id = ?",
+            (transform_id, output_id),
+        ).fetchone()
+        old_token = (old_row["klv_ingest_token"] or "").strip() if old_row else ""
         conn.execute(
             """UPDATE cot_transforms SET
                domain=?, agency=?, reg=?, callsign=?, type=?, model=?, hex=?, cot=?, icon=?, remarks=?, video=?, link=?
@@ -1789,14 +1903,25 @@ class CotTransformModel:
                 (data.get("cot") or "").strip() or None,
                 (data.get("icon") or "").strip() or None,
                 (data.get("remarks") or "").strip() or None,
-                (data.get("video") or "").strip() or None,
+                video_val,
                 (data.get("link") or "").strip() or None,
                 transform_id,
                 output_id,
             ),
         )
+        new_token = CotTransformModel._sync_klv_token(conn, transform_id, video_val)
+        hex_val = (data.get("hex") or "").strip().upper()
         conn.commit()
         conn.close()
+        try:
+            from klv_ingest import register_token, unregister_token
+
+            if old_token and old_token != (new_token or ""):
+                unregister_token(old_token)
+            if new_token:
+                register_token(new_token, output_id, hex_val, transform_id)
+        except Exception:
+            pass
         return True
 
     @staticmethod
@@ -1901,6 +2026,8 @@ class CotTransformModel:
                         new_id = cur.lastrowid
                         if new_id:
                             existing_hex_to_id[hex_val] = new_id
+                            video_val = (row.get("VIDEO") or "").strip() or None
+                            CotTransformModel._sync_klv_token(conn, new_id, video_val)
                     except Exception as e:
                         errors.append(f"Row {row_num}: {e}")
                 conn.commit()
