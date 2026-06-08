@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.378",
+    "date": "2026-06-08",
+    "notes": [
+      "VPN tab: Secure KLV section lists all NetBird/KLV .env variables with status, creates mediamtx_video NetBird group, and Enable secure KLV button writes required .env keys and access policy for TCP 9000."
+    ]
+  },
+  {
     "version": "1.0.377",
     "date": "2026-06-08",
     "notes": [

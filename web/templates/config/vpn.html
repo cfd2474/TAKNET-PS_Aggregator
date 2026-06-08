@@ -47,6 +47,49 @@
         ℹ Setup keys are automatically saved to <code style="color:var(--accent);">/opt/taknet-aggregator/.env</code> and persist through updates.
     </div>
 </div>
+
+<!-- Secure KLV / MediaMTX Video -->
+<div class="card" style="margin-top:16px;" id="klv-secure-card">
+    <div class="card-header" style="flex-wrap:wrap;gap:8px;">
+        <h3>Secure KLV (MediaMTX video)</h3>
+        <span id="klv-secure-badge"><span class="badge badge-offline">Loading…</span></span>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">
+        NetBird mesh + ingest token auth for external MediaMTX boxes. Creates the <code>mediamtx_video</code> group and writes required <code>.env</code> keys.
+    </p>
+
+    <div id="klv-config-loading" style="font-size:13px;color:var(--text-muted);">Loading configuration…</div>
+
+    <div id="klv-config-body" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;font-size:13px;margin-bottom:16px;" id="klv-summary-grid"></div>
+
+        <div class="table-wrap" style="margin-bottom:16px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>.env variable</th>
+                        <th>Status</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody id="klv-env-tbody"></tbody>
+            </table>
+        </div>
+
+        <div id="klv-token-missing" style="display:none;margin-bottom:14px;">
+            <label style="font-size:13px;font-weight:600;">NetBird API token (required once)</label>
+            <input type="password" class="form-control" id="klv-api-token-input" placeholder="Paste NETBIRD_API_TOKEN from NetBird dashboard"
+                   style="font-family:monospace;margin-top:6px;max-width:480px;">
+            <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">Saved to <code>.env</code> when you enable secure KLV. Create under NetBird → Settings → API tokens.</p>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="klv-enable-btn" onclick="enableSecureKlv()">Enable secure KLV</button>
+            <span id="klv-action-msg" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+        <div id="klv-steps-box" style="display:none;margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;font-size:12px;"></div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -265,9 +308,119 @@ function setMsg(msg, color) {
     el.style.color = color || 'var(--text-muted)';
 }
 
+function klvStatusBadge(configured) {
+    return configured
+        ? '<span class="badge badge-live"><span class="pulse">●</span> Configured</span>'
+        : '<span class="badge badge-offline">Not configured</span>';
+}
+
+async function loadKlvConfig() {
+    const loading = document.getElementById('klv-config-loading');
+    const body = document.getElementById('klv-config-body');
+    const badge = document.getElementById('klv-secure-badge');
+    const tbody = document.getElementById('klv-env-tbody');
+    const summary = document.getElementById('klv-summary-grid');
+    const tokenMissing = document.getElementById('klv-token-missing');
+    try {
+        const r = await fetch('/api/netbird/klv-config');
+        const d = await r.json();
+        loading.style.display = 'none';
+        body.style.display = 'block';
+        badge.innerHTML = klvStatusBadge(d.secure_klv_enabled);
+
+        const mtx = d.mediamtx_video_group || {};
+        const pol = d.klv_policy || {};
+        summary.innerHTML =
+            '<span style="color:var(--text-muted)">NetBird group</span><span><code>mediamtx_video</code> ' +
+            (mtx.exists ? '<span class="badge badge-live" style="font-size:10px;">exists</span> <span style="font-family:monospace;font-size:11px;color:var(--text-muted);">' + escapeVpnHtml(mtx.id || '') + '</span>' : '<span class="badge badge-offline" style="font-size:10px;">missing</span>') +
+            '</span>' +
+            '<span style="color:var(--text-muted)">Overlay IP</span><span style="font-family:monospace;">' + escapeVpnHtml(d.netbird_overlay_ip || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">KLV port</span><span style="font-family:monospace;">' + (d.klv_port || 9000) + '</span>' +
+            '<span style="color:var(--text-muted)">Access policy</span><span>' + (pol.exists ? '<span class="badge badge-live" style="font-size:10px;">active</span>' : '<span class="badge badge-stale" style="font-size:10px;">not set</span>') + '</span>';
+
+        const rows = (d.env || []).map(row => {
+            const st = row.configured
+                ? '<span class="badge badge-live" style="font-size:10px;">set</span>'
+                : '<span class="badge badge-offline" style="font-size:10px;">missing</span>';
+            const sync = row.in_env_file && row.in_runtime ? '' : (row.in_env_file ? ' <span style="color:var(--yellow);font-size:10px;">restart needed</span>' : '');
+            return '<tr><td style="font-family:monospace;font-size:12px;">' + escapeVpnHtml(row.key) + '</td><td>' + st + sync + '</td><td style="font-family:monospace;font-size:11px;max-width:280px;overflow:hidden;text-overflow:ellipsis;">' + escapeVpnHtml(row.display || '—') + '</td></tr>';
+        }).join('');
+        tbody.innerHTML = rows || '<tr><td colspan="3" style="color:var(--text-muted);">No variables</td></tr>';
+
+        const tokenRow = (d.env || []).find(e => e.key === 'NETBIRD_API_TOKEN');
+        tokenMissing.style.display = (tokenRow && tokenRow.configured) ? 'none' : 'block';
+
+        if (d.api_error) {
+            setKlvMsg('NetBird API: ' + d.api_error, 'var(--yellow)');
+        }
+    } catch (e) {
+        loading.textContent = 'Error loading KLV config: ' + e;
+    }
+}
+
+function escapeVpnHtml(s) {
+    if (s == null) return '';
+    const el = document.createElement('span');
+    el.textContent = String(s);
+    return el.innerHTML;
+}
+
+function setKlvMsg(msg, color) {
+    const el = document.getElementById('klv-action-msg');
+    el.textContent = msg;
+    el.style.color = color || 'var(--text-muted)';
+}
+
+async function enableSecureKlv() {
+    const btn = document.getElementById('klv-enable-btn');
+    const stepsBox = document.getElementById('klv-steps-box');
+    const tokenInput = document.getElementById('klv-api-token-input');
+    if (!confirm('Enable secure KLV? This creates the mediamtx_video NetBird group and updates .env on this server.')) return;
+    btn.disabled = true;
+    setKlvMsg('Working…', 'var(--text-muted)');
+    stepsBox.style.display = 'none';
+    const payload = {};
+    const tok = tokenInput && tokenInput.value.trim();
+    if (tok) payload.api_token = tok;
+    try {
+        const r = await fetch('/api/netbird/klv-enable', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) {
+            setKlvMsg(d.error || 'Enable failed', 'var(--red)');
+            return;
+        }
+        setKlvMsg('Secure KLV enabled. Restart the dashboard container to apply .env changes.', 'var(--green)');
+        let html = '<strong>Completed:</strong><ul style="margin:8px 0 0 16px;padding:0;">';
+        (d.steps || []).forEach(s => { html += '<li>' + escapeVpnHtml(s) + '</li>'; });
+        html += '</ul>';
+        if (d.warnings && d.warnings.length) {
+            html += '<p style="margin-top:10px;color:var(--yellow);"><strong>Notes:</strong></p><ul style="margin:4px 0 0 16px;">';
+            d.warnings.forEach(w => { html += '<li>' + escapeVpnHtml(w) + '</li>'; });
+            html += '</ul>';
+        }
+        if (d.restart_hint) {
+            html += '<p style="margin-top:10px;color:var(--text-muted);">Run: <code>' + escapeVpnHtml(d.restart_hint) + '</code></p>';
+        }
+        stepsBox.innerHTML = html;
+        stepsBox.style.display = 'block';
+        if (tokenInput) tokenInput.value = '';
+        loadKlvConfig();
+    } catch (e) {
+        setKlvMsg('Request failed: ' + e, 'var(--red)');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 loadVPN();
 loadClientStatus();
+loadKlvConfig();
 setInterval(loadVPN, 30000);
 setInterval(loadClientStatus, 15000);
+setInterval(loadKlvConfig, 30000);
 </script>
 {% endblock %}

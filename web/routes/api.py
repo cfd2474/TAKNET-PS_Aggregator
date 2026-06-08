@@ -709,6 +709,35 @@ def netbird_disconnect_route():
     return jsonify({"success": False, "error": msg}), 500
 
 
+@bp.route("/netbird/klv-config")
+@admin_required
+def netbird_klv_config_status():
+    """Secure KLV / NetBird .env status for VPN tab."""
+    from services.netbird_klv_config import get_klv_config_status
+
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    return jsonify(get_klv_config_status(install_dir=install_dir))
+
+
+@bp.route("/netbird/klv-enable", methods=["POST"])
+@admin_required
+def netbird_klv_enable():
+    """Create mediamtx_video group and persist Secure KLV .env keys."""
+    from services.netbird_klv_config import enable_secure_klv
+
+    data = request.get_json(silent=True) or {}
+    api_token = (data.get("api_token") or "").strip() or None
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    ok, result = enable_secure_klv(
+        install_dir=install_dir,
+        persist_env_fn=_persist_env_var,
+        api_token=api_token,
+    )
+    if not ok:
+        return jsonify({"success": False, "error": result}), 400
+    return jsonify(result)
+
+
 # ── Docker ───────────────────────────────────────────────────────────────────
 
 @bp.route("/docker/containers")

@@ -10,6 +10,7 @@ import requests
 NETBIRD_API_URL = os.environ.get("NETBIRD_API_URL", "http://localhost:33073").rstrip("/")
 NETBIRD_API_TOKEN = os.environ.get("NETBIRD_API_TOKEN", "")
 NETBIRD_VIDEO_SOURCES_GROUP_ID = os.environ.get("NETBIRD_VIDEO_SOURCES_GROUP_ID", "")
+MEDIAMTX_VIDEO_GROUP_NAME = "mediamtx_video"
 NETBIRD_MANAGEMENT_URL = os.environ.get(
     "NETBIRD_MANAGEMENT_URL", "https://netbird.tak-solutions.com"
 ).rstrip("/")
@@ -69,7 +70,10 @@ def create_video_source_setup_key(*, user_id: int, username: str, output_id: int
         return False, "NetBird API token not configured on this server"
     group_id = (NETBIRD_VIDEO_SOURCES_GROUP_ID or "").strip()
     if not group_id:
-        return False, "NETBIRD_VIDEO_SOURCES_GROUP_ID is not configured on this server"
+        return False, (
+            "NETBIRD_VIDEO_SOURCES_GROUP_ID is not configured. "
+            "Use VPN → Enable secure KLV or set the mediamtx_video group ID in .env."
+        )
 
     if not _rate_limit_ok(user_id):
         return False, "Rate limit exceeded — try again later"
