@@ -245,7 +245,37 @@ def apply_klv_platform(aircraft: dict, token: str) -> dict:
         out["alt_baro"] = float(plat["alt_m"]) / 0.3048
     if plat.get("heading_deg") is not None:
         out["track"] = float(plat["heading_deg"])
+    # ADS-B speed/rate are misleading when position comes from video metadata.
+    out.pop("gs", None)
+    out.pop("baro_rate", None)
+    out["_klv_live"] = True
     return out
+
+
+def build_aircraft_from_klv(hex_code: str, token: str) -> Optional[dict]:
+    """Minimal aircraft dict from KLV only (no ADS-B feed required)."""
+    if not is_klv_live(token):
+        return None
+    st = get_stream_state(token)
+    if not st or not st.platform:
+        return None
+    plat = st.platform
+    lat = plat.get("lat")
+    lon = plat.get("lon")
+    if lat is None or lon is None:
+        return None
+    ac: dict[str, Any] = {
+        "hex": hex_code,
+        "_norm_hex": hex_code.strip().upper(),
+        "lat": float(lat),
+        "lon": float(lon),
+        "_klv_live": True,
+    }
+    if plat.get("alt_m") is not None:
+        ac["alt_baro"] = float(plat["alt_m"]) / 0.3048
+    if plat.get("heading_deg") is not None:
+        ac["track"] = float(plat["heading_deg"])
+    return ac
 
 
 def _handle_client(conn: socket.socket, addr) -> None:

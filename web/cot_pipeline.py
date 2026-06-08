@@ -757,6 +757,7 @@ def _compute_cot_xml_parts(
     stale=None,
     *,
     distress_hostile: bool = False,
+    klv_live: bool = False,
 ):
     """
     Compute fields for one CoT event from aircraft + optional COTProxy transform.
@@ -770,16 +771,20 @@ def _compute_cot_xml_parts(
     if lat is None or lon is None:
         return None
 
-    cot_type = _cot_type_from_aircraft(aircraft)
-    callsign = (aircraft.get("flight") or "").strip() or hex_code
-    distress_desc = _distress_descriptor(aircraft) if bool(distress_hostile) else None
+    klv_live = klv_live or bool(aircraft.get("_klv_live"))
+    if transform and transform.get("cot") and str(transform.get("cot")).strip():
+        cot_type = str(transform["cot"]).strip()
+    else:
+        cot_type = _cot_type_from_aircraft(aircraft)
+    if transform and transform.get("callsign") and str(transform.get("callsign")).strip():
+        callsign = str(transform["callsign"]).strip()
+    elif klv_live:
+        callsign = hex_code
+    else:
+        callsign = (aircraft.get("flight") or "").strip() or hex_code
+    distress_desc = _distress_descriptor(aircraft) if bool(distress_hostile) and not klv_live else None
     distress = distress_desc is not None
-    is_tisb = _is_tisb(aircraft)
-    if transform:
-        if transform.get("cot"):
-            cot_type = (transform["cot"] or "").strip() or _cot_type_from_aircraft(aircraft)
-        if transform.get("callsign"):
-            callsign = (transform["callsign"] or "").strip() or callsign
+    is_tisb = False if klv_live else _is_tisb(aircraft)
     if is_tisb:
         cot_type = COT_TYPE_UNKNOWN_AIR
 
@@ -814,6 +819,8 @@ def _compute_cot_xml_parts(
 
     feed_type = "ADSBHub" if (aircraft.get("source") or "").strip().lower() == "adsbhub" else "direct feed"
     rem_parts = ["taknet-ps", feed_type, f"Hex: {hex_code}"]
+    if klv_live:
+        rem_parts.append("KLV live")
     if distress_desc:
         rem_parts.append(distress_desc)
     if transform:
@@ -823,7 +830,7 @@ def _compute_cot_xml_parts(
     transform_remarks = (transform or {}).get("remarks") if transform else None
     if transform_remarks is not None and isinstance(transform_remarks, str) and transform_remarks.strip():
         rem_parts.append(transform_remarks.strip()[:1024])
-    elif not transform or not (transform.get("remarks") and str(transform.get("remarks", "")).strip()):
+    elif not klv_live and (not transform or not (transform.get("remarks") and str(transform.get("remarks", "")).strip())):
         adsb_parts = []
         raw_squawk = aircraft.get("squawk")
         if not is_tisb and raw_squawk is not None and (raw_squawk != "" or raw_squawk == 0) and isinstance(raw_squawk, (str, int)):
@@ -993,6 +1000,7 @@ def build_cot_xml(
     stale=None,
     *,
     distress_hostile: bool = False,
+    klv_live: bool = False,
 ):
     """
     Build a single CoT <event> XML string for one aircraft.
@@ -1009,6 +1017,7 @@ def build_cot_xml(
         now=now,
         stale=stale,
         distress_hostile=distress_hostile,
+        klv_live=klv_live,
     )
     if parts is None:
         return None
@@ -1454,9 +1463,16 @@ def _run_cot_sender_cycle_impl(requests):
         # Second pass: inclusion logic + build/send.
         t0 = time.perf_counter()
         try:
-            from klv_ingest import apply_klv_platform, get_stream_state, is_klv_live, is_spi_live
+            from klv_ingest import (
+                apply_klv_platform,
+                build_aircraft_from_klv,
+                get_stream_state,
+                is_klv_live,
+                is_spi_live,
+            )
         except Exception:
             apply_klv_platform = None
+            build_aircraft_from_klv = None
             get_stream_state = None
             is_klv_live = None
             is_spi_live = None
@@ -1465,7 +1481,20 @@ def _run_cot_sender_cycle_impl(requests):
         last_spi_sent = dict(_last_sent_spi_state.get(output_id, {}))
         spi_seen: set[str] = set()
 
-        for ac in aircraft:
+        aircraft_to_process = list(aircraft)
+        if use_cotproxy and build_aircraft_from_klv and is_klv_live:
+            seen_hex = {ac.get("_norm_hex") for ac in aircraft if ac.get("_norm_hex")}
+            for hx, tr in transforms_by_hex.items():
+                if hx in seen_hex:
+                    continue
+                token = (tr.get("klv_ingest_token") or "").strip()
+                if not token or not is_klv_live(token):
+                    continue
+                syn = build_aircraft_from_klv(hx, token)
+                if syn:
+                    aircraft_to_process.append(syn)
+
+        for ac in aircraft_to_process:
             hex_code = ac.get("_norm_hex") if isinstance(ac, dict) else ""
             if not hex_code:
                 continue
@@ -1488,7 +1517,7 @@ def _run_cot_sender_cycle_impl(requests):
             state = _state_key(ac_send)
             prev_klv = hex_code in _last_klv_active.get(output_id, set())
             force_adsb_resync = prev_klv and not klv_live
-            if not force_adsb_resync and last_sent.get(hex_code) == state:
+            if not klv_live and not force_adsb_resync and last_sent.get(hex_code) == state:
                 # Still emit SPI when only the sensor point moved.
                 if transform and token and is_spi_live and is_spi_live(token):
                     st = get_stream_state(token) if get_stream_state else None
@@ -1516,6 +1545,7 @@ def _run_cot_sender_cycle_impl(requests):
                     now=now,
                     stale=stale,
                     distress_hostile=distress_hostile,
+                    klv_live=klv_live,
                 )
             except Exception as e:
                 log.warning("CoT sender: %s — skip aircraft %s (build_cot_xml failed): %s", name, hex_code, e)
