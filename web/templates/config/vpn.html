@@ -54,9 +54,11 @@
         <h3>Secure KLV (MediaMTX video)</h3>
         <span id="klv-secure-badge"><span class="badge badge-offline">Loading…</span></span>
     </div>
-    <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">
-        NetBird mesh + ingest token auth for external MediaMTX boxes. Creates the <code>mediamtx_video</code> group and writes required <code>.env</code> keys.
+    <p style="font-size:13px;color:var(--text-muted);margin:0 0 8px;line-height:1.5;">
+        <strong>Server-wide</strong> NetBird + KLV listener setup. Creates the <code>mediamtx_video</code> group and writes <code>.env</code> keys here.
+        Per-aircraft handoff (hex, ingest token, MediaMTX setup key) lives on each <strong>COTProxy</strong> row with a video URL.
     </p>
+    <p id="klv-arch-note" style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.45;display:none;"></p>
 
     <div id="klv-config-loading" style="font-size:13px;color:var(--text-muted);">Loading configuration…</div>
 
@@ -85,8 +87,13 @@
 
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <button class="btn btn-primary" id="klv-enable-btn" onclick="enableSecureKlv()">Enable secure KLV</button>
+            <button class="btn" id="klv-ensure-group-btn" onclick="ensureMediamtxGroup()">Create mediamtx_video group</button>
             <span id="klv-action-msg" style="font-size:13px;color:var(--text-muted);"></span>
         </div>
+        <p style="font-size:11px;color:var(--text-muted);margin:10px 0 0;">
+            <code>NB_SETUP_KEY</code> is only for <strong>Server Enrollment</strong> above (this aggregator host).
+            KLV target IP is auto-detected — shown on each COTProxy aircraft row, not stored in <code>.env</code>.
+        </p>
         <div id="klv-steps-box" style="display:none;margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:8px;font-size:12px;"></div>
     </div>
 </div>
@@ -330,13 +337,27 @@ async function loadKlvConfig() {
 
         const mtx = d.mediamtx_video_group || {};
         const pol = d.klv_policy || {};
+        const gid = d.mediamtx_video_group_id || mtx.id || '';
         summary.innerHTML =
+            '<span style="color:var(--text-muted)">Group ID (.env)</span><span style="font-family:monospace;font-size:11px;">' + escapeVpnHtml(gid || '—') + '</span>' +
             '<span style="color:var(--text-muted)">NetBird group</span><span><code>mediamtx_video</code> ' +
-            (mtx.exists ? '<span class="badge badge-live" style="font-size:10px;">exists</span> <span style="font-family:monospace;font-size:11px;color:var(--text-muted);">' + escapeVpnHtml(mtx.id || '') + '</span>' : '<span class="badge badge-offline" style="font-size:10px;">missing</span>') +
+            (mtx.exists ? '<span class="badge badge-live" style="font-size:10px;">exists</span>' : '<span class="badge badge-offline" style="font-size:10px;">missing</span>') +
             '</span>' +
-            '<span style="color:var(--text-muted)">Overlay IP</span><span style="font-family:monospace;">' + escapeVpnHtml(d.netbird_overlay_ip || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">Aggregator overlay IP</span><span style="font-family:monospace;">' + escapeVpnHtml(d.netbird_overlay_ip || '—') + ' <span style="color:var(--text-muted);font-size:10px;">(per-aircraft target in COTProxy)</span></span>' +
             '<span style="color:var(--text-muted)">KLV port</span><span style="font-family:monospace;">' + (d.klv_port || 9000) + '</span>' +
             '<span style="color:var(--text-muted)">Access policy</span><span>' + (pol.exists ? '<span class="badge badge-live" style="font-size:10px;">active</span>' : '<span class="badge badge-stale" style="font-size:10px;">not set</span>') + '</span>';
+
+        const arch = document.getElementById('klv-arch-note');
+        if (arch && d.architecture_note) {
+            arch.textContent = d.architecture_note;
+            arch.style.display = 'block';
+        }
+
+        const tokenRow = (d.env || []).find(e => e.key === 'NETBIRD_API_TOKEN');
+        const gidRow = (d.env || []).find(e => e.key === 'NETBIRD_VIDEO_SOURCES_GROUP_ID');
+        if (gidRow && !gidRow.configured && mtx.exists && tokenRow && tokenRow.configured) {
+            ensureMediamtxGroup(true);
+        }
 
         const rows = (d.env || []).map(row => {
             const st = row.configured
@@ -347,7 +368,6 @@ async function loadKlvConfig() {
         }).join('');
         tbody.innerHTML = rows || '<tr><td colspan="3" style="color:var(--text-muted);">No variables</td></tr>';
 
-        const tokenRow = (d.env || []).find(e => e.key === 'NETBIRD_API_TOKEN');
         tokenMissing.style.display = (tokenRow && tokenRow.configured) ? 'none' : 'block';
 
         if (d.api_error) {
@@ -369,6 +389,32 @@ function setKlvMsg(msg, color) {
     const el = document.getElementById('klv-action-msg');
     el.textContent = msg;
     el.style.color = color || 'var(--text-muted)';
+}
+
+async function ensureMediamtxGroup(silent) {
+    const tokenInput = document.getElementById('klv-api-token-input');
+    const payload = {};
+    const tok = tokenInput && tokenInput.value.trim();
+    if (tok) payload.api_token = tok;
+    if (!silent) setKlvMsg('Creating mediamtx_video group…', 'var(--text-muted)');
+    try {
+        const r = await fetch('/api/netbird/klv-ensure-group', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) {
+            if (!silent) setKlvMsg(d.error || 'Failed', 'var(--red)');
+            return;
+        }
+        if (!silent) {
+            setKlvMsg('Group ID saved to .env — restart dashboard to apply.', 'var(--green)');
+        }
+        loadKlvConfig();
+    } catch (e) {
+        if (!silent) setKlvMsg('Request failed: ' + e, 'var(--red)');
+    }
 }
 
 async function enableSecureKlv() {

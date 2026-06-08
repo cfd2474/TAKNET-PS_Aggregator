@@ -6,9 +6,10 @@ import subprocess
 
 import requests
 
+from services.netbird_api import api_request
+
 TAILSCALE_ENABLED = os.environ.get("TAILSCALE_ENABLED", "true").lower() == "true"
 NETBIRD_ENABLED = os.environ.get("NETBIRD_ENABLED", "false").lower() == "true"
-NETBIRD_API_URL = os.environ.get("NETBIRD_API_URL", "http://localhost:33073")
 NETBIRD_API_TOKEN = os.environ.get("NETBIRD_API_TOKEN", "")
 
 
@@ -92,12 +93,8 @@ def get_netbird_status():
         return {"enabled": True, "state": "no_token", "peers": []}
 
     try:
-        headers = {
-            "Authorization": f"Bearer {NETBIRD_API_TOKEN}",
-            "Content-Type": "application/json",
-        }
-        resp = requests.get(f"{NETBIRD_API_URL}/api/peers", headers=headers, timeout=5)
-        if resp.status_code == 200:
+        resp, _base = api_request("GET", "/api/peers", NETBIRD_API_TOKEN, timeout=5)
+        if resp is not None and resp.status_code == 200:
             raw_peers = resp.json()
             peers = []
             for p in raw_peers:

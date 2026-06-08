@@ -7,7 +7,8 @@ import time
 
 import requests
 
-NETBIRD_API_URL = os.environ.get("NETBIRD_API_URL", "http://localhost:33073").rstrip("/")
+from services.netbird_api import api_request, default_api_base
+
 NETBIRD_API_TOKEN = os.environ.get("NETBIRD_API_TOKEN", "")
 NETBIRD_VIDEO_SOURCES_GROUP_ID = os.environ.get("NETBIRD_VIDEO_SOURCES_GROUP_ID", "")
 MEDIAMTX_VIDEO_GROUP_NAME = "mediamtx_video"
@@ -61,7 +62,14 @@ def get_netbird_self_ip() -> str:
     return ""
 
 
-def create_video_source_setup_key(*, user_id: int, username: str, output_id: int) -> tuple[bool, dict | str]:
+def create_video_source_setup_key(
+    *,
+    user_id: int,
+    username: str,
+    output_id: int,
+    transform_id: int | None = None,
+    hex_code: str | None = None,
+) -> tuple[bool, dict | str]:
     """
     Create a one-off NetBird setup key for an external MediaMTX box.
     Returns (ok, {setup_key, management_url, expires_in} | error_message).
@@ -78,7 +86,9 @@ def create_video_source_setup_key(*, user_id: int, username: str, output_id: int
     if not _rate_limit_ok(user_id):
         return False, "Rate limit exceeded — try again later"
 
-    name = f"video-src-{username}-out{output_id}-{int(time.time())}"
+    hx = (hex_code or "aircraft").strip().upper()[:12] or "aircraft"
+    tid = transform_id or 0
+    name = f"mtx-{hx}-out{output_id}-t{tid}-{int(time.time())}"
     payload = {
         "name": name[:64],
         "type": "one-off",
@@ -88,28 +98,12 @@ def create_video_source_setup_key(*, user_id: int, username: str, output_id: int
         "ephemeral": False,
         "allow_extra_dns_labels": False,
     }
-    headers = {
-        "Authorization": f"Bearer {NETBIRD_API_TOKEN}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
     try:
-        resp = requests.post(
-            f"{NETBIRD_API_URL}/api/setup-keys",
-            headers=headers,
-            json=payload,
-            timeout=15,
-        )
-        if resp.status_code == 401:
-            headers["Authorization"] = f"Token {NETBIRD_API_TOKEN}"
-            resp = requests.post(
-                f"{NETBIRD_API_URL}/api/setup-keys",
-                headers=headers,
-                json=payload,
-                timeout=15,
-            )
-        if resp.status_code not in (200, 201):
-            return False, f"NetBird API error {resp.status_code}: {resp.text[:200]}"
+        resp, _base = api_request("POST", "/api/setup-keys", NETBIRD_API_TOKEN, json_body=payload, timeout=15)
+        if resp is None or resp.status_code not in (200, 201):
+            detail = resp.text[:200] if resp is not None else "NetBird API unreachable"
+            code = resp.status_code if resp is not None else 0
+            return False, f"NetBird API error {code}: {detail}"
         data = resp.json()
         key = (data.get("key") or "").strip()
         if not key:

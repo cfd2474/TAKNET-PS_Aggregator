@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.379",
+    "date": "2026-06-08",
+    "notes": [
+      "Secure KLV: auto-create mediamtx_video NetBird group and persist NETBIRD_VIDEO_SOURCES_GROUP_ID; improved API token error messaging and shared NetBird API client.",
+      "Per-aircraft KLV handoff moved to COTProxy rows: ingest token, hex, KLV target, and per-MediaMTX NetBird setup keys. VPN tab is server-wide only (group, policy, port 9000).",
+      "Multi-MediaMTX: one aggregator TCP listener; each external box enrolls via its aircraft row setup key and routes by that row's ingest token."
+    ]
+  },
+  {
     "version": "1.0.378",
     "date": "2026-06-08",
     "notes": [

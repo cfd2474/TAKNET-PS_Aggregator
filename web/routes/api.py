@@ -738,6 +738,25 @@ def netbird_klv_enable():
     return jsonify(result)
 
 
+@bp.route("/netbird/klv-ensure-group", methods=["POST"])
+@admin_required
+def netbird_klv_ensure_group():
+    """Create mediamtx_video group and persist NETBIRD_VIDEO_SOURCES_GROUP_ID only."""
+    from services.netbird_klv_config import ensure_mediamtx_video_group
+
+    data = request.get_json(silent=True) or {}
+    api_token = (data.get("api_token") or "").strip() or None
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    ok, result = ensure_mediamtx_video_group(
+        install_dir=install_dir,
+        persist_env_fn=_persist_env_var,
+        api_token=api_token,
+    )
+    if not ok:
+        return jsonify({"success": False, "error": result}), 400
+    return jsonify({**result, "needs_dashboard_restart": True})
+
+
 # ── Docker ───────────────────────────────────────────────────────────────────
 
 @bp.route("/docker/containers")
@@ -2041,15 +2060,28 @@ def klv_connection_info(output_id):
     """NetBird target and port for MediaMTX KLV ingest (output owner only)."""
     from flask_login import current_user
     from klv_ingest import KLV_PORT
-    from services.netbird_setup_key import get_netbird_self_ip, NETBIRD_MANAGEMENT_URL
+    from services.netbird_setup_key import (
+        MEDIAMTX_VIDEO_GROUP_NAME,
+        NETBIRD_MANAGEMENT_URL,
+        NETBIRD_VIDEO_SOURCES_GROUP_ID,
+        get_netbird_self_ip,
+    )
 
     if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
         return jsonify({"error": "Access denied"}), 403
+    nb_ip = get_netbird_self_ip()
     return jsonify({
-        "netbird_ip": get_netbird_self_ip(),
+        "netbird_ip": nb_ip,
+        "target": f"{nb_ip}:{KLV_PORT}" if nb_ip else "",
         "port": KLV_PORT,
         "management_url": NETBIRD_MANAGEMENT_URL,
         "protocol": "tcp",
+        "mediamtx_video_group": MEDIAMTX_VIDEO_GROUP_NAME,
+        "mediamtx_video_group_id": NETBIRD_VIDEO_SOURCES_GROUP_ID or "",
+        "handoff_note": (
+            "Each MediaMTX server uses its own NetBird setup key (generated on this aircraft row). "
+            "All servers send KLV to the same target; this aircraft's ingest token routes samples here."
+        ),
     })
 
 
@@ -2069,9 +2101,36 @@ def klv_regenerate_token(output_id, transform_id):
     return jsonify({"success": True, "klv_ingest_token": token})
 
 
+@bp.route("/outputs/<int:output_id>/cot-transforms/<int:transform_id>/klv/netbird-setup-key", methods=["POST"])
+@network_admin_required
+def klv_netbird_setup_key_transform(output_id, transform_id):
+    """One-off NetBird setup key for a specific aircraft / MediaMTX server."""
+    from flask_login import current_user
+    from services.netbird_setup_key import create_video_source_setup_key
+
+    if not OutputModel.can_modify(output_id, current_user.id, current_user.role):
+        return jsonify({"error": "Access denied"}), 403
+    t = CotTransformModel.get_by_id(transform_id, output_id)
+    if not t:
+        return jsonify({"error": "Not found"}), 404
+    if not (t.get("video") and str(t.get("video")).strip()):
+        return jsonify({"error": "Video URL is required on this transform"}), 400
+    ok, result = create_video_source_setup_key(
+        user_id=current_user.id,
+        username=current_user.username or "user",
+        output_id=output_id,
+        transform_id=transform_id,
+        hex_code=t.get("hex"),
+    )
+    if not ok:
+        return jsonify({"error": result}), 400
+    return jsonify({"success": True, **result})
+
+
 @bp.route("/outputs/<int:output_id>/klv/netbird-setup-key", methods=["POST"])
 @network_admin_required
 def klv_netbird_setup_key(output_id):
+    """Legacy: setup key without transform context (prefer per-transform endpoint)."""
     from flask_login import current_user
     from services.netbird_setup_key import create_video_source_setup_key
 

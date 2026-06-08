@@ -401,11 +401,14 @@ th.sortable:hover { color: var(--accent); }
                     <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">When set, KLV metadata from a linked MediaMTX feed can drive map position and an SPI point while streaming.</p>
                 </div>
                 <div id="klv-connection-panel" class="form-group" style="grid-column:1/-1;display:none;padding:12px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border);">
-                    <div style="font-weight:600;font-size:13px;margin-bottom:8px;">KLV ingest connection (share with MediaMTX operator)</div>
+                    <div style="font-weight:600;font-size:13px;margin-bottom:4px;">MediaMTX handoff — this aircraft only</div>
+                    <p id="klv-handoff-note" style="font-size:11px;color:var(--text-muted);margin:0 0 10px;line-height:1.45;"></p>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-                        <div><span style="color:var(--text-muted);">Target</span><br><code id="klv-target-display">—</code></div>
-                        <div><span style="color:var(--text-muted);">HEX</span><br><code id="klv-hex-display">—</code></div>
-                        <div style="grid-column:1/-1;"><span style="color:var(--text-muted);">Ingest token</span><br>
+                        <div><span style="color:var(--text-muted);">KLV target (all servers)</span><br><code id="klv-target-display">—</code></div>
+                        <div><span style="color:var(--text-muted);">NetBird enroll URL</span><br><code id="klv-mgmt-display" style="font-size:11px;word-break:break-all;">—</code></div>
+                        <div><span style="color:var(--text-muted);">HEX (this aircraft)</span><br><code id="klv-hex-display">—</code></div>
+                        <div><span style="color:var(--text-muted);">Group</span><br><code id="klv-group-display">mediamtx_video</code></div>
+                        <div style="grid-column:1/-1;"><span style="color:var(--text-muted);">Ingest token (this aircraft)</span><br>
                             <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
                                 <input class="form-control" id="klv-token-display" type="text" readonly style="font-size:11px;font-family:monospace;">
                                 <button type="button" class="btn" style="font-size:11px;white-space:nowrap;" onclick="copyKlvToken()">Copy</button>
@@ -413,11 +416,12 @@ th.sortable:hover { color: var(--accent); }
                         </div>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                        <button type="button" class="btn" style="font-size:11px;" onclick="copyKlvHandoff()">Copy full handoff</button>
                         <button type="button" class="btn" style="font-size:11px;" onclick="regenerateKlvToken()">Regenerate token</button>
-                        <button type="button" class="btn" style="font-size:11px;" onclick="generateNetbirdSetupKey()">Generate NetBird setup key</button>
+                        <button type="button" class="btn btn-primary" style="font-size:11px;" onclick="generateNetbirdSetupKey()">Generate NetBird setup key (this aircraft)</button>
                     </div>
                     <div id="klv-setup-key-result" style="display:none;margin-top:10px;font-size:12px;"></div>
-                    <p style="font-size:11px;color:var(--text-muted);margin:10px 0 0;">Token is owner-only and not included in CSV export. MediaMTX must send this token in every NDJSON message over NetBird TCP port 9000.</p>
+                    <p style="font-size:11px;color:var(--text-muted);margin:10px 0 0;">Server A → aircraft A, server B → aircraft B: each MediaMTX box gets its own setup key here, but all send to the same KLV target. Routing uses this row's ingest token.</p>
                 </div>
                 <div class="form-group" style="grid-column:1/-1;">
                     <label>Associated Link (CoT &lt;link relation="r-u"&gt; — optional)</label>
@@ -506,13 +510,40 @@ function toggleKlvPanel() {
         const hex = (document.getElementById('t-hex').value || '').trim().toUpperCase();
         document.getElementById('klv-hex-display').textContent = hex || '—';
         loadKlvConnectionInfo().then(info => {
-            if (info && info.netbird_ip) {
-                document.getElementById('klv-target-display').textContent = info.netbird_ip + ':' + (info.port || 9000);
+            if (!info) return;
+            const tgt = document.getElementById('klv-target-display');
+            const mgmt = document.getElementById('klv-mgmt-display');
+            const grp = document.getElementById('klv-group-display');
+            const note = document.getElementById('klv-handoff-note');
+            if (info.target) {
+                tgt.textContent = info.target;
+            } else if (info.netbird_ip) {
+                tgt.textContent = info.netbird_ip + ':' + (info.port || 9000);
             } else {
-                document.getElementById('klv-target-display').textContent = '(NetBird IP unavailable — enroll server first)';
+                tgt.textContent = '(enroll aggregator in VPN → Server Enrollment first)';
             }
+            if (mgmt) mgmt.textContent = info.management_url || '—';
+            if (grp) grp.textContent = info.mediamtx_video_group || 'mediamtx_video';
+            if (note && info.handoff_note) note.textContent = info.handoff_note;
         });
     }
+}
+
+function copyKlvHandoff() {
+    const target = document.getElementById('klv-target-display').textContent;
+    const hex = document.getElementById('klv-hex-display').textContent;
+    const token = document.getElementById('klv-token-display').value;
+    const mgmt = document.getElementById('klv-mgmt-display').textContent;
+    if (!token || token.startsWith('(')) { alert('Save transform with video URL first.'); return; }
+    const text = [
+        'MediaMTX KLV handoff (one aircraft)',
+        'NetBird management URL: ' + mgmt,
+        'KLV target (TCP): ' + target,
+        'Aircraft HEX: ' + hex,
+        'Ingest token: ' + token,
+        'Generate a one-time NetBird setup key from COTProxy for this aircraft row.',
+    ].join('\n');
+    navigator.clipboard.writeText(text).catch(() => {});
 }
 
 async function updateKlvTokenDisplay(transformId) {
@@ -545,7 +576,8 @@ async function regenerateKlvToken() {
 }
 
 async function generateNetbirdSetupKey() {
-    const r = await fetch('/api/outputs/' + outputId + '/klv/netbird-setup-key', { method: 'POST' });
+    if (!currentTransformId) { alert('Save the transform first.'); return; }
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + currentTransformId + '/klv/netbird-setup-key', { method: 'POST' });
     const d = await r.json();
     const el = document.getElementById('klv-setup-key-result');
     if (!r.ok) {
