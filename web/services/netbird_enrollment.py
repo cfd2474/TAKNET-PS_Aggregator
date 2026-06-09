@@ -57,8 +57,10 @@ def _parse_mesh_status() -> dict[str, Any]:
             _pick_str(data, "netbirdIp", "NetbirdIP", "IP")
             or _pick_str(self_node, "NetbirdIP", "netbirdIp", "IP")
         )
-        out["hostname"] = _pick_str(self_node, "Hostname", "hostname", "Name", "name") or _pick_str(
-            data, "Hostname", "hostname"
+        out["hostname"] = (
+            _pick_str(self_node, "Hostname", "hostname", "Name", "name")
+            or _pick_str(data, "Hostname", "hostname", "profileName")
+            or (str(data.get("fqdn") or "").split(".")[0])
         )
         out["fqdn"] = _pick_str(self_node, "FQDN", "fqdn") or _pick_str(data, "FQDN", "fqdn")
 
@@ -66,13 +68,22 @@ def _parse_mesh_status() -> dict[str, Any]:
         sig = data.get("Signal") or data.get("signal") or {}
         if isinstance(mgmt, dict):
             out["management_connected"] = bool(
-                mgmt.get("Connected") or mgmt.get("connected")
+                mgmt.get("Connected")
+                or mgmt.get("connected")
+                or mgmt.get("state") in ("Connected", "connected")
             )
         if isinstance(sig, dict):
-            out["signal_connected"] = bool(sig.get("Connected") or sig.get("connected"))
+            out["signal_connected"] = bool(
+                sig.get("Connected")
+                or sig.get("connected")
+                or sig.get("state") in ("Connected", "connected")
+            )
 
         peers = data.get("Peers") or data.get("peers") or []
-        if isinstance(peers, list):
+        if isinstance(peers, dict):
+            out["peers_total"] = int(peers.get("total") or 0)
+            out["peers_connected"] = int(peers.get("connected") or 0)
+        elif isinstance(peers, list):
             out["peers_total"] = len(peers)
             out["peers_connected"] = sum(
                 1

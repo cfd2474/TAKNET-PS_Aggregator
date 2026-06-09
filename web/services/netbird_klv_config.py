@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from services.docker_service import get_netbird_status_json
+from services.docker_service import get_netbird_status_json, normalize_netbird_ip
 from services.netbird_api import api_request, default_api_base, normalize_api_base, parse_json_list
 from services.netbird_setup_key import NETBIRD_MANAGEMENT_URL, get_netbird_self_ip
 
@@ -133,22 +133,48 @@ def _update_group_peers(
     )
 
 
-def get_aggregator_peer_id() -> str:
-    """NetBird peer ID for this host from netbird-client status."""
+def get_aggregator_peer_id(install_dir: str | None = None) -> str:
+    """NetBird management API peer ID for this host (matches overlay IP / fqdn)."""
+    install = install_dir or os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
     try:
         data, _err = get_netbird_status_json()
         if not data:
             return ""
-        for key in ("ID", "id", "peerId", "peer_id"):
-            val = data.get(key)
-            if val:
-                return str(val).strip()
+
         self_node = data.get("Self") or data.get("self") or {}
         if isinstance(self_node, dict):
-            for key in ("ID", "id"):
+            for key in ("ID", "id", "peerId", "peer_id"):
                 val = self_node.get(key)
                 if val:
                     return str(val).strip()
+
+        overlay_ip = normalize_netbird_ip(
+            str(data.get("netbirdIp") or data.get("NetbirdIP") or "")
+        )
+        fqdn = str(data.get("fqdn") or "").strip().lower()
+        host_hint = fqdn.split(".")[0] if fqdn else ""
+
+        token = _api_token_from_env(install)
+        if not token or (not overlay_ip and not host_hint):
+            return ""
+
+        resp, _ = api_request("GET", "/api/peers", token, install_dir=install)
+        if resp is None or resp.status_code != 200:
+            return ""
+        raw = resp.json()
+        peers = raw if isinstance(raw, list) else parse_json_list(raw, "peers", "items")
+        for p in peers:
+            if not isinstance(p, dict):
+                continue
+            pid = str(p.get("id") or "").strip()
+            if not pid:
+                continue
+            peer_ip = normalize_netbird_ip(str(p.get("ip") or ""))
+            if overlay_ip and peer_ip == overlay_ip:
+                return pid
+            name = str(p.get("name") or p.get("hostname") or "").lower()
+            if host_hint and host_hint in name:
+                return pid
     except Exception:
         pass
     return ""
@@ -337,7 +363,7 @@ def enable_secure_klv(
         else:
             steps.append(f"NetBird group '{MEDIAMTX_VIDEO_GROUP_NAME}' already exists")
 
-        peer_id = get_aggregator_peer_id()
+        peer_id = get_aggregator_peer_id(install_dir)
         agg_group_id = ""
         if peer_id:
             agg = ensure_group(

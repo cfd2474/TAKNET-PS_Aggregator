@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.386",
+    "date": "2026-06-08",
+    "notes": [
+      "Fix aggregator peer ID lookup for new NetBird status JSON via Management API IP match; enables Secure KLV access policy creation when enrollment is connected."
+    ]
+  },
+  {
     "version": "1.0.385",
     "date": "2026-06-08",
     "notes": [
