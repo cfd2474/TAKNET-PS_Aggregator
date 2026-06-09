@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.384",
+    "date": "2026-06-08",
+    "notes": [
+      "Fix NetBird overlay IP detection: read netbird status via Docker SDK exec instead of docker CLI (fixes mesh status on dashboard container)."
+    ]
+  },
+  {
     "version": "1.0.383",
     "date": "2026-06-08",
     "notes": [

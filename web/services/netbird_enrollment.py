@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import os
-import subprocess
 from typing import Any
 
-from services.docker_service import get_netbird_client_status
+from services.docker_service import get_netbird_client_status, get_netbird_status_json
 from services.netbird_klv_config import read_env_file_values
 
 CONTAINER_NAME = "netbird-client"
@@ -42,23 +40,9 @@ def _parse_mesh_status() -> dict[str, Any]:
         "status_error": "",
     }
     try:
-        result = subprocess.run(
-            ["docker", "exec", CONTAINER_NAME, "netbird", "status", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=8,
-        )
-        if result.returncode != 0:
-            err = (result.stderr or result.stdout or "netbird status failed").strip()
-            out["status_error"] = err[:300]
-            return out
-        if not result.stdout.strip():
-            out["status_error"] = "Empty status response"
-            return out
-
-        data = json.loads(result.stdout)
-        if not isinstance(data, dict):
-            out["status_error"] = "Unexpected status format"
+        data, err = get_netbird_status_json()
+        if err or data is None:
+            out["status_error"] = err or "netbird status failed"
             return out
 
         self_node = data.get("Self") or data.get("self") or {}
@@ -98,8 +82,6 @@ def _parse_mesh_status() -> dict[str, Any]:
                     out["management_connected"] = bool(data[key])
                 else:
                     out["signal_connected"] = bool(data[key])
-    except json.JSONDecodeError as e:
-        out["status_error"] = f"Invalid status JSON: {e}"
     except Exception as e:
         out["status_error"] = str(e)[:300]
     return out

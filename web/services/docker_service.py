@@ -1,6 +1,10 @@
 """Docker service — container management via Docker socket."""
 
+from __future__ import annotations
+
+import json
 import os
+
 import docker
 import docker.errors
 
@@ -61,6 +65,47 @@ def get_logs(name, tail=100):
         return container.logs(tail=tail, timestamps=True).decode("utf-8", errors="replace")
     except Exception as e:
         return f"Error: {e}"
+
+
+def exec_in_container(name: str, cmd: list[str]) -> tuple[int, str, str]:
+    """Run a command inside a container via Docker SDK (no docker CLI required)."""
+    client = get_client()
+    if not client:
+        return 1, "", "Docker not available"
+    try:
+        container = client.containers.get(name)
+        if container.status != "running":
+            return 1, "", f"Container {name} is not running"
+        result = container.exec_run(cmd, demux=True)
+        if isinstance(result.output, tuple):
+            out_b, err_b = result.output
+        else:
+            out_b, err_b = result.output, b""
+        stdout = (out_b or b"").decode("utf-8", errors="replace")
+        stderr = (err_b or b"").decode("utf-8", errors="replace")
+        return int(result.exit_code), stdout, stderr
+    except docker.errors.NotFound:
+        return 1, "", f"Container {name} not found"
+    except Exception as e:
+        return 1, "", str(e)
+
+
+def get_netbird_status_json() -> tuple[dict | None, str]:
+    """Parse netbird status --json from the client container."""
+    code, stdout, stderr = exec_in_container(
+        NETBIRD_CLIENT_NAME, ["netbird", "status", "--json"]
+    )
+    if code != 0:
+        return None, (stderr or stdout or "netbird status failed").strip()[:300]
+    if not stdout.strip():
+        return None, "Empty status response"
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError as e:
+        return None, f"Invalid status JSON: {e}"
+    if not isinstance(data, dict):
+        return None, "Unexpected status format"
+    return data, ""
 
 
 def get_netbird_client_status():

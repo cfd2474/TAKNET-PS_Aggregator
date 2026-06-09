@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import os
-import subprocess
 from typing import Any, Callable
 
+from services.docker_service import get_netbird_status_json
 from services.netbird_api import api_request, default_api_base, normalize_api_base, parse_json_list
 from services.netbird_setup_key import NETBIRD_MANAGEMENT_URL, get_netbird_self_ip
 
@@ -137,15 +136,9 @@ def _update_group_peers(
 def get_aggregator_peer_id() -> str:
     """NetBird peer ID for this host from netbird-client status."""
     try:
-        result = subprocess.run(
-            ["docker", "exec", "netbird-client", "netbird", "status", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
+        data, _err = get_netbird_status_json()
+        if not data:
             return ""
-        data = json.loads(result.stdout)
         for key in ("ID", "id", "peerId", "peer_id"):
             val = data.get(key)
             if val:

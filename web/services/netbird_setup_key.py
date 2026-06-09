@@ -1,13 +1,12 @@
 """Generate ephemeral NetBird setup keys for external MediaMTX video sources."""
 
-import json
 import os
-import subprocess
 import time
 
 import requests
 
 from services.netbird_api import api_request, default_api_base
+from services.docker_service import get_netbird_status_json
 
 NETBIRD_API_TOKEN = os.environ.get("NETBIRD_API_TOKEN", "")
 NETBIRD_VIDEO_SOURCES_GROUP_ID = os.environ.get("NETBIRD_VIDEO_SOURCES_GROUP_ID", "")
@@ -39,14 +38,8 @@ def get_netbird_self_ip() -> str:
     if override:
         return override
     try:
-        result = subprocess.run(
-            ["docker", "exec", "netbird-client", "netbird", "status", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            data = json.loads(result.stdout)
+        data, _err = get_netbird_status_json()
+        if data:
             for key in ("netbirdIp", "NetbirdIP", "IP"):
                 val = data.get(key)
                 if val:
