@@ -428,7 +428,7 @@ th.sortable:hover { color: var(--accent); }
                     </div>
                     <div id="klv-setup-key-section" style="margin-top:12px;">
                         <button type="button" class="btn btn-primary" id="klv-setup-key-btn" style="font-size:12px;" onclick="generateNetbirdSetupKey()">Generate NetBird setup key</button>
-                        <p id="klv-setup-key-hint" style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">Save the transform first, then generate a one-time key for this MediaMTX server.</p>
+                        <p id="klv-setup-key-hint" style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">Generates a one-time key for this MediaMTX server (saves the transform first if needed).</p>
                         <div id="klv-setup-key-wrap" style="display:none;margin-top:10px;">
                             <label style="font-size:12px;font-weight:600;">NetBird setup key</label>
                             <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
@@ -633,21 +633,107 @@ function copyKlvToken() {
 }
 
 async function regenerateKlvToken() {
-    if (!currentTransformId) { alert('Save the transform first.'); return; }
+    if (!isKlvCotEnabledChecked()) { alert('Enable active KLV CoT changing first.'); return; }
     if (!confirm('Regenerate ingest token? MediaMTX must be updated with the new token.')) return;
-    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + currentTransformId + '/klv/regenerate-token', { method: 'POST' });
+    const saved = await saveTransformInModal({ silent: true, reloadTable: true });
+    if (!saved.ok || !saved.id) {
+        alert(saved.error || 'Save the transform first.');
+        return;
+    }
+    const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + saved.id + '/klv/regenerate-token', { method: 'POST' });
     const d = await r.json();
     if (!r.ok) { alert(d.error || 'Failed'); return; }
     document.getElementById('klv-token-display').value = d.klv_ingest_token || '';
 }
 
+function buildTransformPayload() {
+    return {
+        hex: document.getElementById('t-hex').value.trim().toUpperCase(),
+        callsign: document.getElementById('t-callsign').value.trim(),
+        type: document.getElementById('t-type').value.trim(),
+        cot: getCotValueFromForm(),
+        domain: document.getElementById('t-domain').value.trim(),
+        agency: document.getElementById('t-agency').value.trim(),
+        reg: document.getElementById('t-reg').value.trim(),
+        model: document.getElementById('t-model').value.trim(),
+        icon: document.getElementById('t-icon').value.trim(),
+        remarks: document.getElementById('t-remarks').value.trim(),
+        video: document.getElementById('t-video').value.trim(),
+        link: document.getElementById('t-link').value.trim(),
+        klv_cot_enabled: isKlvCotEnabledChecked(),
+    };
+}
+
+/** Save transform from modal; returns { ok, id, error } without closing unless closeOnSuccess. */
+async function saveTransformInModal(options) {
+    const opts = options || {};
+    const errEl = document.getElementById('transform-modal-error');
+    errEl.style.display = 'none';
+    const payload = buildTransformPayload();
+    if (!payload.hex) {
+        const msg = 'HEX is required.';
+        if (!opts.silent) {
+            errEl.textContent = msg;
+            errEl.style.display = 'block';
+        }
+        return { ok: false, error: msg };
+    }
+    const id = document.getElementById('transform-id').value;
+    const url = id
+        ? '/api/outputs/' + outputId + '/cot-transforms/' + id
+        : '/api/outputs/' + outputId + '/cot-transforms';
+    const r = await fetch(url, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!r.ok || (!d.success && !d.id)) {
+        const msg = d.error || 'Save failed';
+        if (!opts.silent) {
+            errEl.textContent = msg;
+            errEl.style.display = 'block';
+        }
+        return { ok: false, error: msg };
+    }
+    const newId = d.id || parseInt(id, 10);
+    if (newId) {
+        document.getElementById('transform-id').value = String(newId);
+        currentTransformId = newId;
+        document.getElementById('transform-modal-title').textContent = 'Edit transform';
+    }
+    if (payload.klv_cot_enabled && newId) {
+        await updateKlvTokenDisplay(newId);
+        toggleKlvPanel();
+    }
+    if (opts.closeOnSuccess) {
+        closeTransformModal();
+        loadTransforms();
+    } else if (opts.reloadTable) {
+        loadTransforms();
+    }
+    return { ok: true, id: newId };
+}
+
 async function generateNetbirdSetupKey() {
-    if (!currentTransformId) { alert('Save the transform first.'); return; }
-    if (!isKlvCotEnabledChecked()) { alert('Enable active KLV CoT changing first.'); return; }
+    if (!isKlvCotEnabledChecked()) {
+        alert('Enable active KLV CoT changing first.');
+        return;
+    }
     const btn = document.getElementById('klv-setup-key-btn');
     if (btn) btn.disabled = true;
     try {
-        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + currentTransformId + '/klv/netbird-setup-key', { method: 'POST' });
+        const saved = await saveTransformInModal({ silent: true, reloadTable: true });
+        if (!saved.ok) {
+            alert(saved.error || 'Save the transform first.');
+            return;
+        }
+        const transformId = saved.id;
+        if (!transformId) {
+            alert('Save the transform first.');
+            return;
+        }
+        const r = await fetch('/api/outputs/' + outputId + '/cot-transforms/' + transformId + '/klv/netbird-setup-key', { method: 'POST' });
         const d = await r.json();
         if (!r.ok) {
             alert(d.error || 'Failed to generate setup key');
@@ -1360,43 +1446,12 @@ function closeTransformModal() {
 }
 
 async function saveTransform() {
-    const errEl = document.getElementById('transform-modal-error');
-    errEl.style.display = 'none';
-    const id = document.getElementById('transform-id').value;
-    const payload = {
-        hex: document.getElementById('t-hex').value.trim().toUpperCase(),
-        callsign: document.getElementById('t-callsign').value.trim(),
-        type: document.getElementById('t-type').value.trim(),
-        cot: getCotValueFromForm(),
-        domain: document.getElementById('t-domain').value.trim(),
-        agency: document.getElementById('t-agency').value.trim(),
-        reg: document.getElementById('t-reg').value.trim(),
-        model: document.getElementById('t-model').value.trim(),
-        icon: document.getElementById('t-icon').value.trim(),
-        remarks: document.getElementById('t-remarks').value.trim(),
-        video: document.getElementById('t-video').value.trim(),
-        link: document.getElementById('t-link').value.trim(),
-        klv_cot_enabled: isKlvCotEnabledChecked(),
-    };
-    if (!payload.hex) { errEl.textContent = 'HEX is required.'; errEl.style.display = 'block'; return; }
     const btn = document.getElementById('transform-save-btn');
     btn.disabled = true;
     try {
-        const url = id ? '/api/outputs/' + outputId + '/cot-transforms/' + id : '/api/outputs/' + outputId + '/cot-transforms';
-        const r = await fetch(url, {
-            method: id ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        const d = await r.json();
-        if (d.success || d.id) {
-            closeTransformModal();
-            loadTransforms();
-        } else {
-            errEl.textContent = d.error || 'Save failed';
-            errEl.style.display = 'block';
-        }
+        await saveTransformInModal({ closeOnSuccess: true });
     } catch (e) {
+        const errEl = document.getElementById('transform-modal-error');
         errEl.textContent = 'Request failed: ' + e;
         errEl.style.display = 'block';
     }

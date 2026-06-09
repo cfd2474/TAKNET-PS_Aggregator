@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.388",
+    "date": "2026-06-08",
+    "notes": [
+      "Fix COTProxy NetBird setup key: auto-save transform when generating key so KLV checkbox state is persisted before the API call."
+    ]
+  },
+  {
     "version": "1.0.387",
     "date": "2026-06-08",
     "notes": [

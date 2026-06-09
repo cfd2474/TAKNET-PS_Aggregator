@@ -2195,8 +2195,12 @@ def klv_netbird_setup_key_transform(output_id, transform_id):
     t = CotTransformModel.get_by_id(transform_id, output_id)
     if not t:
         return jsonify({"error": "Not found"}), 404
-    if not t.get("klv_cot_enabled"):
-        return jsonify({"error": "Enable active KLV CoT changing on this transform first"}), 400
+    from models import _klv_cot_enabled_flag
+
+    if not _klv_cot_enabled_flag(t.get("klv_cot_enabled")):
+        return jsonify({
+            "error": "Save the transform with Enable active KLV CoT changing checked, then try again.",
+        }), 400
     ok, result = create_video_source_setup_key(
         user_id=current_user.id,
         username=current_user.username or "user",
