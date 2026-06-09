@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.383",
+    "date": "2026-06-08",
+    "notes": [
+      "VPN Server Enrollment: detailed NetBird mesh status (overlay IP, KLV target, management/signal, peers), enroll form when not connected, and enrollment uses NETBIRD_MANAGEMENT_URL from .env."
+    ]
+  },
+  {
     "version": "1.0.382",
     "date": "2026-06-08",
     "notes": [

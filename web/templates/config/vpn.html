@@ -19,45 +19,53 @@
     </div>
 </div>
 
-<!-- NetBird Enrollment Card -->
+<!-- NetBird Server Enrollment -->
 <div class="card" style="margin-top:16px;" id="nb-enroll-card">
-    <div class="card-header">
+    <div class="card-header" style="flex-wrap:wrap;gap:8px;">
         <h3>Server Enrollment</h3>
-        <span id="nb-client-badge"><span class="badge badge-offline">Checking...</span></span>
+        <span id="nb-client-badge"><span class="badge badge-offline">Checking…</span></span>
     </div>
+    <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">
+        Enrolls <strong>this aggregator host</strong> as a NetBird peer. Required for overlay IP (KLV ingest target) and Secure KLV access policy.
+        Use an aggregator setup key from NetBird — not per-aircraft MediaMTX keys from COTProxy.
+    </p>
 
-    <!-- Connected banner — shown when enrolled + running -->
-    <div id="nb-connected-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.35);border-radius:8px;padding:14px 18px;margin-bottom:16px;display:none;align-items:center;justify-content:space-between;gap:12px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-            <span style="font-size:22px;">✅</span>
-            <div>
-                <div style="font-size:14px;font-weight:600;color:#22c55e;">Server is enrolled and connected to NetBird</div>
-                <div id="nb-connected-detail" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+    <div id="nb-loading-state" style="font-size:13px;color:var(--text-muted);">Checking enrollment status…</div>
+
+    <div id="nb-enroll-body" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;font-size:13px;margin-bottom:14px;" id="nb-enroll-grid"></div>
+
+        <div id="nb-connected-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+            <div style="font-size:14px;font-weight:600;color:#22c55e;margin-bottom:4px;">Connected to NetBird mesh</div>
+            <div id="nb-connected-detail" style="font-size:12px;color:var(--text-muted);"></div>
+        </div>
+
+        <div id="nb-enroll-warning" style="display:none;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--text-secondary);"></div>
+
+        <div id="nb-enroll-form" style="display:none;">
+            <div id="nb-client-status" style="margin-bottom:12px;font-size:13px;color:var(--text-secondary);"></div>
+            <div class="form-group">
+                <label>Aggregator setup key</label>
+                <input type="text" class="form-control" id="nb-setup-key"
+                       placeholder="Paste NetBird setup key for this server (not a MediaMTX / aircraft key)"
+                       style="font-family:monospace;">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="enrollNetbird()" id="nb-enroll-btn">Enroll server</button>
+                <span id="nb-action-msg" style="font-size:13px;color:var(--text-muted);"></span>
             </div>
         </div>
-        <button class="btn btn-danger" onclick="disconnectNetbird()" id="nb-disconnect-btn" style="font-size:12px;white-space:nowrap;">Disconnect</button>
-    </div>
 
-    <!-- Not connected state — shown when not enrolled or not running -->
-    <div id="nb-disconnected-state" style="display:none;">
-        <div id="nb-client-status" style="margin-bottom:16px;font-size:13px;color:var(--text-secondary);"></div>
-        <div class="form-group">
-            <label>Setup Key</label>
-            <input type="text" class="form-control" id="nb-setup-key"
-                   placeholder="Enter a NetBird setup key to enroll this server as a peer..."
-                   style="font-family:monospace;">
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <button class="btn btn-primary" onclick="enrollNetbird()" id="nb-enroll-btn">Enroll Server</button>
-            <span id="nb-action-msg" style="font-size:13px;color:var(--text-muted);"></span>
+        <div id="nb-enroll-actions" style="display:none;margin-top:4px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn" onclick="loadClientStatus()" style="font-size:12px;">Refresh status</button>
+                <button class="btn btn-danger" onclick="disconnectNetbird()" id="nb-disconnect-btn" style="font-size:12px;">Disconnect</button>
+            </div>
         </div>
     </div>
-
-    <!-- Loading state -->
-    <div id="nb-loading-state" style="font-size:13px;color:var(--text-muted);">Checking enrollment status...</div>
 
     <div style="margin-top:16px;padding:12px;background:var(--bg-input);border-radius:6px;font-size:12px;color:var(--text-muted);">
-        ℹ Setup keys are automatically saved to <code style="color:var(--accent);">/opt/taknet-aggregator/.env</code> and persist through updates.
+        Setup key saved to <code style="color:var(--accent);">NB_SETUP_KEY</code> in <code>/opt/taknet-aggregator/.env</code> after enrollment.
     </div>
 </div>
 
@@ -310,37 +318,93 @@ function toggleSection(bodyId) {
     if (chevron) chevron.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
 }
 
+function enrollmentBadge(state) {
+    if (state === 'connected') {
+        return '<span class="badge badge-live"><span class="pulse">●</span> Connected</span>';
+    }
+    if (state === 'running_not_connected') {
+        return '<span class="badge badge-stale">Running / not connected</span>';
+    }
+    if (state === 'stopped') {
+        return '<span class="badge badge-stale">Enrolled / stopped</span>';
+    }
+    return '<span class="badge badge-offline">Not enrolled</span>';
+}
+
 async function loadClientStatus() {
+    const loading = document.getElementById('nb-loading-state');
+    const body = document.getElementById('nb-enroll-body');
+    const badge = document.getElementById('nb-client-badge');
+    const grid = document.getElementById('nb-enroll-grid');
+    const connected = document.getElementById('nb-connected-banner');
+    const warning = document.getElementById('nb-enroll-warning');
+    const form = document.getElementById('nb-enroll-form');
+    const actions = document.getElementById('nb-enroll-actions');
+    const detail = document.getElementById('nb-connected-detail');
+    const statusEl = document.getElementById('nb-client-status');
+
     try {
         const r = await fetch('/api/netbird/client');
         const d = await r.json();
-        const badge       = document.getElementById('nb-client-badge');
-        const loading     = document.getElementById('nb-loading-state');
-        const connected   = document.getElementById('nb-connected-banner');
-        const disconnected = document.getElementById('nb-disconnected-state');
-        const detail      = document.getElementById('nb-connected-detail');
-        const statusEl    = document.getElementById('nb-client-status');
-
         loading.style.display = 'none';
+        body.style.display = 'block';
+        badge.innerHTML = enrollmentBadge(d.state);
 
-        if (d.enrolled && d.running) {
-            badge.innerHTML = '<span class="badge badge-live"><span class="pulse">●</span> Connected</span>';
-            detail.textContent = 'Running since ' + (fmtTime(d.started_at) || '—');
-            connected.style.display = 'flex';
-            disconnected.style.display = 'none';
-        } else if (d.enrolled && !d.running) {
-            badge.innerHTML = '<span class="badge badge-stale">Enrolled / Not Running</span>';
-            statusEl.textContent = 'Container exists but is not running (status: ' + d.status + '). Re-enroll or check Docker logs.';
-            connected.style.display = 'none';
-            disconnected.style.display = 'block';
-        } else {
-            badge.innerHTML = '<span class="badge badge-offline">Not Enrolled</span>';
-            statusEl.textContent = 'This server is not enrolled as a NetBird peer. Enter a setup key to enroll.';
-            connected.style.display = 'none';
-            disconnected.style.display = 'block';
+        const yesNo = function(v) {
+            return v ? '<span class="badge badge-live" style="font-size:10px;">yes</span>' : '<span class="badge badge-offline" style="font-size:10px;">no</span>';
+        };
+
+        grid.innerHTML =
+            '<span style="color:var(--text-muted)">Container</span><span>' + escapeVpnHtml(d.container_status || (d.enrolled ? 'exists' : 'not enrolled')) + '</span>' +
+            '<span style="color:var(--text-muted)">Overlay IP</span><span style="font-family:monospace;">' + escapeVpnHtml(d.overlay_ip || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">KLV target</span><span style="font-family:monospace;">' + escapeVpnHtml(d.klv_target || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">Hostname</span><span>' + escapeVpnHtml(d.hostname || d.fqdn || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">Management URL</span><span style="font-family:monospace;font-size:11px;word-break:break-all;">' + escapeVpnHtml(d.management_url || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">Management</span><span>' + yesNo(d.management_connected) + '</span>' +
+            '<span style="color:var(--text-muted)">Signal</span><span>' + yesNo(d.signal_connected) + '</span>' +
+            '<span style="color:var(--text-muted)">Peers</span><span>' + escapeVpnHtml(String(d.peers_connected || 0) + ' connected / ' + String(d.peers_total || 0) + ' total') + '</span>' +
+            '<span style="color:var(--text-muted)">NB_SETUP_KEY (.env)</span><span>' + (d.nb_setup_key_configured ? '<span class="badge badge-live" style="font-size:10px;">saved</span> <span style="font-family:monospace;font-size:11px;">' + escapeVpnHtml(d.nb_setup_key_display || '') + '</span>' : '<span class="badge badge-offline" style="font-size:10px;">not saved</span>') + '</span>';
+
+        connected.style.display = d.state === 'connected' ? 'block' : 'none';
+        if (d.state === 'connected') {
+            detail.textContent = 'KLV ingest target for MediaMTX: ' + (d.klv_target || d.overlay_ip || '—')
+                + (d.started_at ? ' · container since ' + (fmtTime(d.started_at) || d.started_at) : '');
         }
-    } catch(e) {
-        document.getElementById('nb-loading-state').textContent = 'Error checking status: ' + e;
+
+        let warnText = '';
+        if (d.container_error) warnText = d.container_error;
+        else if (d.mesh_status_error) warnText = 'Mesh status: ' + d.mesh_status_error;
+        else if (d.state === 'running_not_connected') {
+            warnText = 'NetBird client is running but not fully connected to management/signal. Wait a minute and refresh, or re-enroll with a valid setup key.';
+        } else if (d.state === 'stopped') {
+            warnText = 'Container exists but is not running. Re-enroll below or check Docker logs for netbird-client.';
+        }
+        if (warnText) {
+            warning.textContent = warnText;
+            warning.style.display = 'block';
+        } else {
+            warning.style.display = 'none';
+        }
+
+        const showEnroll = d.state !== 'connected';
+        form.style.display = showEnroll ? 'block' : 'none';
+        actions.style.display = d.enrolled ? 'block' : 'none';
+
+        if (showEnroll) {
+            if (d.state === 'not_enrolled') {
+                statusEl.textContent = 'This server is not enrolled. Create an aggregator setup key in NetBird and paste it below.';
+            } else if (d.state === 'stopped') {
+                statusEl.textContent = 'Enrollment container stopped. Paste a setup key to re-enroll.';
+            } else {
+                statusEl.textContent = 'Waiting for mesh connection — you can re-enroll with a new setup key if this persists.';
+            }
+        }
+
+        if (d.state === 'connected') {
+            loadKlvConfig();
+        }
+    } catch (e) {
+        loading.textContent = 'Error checking enrollment status: ' + e;
     }
 }
 
@@ -363,10 +427,12 @@ async function enrollNetbird() {
         });
         const d = await r.json();
         if (d.success) {
-            setMsg(d.message, 'var(--green)');
+            setMsg(d.message + ' Refreshing status…', 'var(--green)');
             document.getElementById('nb-setup-key').value = '';
             setTimeout(loadClientStatus, 3000);
+            setTimeout(loadClientStatus, 8000);
             setTimeout(loadVPN, 5000);
+            setTimeout(loadKlvConfig, 9000);
         } else {
             setMsg('Error: ' + (d.error || 'Unknown error'), 'var(--red)');
         }
@@ -374,7 +440,7 @@ async function enrollNetbird() {
         setMsg('Request failed: ' + e, 'var(--red)');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Enroll Server';
+        btn.textContent = 'Enroll server';
     }
 }
 

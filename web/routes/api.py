@@ -17,7 +17,7 @@ from models import SETTINGS_KEY_COT_PHASE_TIMING_UI, get_setting, set_setting
 from models import enrich_feeder_mlat_display
 from models import filter_feeders_for_user, feeder_stats_from_rows, user_can_access_feeder
 from services.docker_service import (get_containers, restart_container, get_logs,
-                                      get_netbird_client_status, enroll_netbird,
+                                      enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client,
                                       get_caddy_status, get_caddy_certs, force_renew_caddy_cert)
 from services.vpn_service import get_combined_status
@@ -677,20 +677,26 @@ def vpn_status():
 @bp.route("/netbird/client")
 @admin_required
 def netbird_client():
-    """Get netbird-client container status."""
-    return jsonify(get_netbird_client_status())
+    """Get netbird-client container + mesh enrollment status."""
+    from services.netbird_enrollment import get_enrollment_status
+
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    return jsonify(get_enrollment_status(install_dir=install_dir))
 
 
 @bp.route("/netbird/enroll", methods=["POST"])
 @admin_required
 def netbird_enroll():
     """Enroll this server as a NetBird peer using a setup key."""
+    from services.netbird_enrollment import _management_url
+
     data = request.get_json()
     setup_key = (data or {}).get("setup_key", "").strip()
     if not setup_key:
         return jsonify({"error": "setup_key is required"}), 400
 
-    management_url = os.environ.get("NETBIRD_API_URL", "https://netbird.tak-solutions.com")
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    management_url = _management_url(install_dir)
     ok, msg = enroll_netbird(setup_key, management_url)
     if ok:
         # Persist the setup key to .env so it survives updates
