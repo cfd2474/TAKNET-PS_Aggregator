@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.387",
+    "date": "2026-06-08",
+    "notes": [
+      "COTProxy edit transform: opt-in Enable active KLV CoT changing checkbox with MediaMTX handoff panel, NetBird setup key field, and per-aircraft ingest token."
+    ]
+  },
+  {
     "version": "1.0.386",
     "date": "2026-06-08",
     "notes": [

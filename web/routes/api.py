@@ -1748,10 +1748,10 @@ def cot_transforms_list(output_id):
     try:
         from klv_ingest import klv_status_for_token
 
-        video_ids = [t["id"] for t in items if t.get("video") and str(t.get("video")).strip()]
-        token_map = CotTransformModel.get_tokens_for_ids(output_id, video_ids)
+        klv_ids = [t["id"] for t in items if t.get("klv_cot_enabled")]
+        token_map = CotTransformModel.get_tokens_for_ids(output_id, klv_ids)
         for t in items:
-            if t.get("video") and str(t.get("video")).strip():
+            if t.get("klv_cot_enabled"):
                 t["klv_status"] = klv_status_for_token(token_map.get(t["id"], ""))
             else:
                 t["klv_status"] = None
@@ -1910,7 +1910,7 @@ def cot_transform_get(output_id, transform_id):
         from klv_ingest import klv_status_for_token
 
         token = (t.get("klv_ingest_token") or "").strip()
-        t["klv_status"] = klv_status_for_token(token) if t.get("video") and str(t.get("video")).strip() else None
+        t["klv_status"] = klv_status_for_token(token) if t.get("klv_cot_enabled") else None
     except Exception:
         t["klv_status"] = None
     return jsonify({"transform": t})
@@ -2195,8 +2195,8 @@ def klv_netbird_setup_key_transform(output_id, transform_id):
     t = CotTransformModel.get_by_id(transform_id, output_id)
     if not t:
         return jsonify({"error": "Not found"}), 404
-    if not (t.get("video") and str(t.get("video")).strip()):
-        return jsonify({"error": "Video URL is required on this transform"}), 400
+    if not t.get("klv_cot_enabled"):
+        return jsonify({"error": "Enable active KLV CoT changing on this transform first"}), 400
     ok, result = create_video_source_setup_key(
         user_id=current_user.id,
         username=current_user.username or "user",
@@ -2206,6 +2206,9 @@ def klv_netbird_setup_key_transform(output_id, transform_id):
     )
     if not ok:
         return jsonify({"error": result}), 400
+    setup_key = (result.get("setup_key") or "").strip()
+    if setup_key:
+        CotTransformModel.save_netbird_setup_key(transform_id, output_id, setup_key)
     return jsonify({"success": True, **result})
 
 

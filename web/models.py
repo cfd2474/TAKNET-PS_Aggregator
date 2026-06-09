@@ -131,6 +131,25 @@ def get_db():
             conn.commit()
         except Exception:
             pass
+        # Migration: opt-in KLV CoT position/SPI updates (separate from CoT __video URL)
+        try:
+            conn.execute(
+                "ALTER TABLE cot_transforms ADD COLUMN klv_cot_enabled INTEGER NOT NULL DEFAULT 0"
+            )
+            conn.commit()
+            conn.execute(
+                """UPDATE cot_transforms SET klv_cot_enabled = 1
+                   WHERE klv_ingest_token IS NOT NULL AND TRIM(klv_ingest_token) != ''"""
+            )
+            conn.commit()
+        except Exception:
+            pass
+        # Migration: last generated NetBird setup key for MediaMTX handoff (per aircraft row)
+        try:
+            conn.execute("ALTER TABLE cot_transforms ADD COLUMN netbird_setup_key TEXT")
+            conn.commit()
+        except Exception:
+            pass
         try:
             conn.execute(
                 "ALTER TABLE feeders ADD COLUMN owners TEXT NOT NULL DEFAULT '[]'"
@@ -1302,6 +1321,14 @@ def _video_url_set(video) -> bool:
     return bool(video and isinstance(video, str) and video.strip())
 
 
+def _klv_cot_enabled_flag(value) -> bool:
+    if value is True or value == 1:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return False
+
+
 class CotTransformModel:
     """COTProxy-style transform rules per output (hex -> callsign, type, icon, etc.)."""
 
@@ -1558,14 +1585,14 @@ class CotTransformModel:
         return [dict(r) for r in rows]
 
     @staticmethod
-    def _sync_klv_token(conn, transform_id: int, video) -> str | None:
-        """Ensure token exists when video URL is set; clear when removed. Returns new token or None."""
+    def _sync_klv_token(conn, transform_id: int, klv_cot_enabled) -> str | None:
+        """Ensure token exists when KLV CoT is enabled; clear when disabled. Returns new token or None."""
         row = conn.execute(
             "SELECT klv_ingest_token FROM cot_transforms WHERE id = ?",
             (transform_id,),
         ).fetchone()
         existing = (row["klv_ingest_token"] or "").strip() if row else ""
-        if _video_url_set(video):
+        if _klv_cot_enabled_flag(klv_cot_enabled):
             token = existing or _generate_klv_ingest_token()
             conn.execute(
                 "UPDATE cot_transforms SET klv_ingest_token = ? WHERE id = ?",
@@ -1574,7 +1601,7 @@ class CotTransformModel:
             return token
         if existing:
             conn.execute(
-                "UPDATE cot_transforms SET klv_ingest_token = NULL WHERE id = ?",
+                "UPDATE cot_transforms SET klv_ingest_token = NULL, netbird_setup_key = NULL WHERE id = ?",
                 (transform_id,),
             )
         return None
@@ -1584,15 +1611,15 @@ class CotTransformModel:
         """Generate a new ingest token when transform has a video URL. Returns token or None."""
         conn = get_db()
         row = conn.execute(
-            "SELECT video, hex, klv_ingest_token FROM cot_transforms WHERE id = ? AND output_id = ?",
+            "SELECT hex, klv_ingest_token, klv_cot_enabled FROM cot_transforms WHERE id = ? AND output_id = ?",
             (transform_id, output_id),
         ).fetchone()
         if not row:
             conn.close()
             return None
-        if not _video_url_set(row["video"]):
+        if not _klv_cot_enabled_flag(row.get("klv_cot_enabled")):
             conn.close()
-            raise ValueError("Video URL is required to generate a KLV ingest token")
+            raise ValueError("Enable active KLV CoT changing on this transform first")
         old_token = (row["klv_ingest_token"] or "").strip()
         hex_code = (row["hex"] or "").strip().upper()
         token = _generate_klv_ingest_token()
@@ -1611,6 +1638,20 @@ class CotTransformModel:
         except Exception:
             pass
         return token
+
+    @staticmethod
+    def save_netbird_setup_key(transform_id: int, output_id: int, setup_key: str) -> bool:
+        key = (setup_key or "").strip()
+        if not key:
+            return False
+        conn = get_db()
+        cur = conn.execute(
+            "UPDATE cot_transforms SET netbird_setup_key = ? WHERE id = ? AND output_id = ?",
+            (key, transform_id, output_id),
+        )
+        conn.commit()
+        conn.close()
+        return cur.rowcount > 0
 
     # Max hex placeholders per query (output_id + N vars; stay under SQLite default 999 variable limit).
     _COT_TRANSFORMS_HEX_IN_CHUNK = 400
@@ -1635,7 +1676,8 @@ class CotTransformModel:
         if not norm:
             return []
         cols = (
-            "id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, klv_ingest_token, created_at"
+            "id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, "
+            "klv_ingest_token, klv_cot_enabled, netbird_setup_key, created_at"
         )
         chunk = CotTransformModel._COT_TRANSFORMS_HEX_IN_CHUNK
         conn = get_db()
@@ -1738,7 +1780,8 @@ class CotTransformModel:
             offset = (page - 1) * per_page
             q_params = params + [per_page, offset]
             rows = conn.execute(
-                f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, klv_ingest_token, created_at
+                f"""SELECT id, output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link,
+                           klv_ingest_token, klv_cot_enabled, created_at
                     FROM cot_transforms WHERE {where_sql}
                     ORDER BY {sort_by} {order}
                     LIMIT ? OFFSET ?""",
@@ -1824,9 +1867,11 @@ class CotTransformModel:
                 f"Duplicate HEX {hex_val}: transform already exists for this output (id={existing_id})."
             )
         video_val = (data.get("video") or "").strip() or None
+        klv_cot_enabled = 1 if _klv_cot_enabled_flag(data.get("klv_cot_enabled")) else 0
         cursor = conn.execute(
-            """INSERT INTO cot_transforms (output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO cot_transforms (
+                   output_id, domain, agency, reg, callsign, type, model, hex, cot, icon, remarks, video, link, klv_cot_enabled
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 output_id,
                 (data.get("domain") or "").strip() or None,
@@ -1841,10 +1886,11 @@ class CotTransformModel:
                 (data.get("remarks") or "").strip() or None,
                 video_val,
                 (data.get("link") or "").strip() or None,
+                klv_cot_enabled,
             ),
         )
         tid = cursor.lastrowid
-        token = CotTransformModel._sync_klv_token(conn, tid, video_val)
+        token = CotTransformModel._sync_klv_token(conn, tid, klv_cot_enabled)
         conn.commit()
         conn.close()
         if token:
@@ -1858,7 +1904,10 @@ class CotTransformModel:
 
     @staticmethod
     def update(transform_id: int, output_id: int, data: dict) -> bool:
-        allowed = {"domain", "agency", "reg", "callsign", "type", "model", "hex", "cot", "icon", "remarks", "video", "link"}
+        allowed = {
+            "domain", "agency", "reg", "callsign", "type", "model", "hex", "cot", "icon",
+            "remarks", "video", "link", "klv_cot_enabled",
+        }
         fields = {k: v for k, v in data.items() if k in allowed}
         if not fields:
             return False
@@ -1882,7 +1931,24 @@ class CotTransformModel:
                 raise ValueError(
                     f"Duplicate HEX {new_hex}: another transform already exists for this output (id={dupe_id})."
                 )
-        video_val = (data.get("video") or "").strip() or None
+        video_val = (fields.get("video") or data.get("video") or "").strip() or None
+        if "video" not in fields:
+            prev = conn.execute(
+                "SELECT video FROM cot_transforms WHERE id = ? AND output_id = ?",
+                (transform_id, output_id),
+            ).fetchone()
+            video_val = (prev["video"] or "").strip() or None if prev else None
+        klv_cot_enabled = (
+            1 if _klv_cot_enabled_flag(data.get("klv_cot_enabled")) else 0
+            if "klv_cot_enabled" in fields
+            else None
+        )
+        if klv_cot_enabled is None:
+            prev_klv = conn.execute(
+                "SELECT klv_cot_enabled FROM cot_transforms WHERE id = ? AND output_id = ?",
+                (transform_id, output_id),
+            ).fetchone()
+            klv_cot_enabled = int(prev_klv["klv_cot_enabled"] or 0) if prev_klv else 0
         old_row = conn.execute(
             "SELECT klv_ingest_token FROM cot_transforms WHERE id = ? AND output_id = ?",
             (transform_id, output_id),
@@ -1890,7 +1956,8 @@ class CotTransformModel:
         old_token = (old_row["klv_ingest_token"] or "").strip() if old_row else ""
         conn.execute(
             """UPDATE cot_transforms SET
-               domain=?, agency=?, reg=?, callsign=?, type=?, model=?, hex=?, cot=?, icon=?, remarks=?, video=?, link=?
+               domain=?, agency=?, reg=?, callsign=?, type=?, model=?, hex=?, cot=?, icon=?, remarks=?, video=?, link=?,
+               klv_cot_enabled=?
                WHERE id = ? AND output_id = ?""",
             (
                 (data.get("domain") or "").strip() or None,
@@ -1905,11 +1972,12 @@ class CotTransformModel:
                 (data.get("remarks") or "").strip() or None,
                 video_val,
                 (data.get("link") or "").strip() or None,
+                klv_cot_enabled,
                 transform_id,
                 output_id,
             ),
         )
-        new_token = CotTransformModel._sync_klv_token(conn, transform_id, video_val)
+        new_token = CotTransformModel._sync_klv_token(conn, transform_id, klv_cot_enabled)
         hex_val = (data.get("hex") or "").strip().upper()
         conn.commit()
         conn.close()
@@ -2026,8 +2094,7 @@ class CotTransformModel:
                         new_id = cur.lastrowid
                         if new_id:
                             existing_hex_to_id[hex_val] = new_id
-                            video_val = (row.get("VIDEO") or "").strip() or None
-                            CotTransformModel._sync_klv_token(conn, new_id, video_val)
+                            CotTransformModel._sync_klv_token(conn, new_id, 0)
                     except Exception as e:
                         errors.append(f"Row {row_num}: {e}")
                 conn.commit()

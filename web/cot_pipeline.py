@@ -1487,6 +1487,8 @@ def _run_cot_sender_cycle_impl(requests):
             for hx, tr in transforms_by_hex.items():
                 if hx in seen_hex:
                     continue
+                if not tr.get("klv_cot_enabled"):
+                    continue
                 token = (tr.get("klv_ingest_token") or "").strip()
                 if not token or not is_klv_live(token):
                     continue
@@ -1508,7 +1510,12 @@ def _run_cot_sender_cycle_impl(requests):
             token = (transform or {}).get("klv_ingest_token") if transform else None
             token = (token or "").strip() if token else ""
             klv_live = bool(
-                token and apply_klv_platform and is_klv_live and is_klv_live(token)
+                transform
+                and transform.get("klv_cot_enabled")
+                and token
+                and apply_klv_platform
+                and is_klv_live
+                and is_klv_live(token)
             )
             if klv_live:
                 klv_active_now.add(hex_code)
