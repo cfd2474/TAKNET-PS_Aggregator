@@ -709,6 +709,44 @@ def netbird_disconnect_route():
     return jsonify({"success": False, "error": msg}), 500
 
 
+@bp.route("/netbird/api-token")
+@admin_required
+def netbird_api_token_status():
+    """NetBird Management API token validity and expiration."""
+    from services.netbird_api_token import get_api_token_status
+
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    return jsonify(get_api_token_status(install_dir=install_dir))
+
+
+@bp.route("/netbird/api-token/regenerate", methods=["POST"])
+@admin_required
+def netbird_api_token_regenerate():
+    """Create a new NetBird PAT and persist NETBIRD_API_TOKEN to .env."""
+    from services.netbird_api_token import DEFAULT_EXPIRES_DAYS, regenerate_api_token
+
+    data = request.get_json(silent=True) or {}
+    bootstrap = (data.get("bootstrap_token") or data.get("api_token") or "").strip() or None
+    try:
+        expires_in = int(data.get("expires_in_days") or DEFAULT_EXPIRES_DAYS)
+    except (TypeError, ValueError):
+        expires_in = DEFAULT_EXPIRES_DAYS
+    revoke_previous = bool(data.get("revoke_previous", False))
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    ok, result = regenerate_api_token(
+        install_dir=install_dir,
+        persist_env_fn=_persist_env_var,
+        expires_in_days=expires_in,
+        bootstrap_token=bootstrap,
+        revoke_previous=revoke_previous,
+    )
+    if not ok:
+        return jsonify({"success": False, "error": result}), 400
+    thread = threading.Thread(target=_restart_dashboard_background, daemon=True)
+    thread.start()
+    return jsonify(result)
+
+
 @bp.route("/netbird/klv-config")
 @admin_required
 def netbird_klv_config_status():

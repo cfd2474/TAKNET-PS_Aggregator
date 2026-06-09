@@ -48,6 +48,48 @@
     </div>
 </div>
 
+<!-- NetBird Management API Token -->
+<div class="card" style="margin-top:16px;" id="nb-api-token-card">
+    <div class="card-header" style="flex-wrap:wrap;gap:8px;">
+        <h3>NetBird Management API Token</h3>
+        <span id="nb-api-token-badge"><span class="badge badge-offline">Loading…</span></span>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">
+        Powers NetBird peers, Secure KLV, and per-aircraft setup keys. Stored as <code>NETBIRD_API_TOKEN</code> in <code>.env</code>.
+    </p>
+
+    <div id="nb-api-token-loading" style="font-size:13px;color:var(--text-muted);">Checking token…</div>
+    <div id="nb-api-token-body" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;font-size:13px;margin-bottom:14px;" id="nb-api-token-grid"></div>
+
+        <div id="nb-api-token-bootstrap" style="display:none;margin-bottom:14px;">
+            <label style="font-size:13px;font-weight:600;">Bootstrap token (one-time)</label>
+            <input type="password" class="form-control" id="nb-api-bootstrap-input"
+                   placeholder="Paste a valid NetBird API token to create a new one"
+                   style="font-family:monospace;margin-top:6px;max-width:480px;">
+            <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">Required when the current token is missing or invalid. Create one in NetBird → Team → your user → Access tokens.</p>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+            <label style="font-size:12px;color:var(--text-muted);">New token lifetime</label>
+            <select class="form-control" id="nb-api-expires-select" style="width:auto;min-width:120px;font-size:12px;">
+                <option value="30">30 days</option>
+                <option value="90" selected>90 days</option>
+                <option value="180">180 days</option>
+                <option value="365">365 days</option>
+            </select>
+            <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" id="nb-api-revoke-prev"> Revoke previous token
+            </label>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="nb-api-regen-btn" onclick="regenerateNetbirdApiToken()">Generate new API token</button>
+            <span id="nb-api-token-msg" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+    </div>
+</div>
+
 <!-- Secure KLV / MediaMTX Video -->
 <div class="card" style="margin-top:16px;" id="klv-secure-card">
     <div class="card-header" style="flex-wrap:wrap;gap:8px;">
@@ -315,6 +357,109 @@ function setMsg(msg, color) {
     el.style.color = color || 'var(--text-muted)';
 }
 
+function apiTokenBadge(d) {
+    if (!d.configured) return '<span class="badge badge-offline">Not configured</span>';
+    if (!d.valid) return '<span class="badge badge-offline">Invalid</span>';
+    if (d.expired) return '<span class="badge badge-stale">Expired</span>';
+    if (d.expiration_unknown) return '<span class="badge badge-stale">Valid (expiry unknown)</span>';
+    if (d.days_remaining != null && d.days_remaining <= 7) {
+        return '<span class="badge badge-stale"><span class="pulse">●</span> Expires soon</span>';
+    }
+    return '<span class="badge badge-live"><span class="pulse">●</span> Valid</span>';
+}
+
+function formatTokenRemaining(d) {
+    if (!d.configured) return 'No token in .env';
+    if (!d.valid) return d.error || 'Token rejected by NetBird API';
+    if (d.expiration_unknown) return 'Expiration unknown — regenerate to track lifetime';
+    if (d.expired) return 'Expired' + (d.expiration_date ? ' (' + d.expiration_date + ')' : '');
+    const parts = [];
+    if (d.days_remaining != null && d.days_remaining > 0) parts.push(d.days_remaining + ' day' + (d.days_remaining === 1 ? '' : 's'));
+    if (d.hours_remaining != null && d.hours_remaining > 0) parts.push(d.hours_remaining + ' hour' + (d.hours_remaining === 1 ? '' : 's'));
+    if (!parts.length) parts.push('less than 1 hour');
+    return parts.join(', ') + ' remaining';
+}
+
+async function loadApiTokenStatus() {
+    const loading = document.getElementById('nb-api-token-loading');
+    const body = document.getElementById('nb-api-token-body');
+    const badge = document.getElementById('nb-api-token-badge');
+    const grid = document.getElementById('nb-api-token-grid');
+    const bootstrap = document.getElementById('nb-api-token-bootstrap');
+    try {
+        const r = await fetch('/api/netbird/api-token');
+        const d = await r.json();
+        loading.style.display = 'none';
+        body.style.display = 'block';
+        badge.innerHTML = apiTokenBadge(d);
+
+        grid.innerHTML =
+            '<span style="color:var(--text-muted)">Time remaining</span><span id="nb-api-remaining">' + escapeVpnHtml(formatTokenRemaining(d)) + '</span>' +
+            '<span style="color:var(--text-muted)">Expires</span><span style="font-family:monospace;font-size:12px;">' + escapeVpnHtml(d.expiration_date || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">Token name</span><span style="font-family:monospace;font-size:12px;">' + escapeVpnHtml(d.token_name || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">NetBird user</span><span>' + escapeVpnHtml(d.user_name || d.user_email || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">Last used</span><span style="font-size:12px;">' + escapeVpnHtml(d.last_used ? fmtTime(d.last_used) : '—') + '</span>' +
+            '<span style="color:var(--text-muted)">Token ID</span><span style="font-family:monospace;font-size:11px;word-break:break-all;">' + escapeVpnHtml(d.token_id || '—') + '</span>';
+
+        const needsBootstrap = !d.configured || !d.valid;
+        bootstrap.style.display = needsBootstrap ? 'block' : 'none';
+        const revoke = document.getElementById('nb-api-revoke-prev');
+        if (revoke) {
+            revoke.disabled = !d.revoke_previous_available;
+            if (!d.revoke_previous_available) revoke.checked = false;
+        }
+    } catch (e) {
+        loading.textContent = 'Error loading API token status: ' + e;
+    }
+}
+
+function setApiTokenMsg(msg, color) {
+    const el = document.getElementById('nb-api-token-msg');
+    el.textContent = msg;
+    el.style.color = color || 'var(--text-muted)';
+}
+
+async function regenerateNetbirdApiToken() {
+    const btn = document.getElementById('nb-api-regen-btn');
+    const bootstrapInput = document.getElementById('nb-api-bootstrap-input');
+    const expiresSelect = document.getElementById('nb-api-expires-select');
+    const revokePrev = document.getElementById('nb-api-revoke-prev');
+    if (!confirm('Generate a new NetBird API token and save it to .env? The dashboard will restart to apply the change.')) return;
+
+    const payload = {
+        expires_in_days: parseInt(expiresSelect.value, 10) || 90,
+        revoke_previous: !!(revokePrev && revokePrev.checked),
+    };
+    const boot = bootstrapInput && bootstrapInput.value.trim();
+    if (boot) payload.bootstrap_token = boot;
+
+    btn.disabled = true;
+    setApiTokenMsg('Creating token…', 'var(--text-muted)');
+    try {
+        const r = await fetch('/api/netbird/api-token/regenerate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) {
+            setApiTokenMsg(d.error || 'Failed', 'var(--red)');
+            return;
+        }
+        let msg = 'New token saved. Dashboard restarting…';
+        if (d.revoked_previous) msg += ' Previous token revoked.';
+        setApiTokenMsg(msg, 'var(--green)');
+        if (bootstrapInput) bootstrapInput.value = '';
+        loadApiTokenStatus();
+        loadKlvConfig();
+        loadVPN();
+    } catch (e) {
+        setApiTokenMsg('Request failed: ' + e, 'var(--red)');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 function klvStatusBadge(configured) {
     return configured
         ? '<span class="badge badge-live"><span class="pulse">●</span> Configured</span>'
@@ -464,9 +609,11 @@ async function enableSecureKlv() {
 
 loadVPN();
 loadClientStatus();
+loadApiTokenStatus();
 loadKlvConfig();
 setInterval(loadVPN, 30000);
 setInterval(loadClientStatus, 15000);
+setInterval(loadApiTokenStatus, 60000);
 setInterval(loadKlvConfig, 30000);
 </script>
 {% endblock %}

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.380",
+    "date": "2026-06-08",
+    "notes": [
+      "VPN tab: NetBird Management API Token card — generate a new PAT via NetBird API, persist to .env, show expiration countdown, optional revoke of previous token, and dashboard auto-restart."
+    ]
+  },
+  {
     "version": "1.0.379",
     "date": "2026-06-08",
     "notes": [
