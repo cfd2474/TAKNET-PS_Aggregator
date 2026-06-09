@@ -90,6 +90,14 @@ def exec_in_container(name: str, cmd: list[str]) -> tuple[int, str, str]:
         return 1, "", str(e)
 
 
+def normalize_netbird_ip(raw: str) -> str:
+    """Strip CIDR suffix from NetBird status IP (e.g. 100.x.x.x/16 -> 100.x.x.x)."""
+    val = (raw or "").strip()
+    if "/" in val:
+        val = val.split("/", 1)[0].strip()
+    return val
+
+
 def get_netbird_status_json() -> tuple[dict | None, str]:
     """Parse netbird status --json from the client container."""
     code, stdout, stderr = exec_in_container(

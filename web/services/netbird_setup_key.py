@@ -6,7 +6,7 @@ import time
 import requests
 
 from services.netbird_api import api_request, default_api_base
-from services.docker_service import get_netbird_status_json
+from services.docker_service import get_netbird_status_json, normalize_netbird_ip
 
 NETBIRD_API_TOKEN = os.environ.get("NETBIRD_API_TOKEN", "")
 NETBIRD_VIDEO_SOURCES_GROUP_ID = os.environ.get("NETBIRD_VIDEO_SOURCES_GROUP_ID", "")
@@ -43,13 +43,13 @@ def get_netbird_self_ip() -> str:
             for key in ("netbirdIp", "NetbirdIP", "IP"):
                 val = data.get(key)
                 if val:
-                    return str(val).strip()
+                    return normalize_netbird_ip(str(val))
             self_node = data.get("Self") or data.get("self") or {}
             if isinstance(self_node, dict):
                 for key in ("NetbirdIP", "netbirdIp", "IP"):
                     val = self_node.get(key)
                     if val:
-                        return str(val).strip()
+                        return normalize_netbird_ip(str(val))
     except Exception:
         pass
     return ""

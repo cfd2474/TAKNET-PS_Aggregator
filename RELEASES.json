@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.385",
+    "date": "2026-06-08",
+    "notes": [
+      "Normalize NetBird overlay IP by stripping CIDR suffix from status JSON (e.g. 100.x.x.x/16)."
+    ]
+  },
+  {
     "version": "1.0.384",
     "date": "2026-06-08",
     "notes": [

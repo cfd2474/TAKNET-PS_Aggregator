@@ -5,7 +5,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from services.docker_service import get_netbird_client_status, get_netbird_status_json
+from services.docker_service import (
+    get_netbird_client_status,
+    get_netbird_status_json,
+    normalize_netbird_ip,
+)
 from services.netbird_klv_config import read_env_file_values
 
 CONTAINER_NAME = "netbird-client"
@@ -49,8 +53,9 @@ def _parse_mesh_status() -> dict[str, Any]:
         if not isinstance(self_node, dict):
             self_node = {}
 
-        out["overlay_ip"] = _pick_str(data, "netbirdIp", "NetbirdIP", "IP") or _pick_str(
-            self_node, "NetbirdIP", "netbirdIp", "IP"
+        out["overlay_ip"] = normalize_netbird_ip(
+            _pick_str(data, "netbirdIp", "NetbirdIP", "IP")
+            or _pick_str(self_node, "NetbirdIP", "netbirdIp", "IP")
         )
         out["hostname"] = _pick_str(self_node, "Hostname", "hostname", "Name", "name") or _pick_str(
             data, "Hostname", "hostname"
