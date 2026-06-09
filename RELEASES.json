@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.382",
+    "date": "2026-06-08",
+    "notes": [
+      "VPN tab: Restart dashboard button to apply NetBird and Secure KLV .env changes without using the shell."
+    ]
+  },
+  {
     "version": "1.0.381",
     "date": "2026-06-08",
     "notes": [

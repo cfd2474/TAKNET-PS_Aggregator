@@ -6,6 +6,19 @@
     <div style="color:var(--text-muted);padding:40px;text-align:center;">Loading VPN status...</div>
 </div>
 
+<!-- NetBird apply .env -->
+<div class="card" style="margin-top:16px;" id="nb-restart-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.45;max-width:640px;">
+            NetBird and Secure KLV settings are written to <code>.env</code>. Restart the dashboard to load API token, group ID, CIDR, and port changes.
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn" id="nb-dashboard-restart-btn" onclick="restartNetbirdDashboard()">Restart dashboard</button>
+            <span id="nb-dashboard-restart-msg" style="font-size:13px;color:var(--text-muted);"></span>
+        </div>
+    </div>
+</div>
+
 <!-- NetBird Enrollment Card -->
 <div class="card" style="margin-top:16px;" id="nb-enroll-card">
     <div class="card-header">
@@ -146,6 +159,34 @@
 
 {% block extra_scripts %}
 <script>
+function setDashboardRestartMsg(msg, color) {
+    const el = document.getElementById('nb-dashboard-restart-msg');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = color || 'var(--text-muted)';
+}
+
+async function restartNetbirdDashboard() {
+    const btn = document.getElementById('nb-dashboard-restart-btn');
+    if (!confirm('Restart the dashboard container now? This page will disconnect briefly.')) return;
+    btn.disabled = true;
+    setDashboardRestartMsg('Restarting…', 'var(--text-muted)');
+    try {
+        const r = await fetch('/api/netbird/restart-dashboard', { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok || !d.success) {
+            setDashboardRestartMsg(d.error || d.message || 'Restart failed', 'var(--red)');
+            btn.disabled = false;
+            return;
+        }
+        setDashboardRestartMsg('Restarting — reloading in 8s…', 'var(--green)');
+        setTimeout(function() { window.location.reload(); }, 8000);
+    } catch (e) {
+        setDashboardRestartMsg('Request failed (dashboard may still be restarting): ' + e, 'var(--yellow)');
+        setTimeout(function() { window.location.reload(); }, 8000);
+    }
+}
+
 async function loadVPN() {
     const tsBody = document.getElementById('ts-body');
     const nbBody = document.getElementById('nb-body');

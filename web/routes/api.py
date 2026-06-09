@@ -709,6 +709,18 @@ def netbird_disconnect_route():
     return jsonify({"success": False, "error": msg}), 500
 
 
+@bp.route("/netbird/restart-dashboard", methods=["POST"])
+@admin_required
+def netbird_restart_dashboard():
+    """Restart dashboard to apply NetBird / KLV .env changes."""
+    thread = threading.Thread(target=_restart_dashboard_background, daemon=True)
+    thread.start()
+    return jsonify({
+        "success": True,
+        "message": "Dashboard restart started. Reload this page in a few seconds.",
+    })
+
+
 @bp.route("/netbird/api-token")
 @admin_required
 def netbird_api_token_status():
