@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.381",
+    "date": "2026-06-08",
+    "notes": [
+      "VPN NetBird API token: Validate & save button for pasted tokens; fix API client to try all configured NetBird URLs (prefer host .env) instead of failing on first 401 from localhost."
+    ]
+  },
+  {
     "version": "1.0.380",
     "date": "2026-06-08",
     "notes": [

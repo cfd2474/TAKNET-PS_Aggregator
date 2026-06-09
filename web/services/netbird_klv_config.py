@@ -64,8 +64,8 @@ def _api_token_from_env(install_dir: str) -> str:
     return (os.environ.get("NETBIRD_API_TOKEN") or file_env.get("NETBIRD_API_TOKEN") or "").strip()
 
 
-def _list_groups(token: str) -> list[dict]:
-    resp, _base = api_request("GET", "/api/groups", token)
+def _list_groups(token: str, install_dir: str | None = None) -> list[dict]:
+    resp, _base = api_request("GET", "/api/groups", token, install_dir=install_dir)
     if resp is None:
         raise RuntimeError("NetBird API unreachable")
     if resp.status_code != 200:
@@ -73,25 +73,32 @@ def _list_groups(token: str) -> list[dict]:
     return parse_json_list(resp.json(), "groups", "items")
 
 
-def _group_status(token: str, name: str) -> dict:
-    for g in _list_groups(token):
+def _group_status(token: str, name: str, install_dir: str | None = None) -> dict:
+    for g in _list_groups(token, install_dir):
         if (g.get("name") or "").strip() == name:
             return {"name": name, "exists": True, "id": g.get("id") or ""}
     return {"name": name, "exists": False, "id": ""}
 
 
-def ensure_group(token: str, name: str, peer_ids: list[str] | None = None) -> dict:
+def ensure_group(
+    token: str,
+    name: str,
+    peer_ids: list[str] | None = None,
+    install_dir: str | None = None,
+) -> dict:
     """Return {id, name, created: bool}."""
-    existing = _group_status(token, name)
+    existing = _group_status(token, name, install_dir)
     if existing["exists"]:
         gid = existing["id"]
         if peer_ids:
-            _update_group_peers(token, gid, peer_ids)
+            _update_group_peers(token, gid, peer_ids, install_dir)
         return {"id": gid, "name": name, "created": False}
     payload: dict[str, Any] = {"name": name}
     if peer_ids:
         payload["peers"] = peer_ids
-    resp, _base = api_request("POST", "/api/groups", token, json_body=payload)
+    resp, _base = api_request(
+        "POST", "/api/groups", token, json_body=payload, install_dir=install_dir
+    )
     if resp is None or resp.status_code not in (200, 201):
         detail = resp.text[:200] if resp is not None else "no response"
         code = resp.status_code if resp is not None else 0
@@ -100,8 +107,12 @@ def ensure_group(token: str, name: str, peer_ids: list[str] | None = None) -> di
     return {"id": data.get("id") or "", "name": name, "created": True}
 
 
-def _update_group_peers(token: str, group_id: str, peer_ids: list[str]) -> None:
-    resp, _ = api_request("GET", f"/api/groups/{group_id}", token)
+def _update_group_peers(
+    token: str, group_id: str, peer_ids: list[str], install_dir: str | None = None
+) -> None:
+    resp, _ = api_request(
+        "GET", f"/api/groups/{group_id}", token, install_dir=install_dir
+    )
     if resp is None or resp.status_code != 200:
         return
     g = resp.json()
@@ -119,6 +130,7 @@ def _update_group_peers(token: str, group_id: str, peer_ids: list[str]) -> None:
         f"/api/groups/{group_id}",
         token,
         json_body={"name": g.get("name") or "", "peers": merged},
+        install_dir=install_dir,
     )
 
 
@@ -149,8 +161,8 @@ def get_aggregator_peer_id() -> str:
     return ""
 
 
-def _list_policies(token: str) -> list[dict]:
-    resp, _ = api_request("GET", "/api/policies", token)
+def _list_policies(token: str, install_dir: str | None = None) -> list[dict]:
+    resp, _ = api_request("GET", "/api/policies", token, install_dir=install_dir)
     if resp is None:
         raise RuntimeError("NetBird API unreachable")
     if resp.status_code != 200:
@@ -158,15 +170,21 @@ def _list_policies(token: str) -> list[dict]:
     return parse_json_list(resp.json(), "policies", "items")
 
 
-def _policy_status(token: str, name: str) -> dict:
-    for p in _list_policies(token):
+def _policy_status(token: str, name: str, install_dir: str | None = None) -> dict:
+    for p in _list_policies(token, install_dir):
         if (p.get("name") or "").strip() == name:
             return {"name": name, "exists": True, "id": p.get("id") or ""}
     return {"name": name, "exists": False, "id": ""}
 
 
-def ensure_klv_policy(token: str, source_group_id: str, dest_group_id: str, port: int = 9000) -> dict:
-    existing = _policy_status(token, KLV_POLICY_NAME)
+def ensure_klv_policy(
+    token: str,
+    source_group_id: str,
+    dest_group_id: str,
+    port: int = 9000,
+    install_dir: str | None = None,
+) -> dict:
+    existing = _policy_status(token, KLV_POLICY_NAME, install_dir)
     if existing["exists"]:
         return {"id": existing["id"], "name": KLV_POLICY_NAME, "created": False}
     payload = {
@@ -188,7 +206,9 @@ def ensure_klv_policy(token: str, source_group_id: str, dest_group_id: str, port
             }
         ],
     }
-    resp, _ = api_request("POST", "/api/policies", token, json_body=payload)
+    resp, _ = api_request(
+        "POST", "/api/policies", token, json_body=payload, install_dir=install_dir
+    )
     if resp is None or resp.status_code not in (200, 201):
         detail = resp.text[:200] if resp is not None else "no response"
         code = resp.status_code if resp is not None else 0
@@ -208,7 +228,7 @@ def ensure_mediamtx_video_group(
     if not token:
         return False, "NETBIRD_API_TOKEN is required"
     try:
-        mtx = ensure_group(token, MEDIAMTX_VIDEO_GROUP_NAME)
+        mtx = ensure_group(token, MEDIAMTX_VIDEO_GROUP_NAME, install_dir=install_dir)
         if persist_env_fn and mtx.get("id"):
             persist_env_fn("NETBIRD_VIDEO_SOURCES_GROUP_ID", mtx["id"])
         return True, {
@@ -258,9 +278,13 @@ def get_klv_config_status(*, install_dir: str) -> dict[str, Any]:
 
     if runtime_token:
         try:
-            group_info = _group_status(runtime_token, MEDIAMTX_VIDEO_GROUP_NAME)
-            aggregator_group = _group_status(runtime_token, AGGREGATOR_GROUP_NAME)
-            policy_info = _policy_status(runtime_token, KLV_POLICY_NAME)
+            group_info = _group_status(
+                runtime_token, MEDIAMTX_VIDEO_GROUP_NAME, install_dir
+            )
+            aggregator_group = _group_status(
+                runtime_token, AGGREGATOR_GROUP_NAME, install_dir
+            )
+            policy_info = _policy_status(runtime_token, KLV_POLICY_NAME, install_dir)
             if group_info["exists"] and not group_id_env:
                 group_id_env = group_info["id"]
         except Exception as e:
@@ -314,7 +338,7 @@ def enable_secure_klv(
     warnings: list[str] = []
 
     try:
-        mtx_group = ensure_group(token, MEDIAMTX_VIDEO_GROUP_NAME)
+        mtx_group = ensure_group(token, MEDIAMTX_VIDEO_GROUP_NAME, install_dir=install_dir)
         if mtx_group["created"]:
             steps.append(f"Created NetBird group '{MEDIAMTX_VIDEO_GROUP_NAME}'")
         else:
@@ -323,14 +347,18 @@ def enable_secure_klv(
         peer_id = get_aggregator_peer_id()
         agg_group_id = ""
         if peer_id:
-            agg = ensure_group(token, AGGREGATOR_GROUP_NAME, peer_ids=[peer_id])
+            agg = ensure_group(
+                token, AGGREGATOR_GROUP_NAME, peer_ids=[peer_id], install_dir=install_dir
+            )
             agg_group_id = agg["id"]
             if agg["created"]:
                 steps.append(f"Created group '{AGGREGATOR_GROUP_NAME}' with this server peer")
             else:
                 steps.append(f"Group '{AGGREGATOR_GROUP_NAME}' ready")
             try:
-                pol = ensure_klv_policy(token, mtx_group["id"], agg_group_id)
+                pol = ensure_klv_policy(
+                    token, mtx_group["id"], agg_group_id, install_dir=install_dir
+                )
                 if pol["created"]:
                     steps.append("Created access policy for TCP 9000")
                 else:

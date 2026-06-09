@@ -8,13 +8,21 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from services.netbird_api import api_request
+from services.netbird_api import api_request, default_api_base
 from services.netbird_klv_config import read_env_file_values
 
 TOKEN_NAME_PREFIX = "taknet-aggregator-api"
 ENV_TOKEN_ID = "NETBIRD_API_TOKEN_ID"
 ENV_TOKEN_EXPIRES = "NETBIRD_API_TOKEN_EXPIRES"
 DEFAULT_EXPIRES_DAYS = 90
+
+
+def _normalize_token(token: str) -> str:
+    t = (token or "").strip()
+    for prefix in ("Bearer ", "bearer ", "Token ", "token "):
+        if t.startswith(prefix):
+            t = t[len(prefix):].strip()
+    return t
 
 
 def _api_token_from_env(install_dir: str) -> str:
@@ -72,12 +80,18 @@ def _expiration_info(expiration_date: str | None) -> dict[str, Any]:
         }
 
 
-def _get_current_user(token: str) -> dict[str, Any]:
-    resp, _ = api_request("GET", "/api/users/current", token)
+def _get_current_user(token: str, install_dir: str | None = None) -> dict[str, Any]:
+    resp, base = api_request(
+        "GET", "/api/users/current", token, install_dir=install_dir
+    )
     if resp is None:
         raise RuntimeError("NetBird API unreachable")
     if resp.status_code == 401:
-        raise RuntimeError("Current API token is invalid or expired")
+        raise RuntimeError(
+            "API token rejected"
+            + (f" by {base}" if base else "")
+            + " — check the token and NETBIRD_API_URL in .env"
+        )
     if resp.status_code != 200:
         raise RuntimeError(f"Users API {resp.status_code}: {resp.text[:200]}")
     data = resp.json()
@@ -86,8 +100,12 @@ def _get_current_user(token: str) -> dict[str, Any]:
     return data
 
 
-def _list_user_tokens(token: str, user_id: str) -> list[dict]:
-    resp, _ = api_request("GET", f"/api/users/{user_id}/tokens", token)
+def _list_user_tokens(
+    token: str, user_id: str, install_dir: str | None = None
+) -> list[dict]:
+    resp, _ = api_request(
+        "GET", f"/api/users/{user_id}/tokens", token, install_dir=install_dir
+    )
     if resp is None:
         raise RuntimeError("NetBird API unreachable")
     if resp.status_code != 200:
@@ -98,8 +116,15 @@ def _list_user_tokens(token: str, user_id: str) -> list[dict]:
     return []
 
 
-def _get_token_record(token: str, user_id: str, token_id: str) -> dict | None:
-    resp, _ = api_request("GET", f"/api/users/{user_id}/tokens/{token_id}", token)
+def _get_token_record(
+    token: str, user_id: str, token_id: str, install_dir: str | None = None
+) -> dict | None:
+    resp, _ = api_request(
+        "GET",
+        f"/api/users/{user_id}/tokens/{token_id}",
+        token,
+        install_dir=install_dir,
+    )
     if resp is None or resp.status_code == 404:
         return None
     if resp.status_code != 200:
@@ -140,6 +165,7 @@ def get_api_token_status(*, install_dir: str) -> dict[str, Any]:
         "days_remaining": None,
         "hours_remaining": None,
         "error": "",
+        "api_url": default_api_base(install_dir),
     }
 
     if not configured:
@@ -148,7 +174,7 @@ def get_api_token_status(*, install_dir: str) -> dict[str, Any]:
 
     token = _api_token_from_env(install_dir)
     try:
-        user = _get_current_user(token)
+        user = _get_current_user(token, install_dir)
         out["valid"] = True
         out["user_email"] = user.get("email") or ""
         out["user_name"] = user.get("name") or ""
@@ -156,9 +182,9 @@ def get_api_token_status(*, install_dir: str) -> dict[str, Any]:
 
         record: dict | None = None
         if meta["token_id"]:
-            record = _get_token_record(token, user_id, meta["token_id"])
+            record = _get_token_record(token, user_id, meta["token_id"], install_dir)
         if record is None:
-            record = _guess_managed_token(_list_user_tokens(token, user_id))
+            record = _guess_managed_token(_list_user_tokens(token, user_id, install_dir))
 
         if record:
             out["token_id"] = record.get("id") or meta["token_id"]
@@ -188,8 +214,78 @@ def _token_name() -> str:
     return f"{TOKEN_NAME_PREFIX}-{host}-{int(time.time())}"[:64]
 
 
-def _delete_token(token: str, user_id: str, token_id: str) -> None:
-    api_request("DELETE", f"/api/users/{user_id}/tokens/{token_id}", token)
+def _delete_token(
+    token: str, user_id: str, token_id: str, install_dir: str | None = None
+) -> None:
+    api_request(
+        "DELETE",
+        f"/api/users/{user_id}/tokens/{token_id}",
+        token,
+        install_dir=install_dir,
+    )
+
+
+def _extract_plain_token(data: dict) -> str:
+    plain = data.get("plain_token")
+    if isinstance(plain, str) and plain.strip():
+        return plain.strip()
+    if isinstance(plain, dict):
+        for key in ("token", "value", "plain", "plain_token"):
+            val = plain.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    for key in ("token", "plain_token", "access_token"):
+        val = data.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def save_api_token(
+    *,
+    install_dir: str,
+    persist_env_fn: Callable[[str, str], None],
+    token: str,
+) -> tuple[bool, dict | str]:
+    """Validate a pasted token and persist it to .env without creating a new PAT."""
+    auth = _normalize_token(token)
+    if not auth:
+        return False, "Paste a NetBird API token first."
+
+    try:
+        user = _get_current_user(auth, install_dir)
+        user_id = str(user["id"])
+        persist_env_fn("NETBIRD_API_TOKEN", auth)
+
+        record = _guess_managed_token(_list_user_tokens(auth, user_id, install_dir))
+        if record:
+            if record.get("id"):
+                persist_env_fn(ENV_TOKEN_ID, str(record["id"]))
+            if record.get("expiration_date"):
+                persist_env_fn(ENV_TOKEN_EXPIRES, str(record["expiration_date"]))
+        else:
+            persist_env_fn(ENV_TOKEN_ID, "")
+            persist_env_fn(ENV_TOKEN_EXPIRES, "")
+
+        exp_info = _expiration_info(
+            str(record.get("expiration_date") or "") if record else ""
+        )
+        return True, {
+            "success": True,
+            "saved": True,
+            "user_email": user.get("email") or "",
+            "user_name": user.get("name") or "",
+            "token_name": (record or {}).get("name") or "",
+            "expiration_date": (record or {}).get("expiration_date") or "",
+            "expiration_unknown": not bool(record),
+            "needs_dashboard_restart": True,
+            "restart_hint": "docker compose up -d dashboard",
+            **{k: exp_info[k] for k in (
+                "days_remaining", "hours_remaining", "seconds_remaining", "expired"
+            )},
+        }
+    except Exception as e:
+        return False, str(e)
 
 
 def regenerate_api_token(
@@ -204,38 +300,44 @@ def regenerate_api_token(
     Create a new NetBird PAT and persist NETBIRD_API_TOKEN (+ metadata) to .env.
     Uses bootstrap_token or the configured token to authenticate creation.
     """
-    auth = (bootstrap_token or "").strip() or _api_token_from_env(install_dir)
+    auth = _normalize_token(bootstrap_token or "") or _api_token_from_env(install_dir)
     if not auth:
-        return False, "No API token available. Paste a valid token first."
+        return False, "Paste a valid token, then click Validate & save or Generate."
 
     expires_in_days = max(1, min(365, int(expires_in_days)))
 
     old_meta = _token_meta_from_env(install_dir)
     try:
-        user = _get_current_user(auth)
+        user = _get_current_user(auth, install_dir)
         user_id = str(user["id"])
         payload = {"name": _token_name(), "expires_in": expires_in_days}
-        resp, _ = api_request(
+        resp, base = api_request(
             "POST",
             f"/api/users/{user_id}/tokens",
             auth,
             json_body=payload,
+            install_dir=install_dir,
         )
         if resp is None:
             return False, "NetBird API unreachable"
         if resp.status_code == 401:
             return False, (
-                "Authentication failed — paste a valid Management API token "
-                "with permission to create tokens for this user."
+                "Authentication failed"
+                + (f" at {base}" if base else "")
+                + " — use Validate & save with a working token from NetBird dashboard first."
+            )
+        if resp.status_code == 403:
+            return False, (
+                "Not allowed to create API tokens for this user — use Validate & save "
+                "to store your dashboard token instead."
             )
         if resp.status_code not in (200, 201):
             return False, f"Create token failed {resp.status_code}: {resp.text[:200]}"
 
         data = resp.json()
-        plain = data.get("plain_token")
-        if isinstance(plain, dict):
-            plain = ""
-        plain = str(plain or "").strip()
+        if not isinstance(data, dict):
+            return False, "Unexpected NetBird API response"
+        plain = _extract_plain_token(data)
         pat = data.get("personal_access_token") or {}
         if not plain:
             return False, "NetBird API did not return a plain text token"
@@ -253,7 +355,7 @@ def regenerate_api_token(
         revoked = False
         if revoke_previous and old_meta["token_id"] and old_meta["token_id"] != token_id:
             try:
-                _delete_token(auth, user_id, old_meta["token_id"])
+                _delete_token(auth, user_id, old_meta["token_id"], install_dir)
                 revoked = True
             except Exception:
                 pass

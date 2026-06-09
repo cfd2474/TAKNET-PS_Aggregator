@@ -719,6 +719,32 @@ def netbird_api_token_status():
     return jsonify(get_api_token_status(install_dir=install_dir))
 
 
+@bp.route("/netbird/api-token/save", methods=["POST"])
+@admin_required
+def netbird_api_token_save():
+    """Validate a pasted NetBird PAT and persist NETBIRD_API_TOKEN to .env."""
+    from services.netbird_api_token import save_api_token
+
+    data = request.get_json(silent=True) or {}
+    token = (
+        data.get("token")
+        or data.get("bootstrap_token")
+        or data.get("api_token")
+        or ""
+    ).strip()
+    install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
+    ok, result = save_api_token(
+        install_dir=install_dir,
+        persist_env_fn=_persist_env_var,
+        token=token,
+    )
+    if not ok:
+        return jsonify({"success": False, "error": result}), 400
+    thread = threading.Thread(target=_restart_dashboard_background, daemon=True)
+    thread.start()
+    return jsonify(result)
+
+
 @bp.route("/netbird/api-token/regenerate", methods=["POST"])
 @admin_required
 def netbird_api_token_regenerate():

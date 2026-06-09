@@ -18,17 +18,42 @@ def normalize_api_base(url: str) -> str:
     return base
 
 
-def default_api_base() -> str:
-    raw = (os.environ.get("NETBIRD_API_URL") or DEFAULT_NETBIRD_API_URL).strip()
-    return normalize_api_base(raw) or DEFAULT_NETBIRD_API_URL
+def _file_api_urls(install_dir: str | None) -> list[str]:
+    if not install_dir:
+        return []
+    try:
+        from services.netbird_klv_config import read_env_file_values
+
+        file_env = read_env_file_values(install_dir)
+        return [
+            file_env.get("NETBIRD_API_URL") or "",
+            file_env.get("NETBIRD_MANAGEMENT_URL") or "",
+        ]
+    except Exception:
+        return []
 
 
-def api_candidates() -> list[str]:
-    """URLs to try for Management API (deduped)."""
+def default_api_base(install_dir: str | None = None) -> str:
+    for raw in (
+        *_file_api_urls(install_dir),
+        os.environ.get("NETBIRD_API_URL"),
+        os.environ.get("NETBIRD_MANAGEMENT_URL"),
+        DEFAULT_NETBIRD_API_URL,
+    ):
+        base = normalize_api_base(raw or "")
+        if base:
+            return base
+    return DEFAULT_NETBIRD_API_URL
+
+
+def api_candidates(install_dir: str | None = None) -> list[str]:
+    """URLs to try for Management API (deduped). Prefers host .env over stale runtime env."""
     seen: set[str] = set()
     out: list[str] = []
     for raw in (
+        *_file_api_urls(install_dir),
         os.environ.get("NETBIRD_API_URL"),
+        os.environ.get("NETBIRD_MANAGEMENT_URL"),
         DEFAULT_NETBIRD_API_URL,
         "http://localhost:33073",
     ):
@@ -48,6 +73,7 @@ def api_request(
     *,
     json_body: dict | None = None,
     timeout: int = 20,
+    install_dir: str | None = None,
 ) -> tuple[requests.Response | None, str | None]:
     """
     Call NetBird API; try each configured base URL.
@@ -57,27 +83,28 @@ def api_request(
     if not path.startswith("/"):
         path = "/" + path
     last_resp: requests.Response | None = None
-    for base in api_candidates():
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
+    last_base: str | None = None
+    for base in api_candidates(install_dir):
         url = f"{base}{path}"
-        try:
-            resp = requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
-        except requests.RequestException:
-            continue
-        if resp.status_code == 401:
-            headers["Authorization"] = f"Token {token}"
+        for scheme in ("Token", "Bearer"):
+            headers = {
+                "Authorization": f"{scheme} {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
             try:
                 resp = requests.request(method, url, headers=headers, json=json_body, timeout=timeout)
             except requests.RequestException:
+                resp = None
+                break
+            last_resp = resp
+            last_base = base
+            if resp.status_code == 404:
+                break
+            if resp.status_code == 401:
                 continue
-        last_resp = resp
-        if resp.status_code != 404:
             return resp, base
-    return last_resp, api_candidates()[0] if api_candidates() else None
+    return last_resp, last_base
 
 
 def parse_json_list(data: Any, *keys: str) -> list:

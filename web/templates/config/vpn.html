@@ -62,12 +62,14 @@
     <div id="nb-api-token-body" style="display:none;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;font-size:13px;margin-bottom:14px;" id="nb-api-token-grid"></div>
 
-        <div id="nb-api-token-bootstrap" style="display:none;margin-bottom:14px;">
-            <label style="font-size:13px;font-weight:600;">Bootstrap token (one-time)</label>
+        <div id="nb-api-token-input-wrap" style="margin-bottom:14px;">
+            <label style="font-size:13px;font-weight:600;">API token</label>
             <input type="password" class="form-control" id="nb-api-bootstrap-input"
-                   placeholder="Paste a valid NetBird API token to create a new one"
+                   placeholder="Paste NetBird access token (nbp_…)"
                    style="font-family:monospace;margin-top:6px;max-width:480px;">
-            <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">Required when the current token is missing or invalid. Create one in NetBird → Team → your user → Access tokens.</p>
+            <p id="nb-api-token-hint" style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">
+                Create in NetBird → Team → your user → Access tokens. Use <strong>Validate &amp; save</strong> to store a working token in <code>.env</code>.
+            </p>
         </div>
 
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
@@ -84,7 +86,8 @@
         </div>
 
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <button class="btn btn-primary" id="nb-api-regen-btn" onclick="regenerateNetbirdApiToken()">Generate new API token</button>
+            <button class="btn btn-primary" id="nb-api-save-btn" onclick="saveNetbirdApiToken()">Validate &amp; save token</button>
+            <button class="btn" id="nb-api-regen-btn" onclick="regenerateNetbirdApiToken()">Generate new API token</button>
             <span id="nb-api-token-msg" style="font-size:13px;color:var(--text-muted);"></span>
         </div>
     </div>
@@ -380,15 +383,23 @@ function formatTokenRemaining(d) {
     return parts.join(', ') + ' remaining';
 }
 
+let nbApiTokenStatus = null;
+
+function getPastedApiToken() {
+    const el = document.getElementById('nb-api-bootstrap-input');
+    return el ? el.value.trim() : '';
+}
+
 async function loadApiTokenStatus() {
     const loading = document.getElementById('nb-api-token-loading');
     const body = document.getElementById('nb-api-token-body');
     const badge = document.getElementById('nb-api-token-badge');
     const grid = document.getElementById('nb-api-token-grid');
-    const bootstrap = document.getElementById('nb-api-token-bootstrap');
+    const hint = document.getElementById('nb-api-token-hint');
     try {
         const r = await fetch('/api/netbird/api-token');
         const d = await r.json();
+        nbApiTokenStatus = d;
         loading.style.display = 'none';
         body.style.display = 'block';
         badge.innerHTML = apiTokenBadge(d);
@@ -396,13 +407,21 @@ async function loadApiTokenStatus() {
         grid.innerHTML =
             '<span style="color:var(--text-muted)">Time remaining</span><span id="nb-api-remaining">' + escapeVpnHtml(formatTokenRemaining(d)) + '</span>' +
             '<span style="color:var(--text-muted)">Expires</span><span style="font-family:monospace;font-size:12px;">' + escapeVpnHtml(d.expiration_date || '—') + '</span>' +
+            '<span style="color:var(--text-muted)">API URL</span><span style="font-family:monospace;font-size:11px;word-break:break-all;">' + escapeVpnHtml(d.api_url || '—') + '</span>' +
             '<span style="color:var(--text-muted)">Token name</span><span style="font-family:monospace;font-size:12px;">' + escapeVpnHtml(d.token_name || '—') + '</span>' +
             '<span style="color:var(--text-muted)">NetBird user</span><span>' + escapeVpnHtml(d.user_name || d.user_email || '—') + '</span>' +
             '<span style="color:var(--text-muted)">Last used</span><span style="font-size:12px;">' + escapeVpnHtml(d.last_used ? fmtTime(d.last_used) : '—') + '</span>' +
             '<span style="color:var(--text-muted)">Token ID</span><span style="font-family:monospace;font-size:11px;word-break:break-all;">' + escapeVpnHtml(d.token_id || '—') + '</span>';
 
-        const needsBootstrap = !d.configured || !d.valid;
-        bootstrap.style.display = needsBootstrap ? 'block' : 'none';
+        if (hint) {
+            if (!d.configured || !d.valid) {
+                hint.innerHTML = 'Current <code>.env</code> token is missing or invalid'
+                    + (d.error ? ' (' + escapeVpnHtml(d.error) + ')' : '')
+                    + '. Paste a working token and click <strong>Validate &amp; save</strong>.';
+            } else {
+                hint.innerHTML = 'Paste a replacement token and <strong>Validate &amp; save</strong>, or use <strong>Generate new API token</strong> to mint a fresh one.';
+            }
+        }
         const revoke = document.getElementById('nb-api-revoke-prev');
         if (revoke) {
             revoke.disabled = !d.revoke_previous_available;
@@ -419,19 +438,55 @@ function setApiTokenMsg(msg, color) {
     el.style.color = color || 'var(--text-muted)';
 }
 
+async function saveNetbirdApiToken() {
+    const btn = document.getElementById('nb-api-save-btn');
+    const token = getPastedApiToken();
+    if (!token) {
+        setApiTokenMsg('Paste a NetBird API token first.', 'var(--red)');
+        return;
+    }
+    btn.disabled = true;
+    setApiTokenMsg('Validating token…', 'var(--text-muted)');
+    try {
+        const r = await fetch('/api/netbird/api-token/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token: token}),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) {
+            setApiTokenMsg(d.error || 'Save failed', 'var(--red)');
+            return;
+        }
+        setApiTokenMsg('Token saved to .env. Dashboard restarting…', 'var(--green)');
+        document.getElementById('nb-api-bootstrap-input').value = '';
+        loadApiTokenStatus();
+        loadKlvConfig();
+        loadVPN();
+    } catch (e) {
+        setApiTokenMsg('Request failed: ' + e, 'var(--red)');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 async function regenerateNetbirdApiToken() {
     const btn = document.getElementById('nb-api-regen-btn');
-    const bootstrapInput = document.getElementById('nb-api-bootstrap-input');
     const expiresSelect = document.getElementById('nb-api-expires-select');
     const revokePrev = document.getElementById('nb-api-revoke-prev');
+    const pasted = getPastedApiToken();
+    const envInvalid = nbApiTokenStatus && (!nbApiTokenStatus.configured || !nbApiTokenStatus.valid);
+    if (envInvalid && !pasted) {
+        setApiTokenMsg('Paste a working token and click Validate & save first (or paste it here before generating).', 'var(--red)');
+        return;
+    }
     if (!confirm('Generate a new NetBird API token and save it to .env? The dashboard will restart to apply the change.')) return;
 
     const payload = {
         expires_in_days: parseInt(expiresSelect.value, 10) || 90,
         revoke_previous: !!(revokePrev && revokePrev.checked),
     };
-    const boot = bootstrapInput && bootstrapInput.value.trim();
-    if (boot) payload.bootstrap_token = boot;
+    if (pasted) payload.bootstrap_token = pasted;
 
     btn.disabled = true;
     setApiTokenMsg('Creating token…', 'var(--text-muted)');
@@ -449,7 +504,7 @@ async function regenerateNetbirdApiToken() {
         let msg = 'New token saved. Dashboard restarting…';
         if (d.revoked_previous) msg += ' Previous token revoked.';
         setApiTokenMsg(msg, 'var(--green)');
-        if (bootstrapInput) bootstrapInput.value = '';
+        document.getElementById('nb-api-bootstrap-input').value = '';
         loadApiTokenStatus();
         loadKlvConfig();
         loadVPN();
