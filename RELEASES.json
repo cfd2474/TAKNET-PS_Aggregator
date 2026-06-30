@@ -1,5 +1,27 @@
 [
   {
+    "version": "1.0.391",
+    "date": "2026-06-29",
+    "notes": [
+      "Incoming JSON feeds: push aircraft from remote aggregators over public HTTPS (/ingest/json/{token}). Services page CRUD, tar1090 and ADSBExchange envelope support, merge order local Beast then JSON then ADSBHub."
+    ]
+  },
+  {
+    "version": "1.0.390",
+    "date": "2026-06-08",
+    "notes": [
+      "Fix KLV platform merge: include klv_cot_enabled in CoT transform dict so aircraft markers move to KLV platform position (SPI was unaffected)."
+    ]
+  },
+  {
+    "version": "1.0.389",
+    "date": "2026-06-08",
+    "notes": [
+      "VPN Server Enrollment: block re-enroll when mesh is up (preserves overlay IP); add Restart mesh action; warn before destructive re-enroll.",
+      "Installer: open UDP 51820 for NetBird WireGuard on firewalld hosts."
+    ]
+  },
+  {
     "version": "1.0.388",
     "date": "2026-06-08",
     "notes": [

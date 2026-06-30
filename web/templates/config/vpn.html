@@ -59,7 +59,15 @@
         <div id="nb-enroll-actions" style="display:none;margin-top:4px;">
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                 <button class="btn" onclick="loadClientStatus()" style="font-size:12px;">Refresh status</button>
+                <button class="btn" onclick="restartNetbirdMesh()" id="nb-restart-mesh-btn" style="font-size:12px;">Restart mesh</button>
                 <button class="btn btn-danger" onclick="disconnectNetbird()" id="nb-disconnect-btn" style="font-size:12px;">Disconnect</button>
+            </div>
+            <div id="nb-re-enroll-advanced" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.45;">
+                    <strong style="color:#eab308;">Re-enroll only if mesh restart fails.</strong>
+                    Re-enrolling destroys the NetBird client and registers a <em>new</em> overlay IP — all NetBird feeders stop until each one is updated and restarted.
+                </div>
+                <button class="btn" onclick="toggleReEnrollForm()" id="nb-show-re-enroll-btn" style="font-size:12px;">Show re-enroll form…</button>
             </div>
         </div>
     </div>
@@ -389,6 +397,13 @@ async function loadClientStatus() {
         const showEnroll = d.state !== 'connected';
         form.style.display = showEnroll ? 'block' : 'none';
         actions.style.display = d.enrolled ? 'block' : 'none';
+        const reEnrollAdv = document.getElementById('nb-re-enroll-advanced');
+        if (reEnrollAdv) {
+            reEnrollAdv.style.display = d.state === 'connected' ? 'block' : 'none';
+            if (d.state === 'connected') {
+                form.style.display = 'none';
+            }
+        }
 
         if (showEnroll) {
             if (d.state === 'not_enrolled') {
@@ -408,12 +423,55 @@ async function loadClientStatus() {
     }
 }
 
+let nbEnrollIsReEnroll = false;
+
+function toggleReEnrollForm() {
+    const form = document.getElementById('nb-enroll-form');
+    const btn = document.getElementById('nb-enroll-btn');
+    const show = form.style.display === 'none';
+    form.style.display = show ? 'block' : 'none';
+    nbEnrollIsReEnroll = show;
+    if (btn) btn.textContent = show ? 'Re-enroll server' : 'Enroll server';
+    if (show) {
+        document.getElementById('nb-client-status').textContent =
+            'Re-enrolling creates a new NetBird peer IP and disconnects all NetBird feeders until they are updated.';
+    }
+}
+
+async function restartNetbirdMesh() {
+    const btn = document.getElementById('nb-restart-mesh-btn');
+    btn.disabled = true;
+    setMsg('Restarting NetBird mesh…', 'var(--text-muted)');
+    try {
+        const r = await fetch('/api/netbird/restart-mesh', {method: 'POST'});
+        const d = await r.json();
+        if (d.success) {
+            setMsg(d.message + ' Refreshing status…', 'var(--green)');
+            setTimeout(loadClientStatus, 3000);
+            setTimeout(loadClientStatus, 8000);
+        } else {
+            setMsg('Error: ' + (d.error || 'Unknown error'), 'var(--red)');
+        }
+    } catch (e) {
+        setMsg('Request failed: ' + e, 'var(--red)');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 async function enrollNetbird() {
     const key = document.getElementById('nb-setup-key').value.trim();
     if (!key) {
         setMsg('Please enter a setup key.', 'var(--red)');
         return;
     }
+    if (nbEnrollIsReEnroll) {
+        if (!confirm(
+            'Re-enrolling registers a NEW NetBird overlay IP and stops all NetBird feeders until each feeder is updated and restarted.\n\n' +
+            'Use Restart mesh instead if you only need to refresh the connection.\n\nContinue with re-enroll?'
+        )) return;
+    }
+
     const btn = document.getElementById('nb-enroll-btn');
     btn.disabled = true;
     btn.textContent = 'Enrolling...';
@@ -423,7 +481,7 @@ async function enrollNetbird() {
         const r = await fetch('/api/netbird/enroll', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({setup_key: key})
+            body: JSON.stringify({setup_key: key, force: nbEnrollIsReEnroll})
         });
         const d = await r.json();
         if (d.success) {
@@ -440,7 +498,7 @@ async function enrollNetbird() {
         setMsg('Request failed: ' + e, 'var(--red)');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Enroll server';
+        btn.textContent = nbEnrollIsReEnroll ? 'Re-enroll server' : 'Enroll server';
     }
 }
 

@@ -199,6 +199,25 @@ def get_db():
             )
         """)
         conn.commit()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS json_feeds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                token_hash TEXT NOT NULL,
+                token_prefix TEXT NOT NULL,
+                token_display TEXT NOT NULL DEFAULT '',
+                source_label TEXT NOT NULL,
+                merge_priority INTEGER NOT NULL DEFAULT 100,
+                stale_seconds REAL NOT NULL DEFAULT 10,
+                ip_allowlist TEXT NOT NULL DEFAULT '[]',
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_json_feeds_enabled ON json_feeds(enabled)")
+        conn.commit()
         _initialized = True
 
     return conn
@@ -2182,3 +2201,217 @@ def signal_drop_output(output_id: int):
     )
     conn.commit()
     conn.close()
+
+
+JSON_FEEDS_STATUS_DIR = os.environ.get("ADSBHUB_STATUS_PATH", "/app/adsbhub-status")
+
+
+def _generate_json_feed_token() -> str:
+    return "jfeed-" + secrets.token_urlsafe(32)
+
+
+def _json_feed_slug(name: str, feed_id: int) -> str:
+    import re
+    slug = re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower()).strip("-")
+    if not slug:
+        slug = str(feed_id)
+    return f"json:{slug}"
+
+
+class JsonFeedModel:
+    """Incoming JSON push feeds (remote aggregators → aircraft-merger)."""
+
+    @staticmethod
+    def _row_to_dict(row, *, include_token: bool = False) -> dict:
+        if not row:
+            return {}
+        d = dict_row(row)
+        d["enabled"] = bool(d.get("enabled"))
+        try:
+            d["ip_allowlist"] = json.loads(d.get("ip_allowlist") or "[]")
+        except (TypeError, ValueError):
+            d["ip_allowlist"] = []
+        if not include_token:
+            d.pop("token_hash", None)
+        return d
+
+    @staticmethod
+    def list_all() -> list[dict]:
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT * FROM json_feeds ORDER BY merge_priority ASC, name ASC"
+        ).fetchall()
+        conn.close()
+        return [JsonFeedModel._row_to_dict(r) for r in rows]
+
+    @staticmethod
+    def get(feed_id: int) -> dict | None:
+        conn = get_db()
+        row = conn.execute("SELECT * FROM json_feeds WHERE id = ?", (feed_id,)).fetchone()
+        conn.close()
+        return JsonFeedModel._row_to_dict(row) if row else None
+
+    @staticmethod
+    def create(name: str, notes: str = None, merge_priority: int = 100,
+               stale_seconds: float = 10, ip_allowlist=None, enabled: bool = True) -> tuple[dict, str]:
+        import hashlib
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("name is required")
+        raw = _generate_json_feed_token()
+        key_hash = hashlib.sha256(raw.encode()).hexdigest()
+        prefix = raw[:12]
+        allow_json = json.dumps(list(ip_allowlist or []))
+        conn = get_db()
+        cur = conn.execute(
+            """INSERT INTO json_feeds
+               (name, enabled, token_hash, token_prefix, token_display, source_label,
+                merge_priority, stale_seconds, ip_allowlist, notes)
+               VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?)""",
+            (
+                name,
+                1 if enabled else 0,
+                key_hash,
+                prefix,
+                raw,
+                int(merge_priority),
+                float(stale_seconds),
+                allow_json,
+                notes or "",
+            ),
+        )
+        feed_id = cur.lastrowid
+        source_label = _json_feed_slug(name, feed_id)
+        conn.execute(
+            "UPDATE json_feeds SET source_label = ? WHERE id = ?",
+            (source_label, feed_id),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM json_feeds WHERE id = ?", (feed_id,)).fetchone()
+        conn.close()
+        JsonFeedModel.sync_config_to_volume()
+        return JsonFeedModel._row_to_dict(row), raw
+
+    @staticmethod
+    def update(feed_id: int, data: dict) -> bool:
+        conn = get_db()
+        row = conn.execute("SELECT id FROM json_feeds WHERE id = ?", (feed_id,)).fetchone()
+        if not row:
+            conn.close()
+            return False
+        fields = []
+        values = []
+        allowed = {"name", "enabled", "merge_priority", "stale_seconds", "ip_allowlist", "notes"}
+        for key, val in data.items():
+            if key not in allowed:
+                continue
+            if key == "enabled":
+                val = 1 if val in (True, 1, "1", "true", "yes") else 0
+            elif key == "ip_allowlist":
+                val = json.dumps(list(val or []))
+            elif key == "merge_priority":
+                val = int(val)
+            elif key == "stale_seconds":
+                val = float(val)
+            fields.append(f"{key} = ?")
+            values.append(val)
+        if not fields:
+            conn.close()
+            return False
+        if "name" in data:
+            name = (data.get("name") or "").strip()
+            if name:
+                conn.execute(
+                    "UPDATE json_feeds SET source_label = ? WHERE id = ?",
+                    (_json_feed_slug(name, feed_id), feed_id),
+                )
+        fields.append("updated_at = datetime('now')")
+        values.append(feed_id)
+        conn.execute(f"UPDATE json_feeds SET {', '.join(fields)} WHERE id = ?", values)
+        conn.commit()
+        conn.close()
+        JsonFeedModel.sync_config_to_volume()
+        return True
+
+    @staticmethod
+    def delete(feed_id: int) -> bool:
+        conn = get_db()
+        cur = conn.execute("DELETE FROM json_feeds WHERE id = ?", (feed_id,))
+        conn.commit()
+        conn.close()
+        if cur.rowcount:
+            JsonFeedModel.sync_config_to_volume()
+            return True
+        return False
+
+    @staticmethod
+    def regenerate_token(feed_id: int) -> str | None:
+        import hashlib
+        conn = get_db()
+        row = conn.execute("SELECT id FROM json_feeds WHERE id = ?", (feed_id,)).fetchone()
+        if not row:
+            conn.close()
+            return None
+        raw = _generate_json_feed_token()
+        key_hash = hashlib.sha256(raw.encode()).hexdigest()
+        prefix = raw[:12]
+        conn.execute(
+            """UPDATE json_feeds SET token_hash = ?, token_prefix = ?, token_display = ?,
+               updated_at = datetime('now') WHERE id = ?""",
+            (key_hash, prefix, raw, feed_id),
+        )
+        conn.commit()
+        conn.close()
+        JsonFeedModel.sync_config_to_volume()
+        return raw
+
+    @staticmethod
+    def sync_config_to_volume() -> None:
+        """Write feed token hashes to shared volume for aircraft-merger."""
+        conn = get_db()
+        rows = conn.execute(
+            """SELECT id, enabled, token_hash, source_label, merge_priority, stale_seconds, ip_allowlist
+               FROM json_feeds ORDER BY merge_priority ASC, id ASC"""
+        ).fetchall()
+        conn.close()
+        feeds = []
+        for r in rows:
+            try:
+                allow = json.loads(r["ip_allowlist"] or "[]")
+            except (TypeError, ValueError):
+                allow = []
+            feeds.append({
+                "id": r["id"],
+                "enabled": bool(r["enabled"]),
+                "token_hash": r["token_hash"],
+                "source_label": r["source_label"],
+                "merge_priority": r["merge_priority"],
+                "stale_seconds": r["stale_seconds"],
+                "ip_allowlist": allow,
+            })
+        payload = {
+            "feeds": feeds,
+            "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        try:
+            os.makedirs(JSON_FEEDS_STATUS_DIR, exist_ok=True)
+            path = os.path.join(JSON_FEEDS_STATUS_DIR, "json_feeds_config.json")
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            os.replace(tmp, path)
+        except Exception as e:
+            print(f"[json_feeds] sync_config_to_volume: {e}")
+
+    @staticmethod
+    def read_status_from_volume() -> dict:
+        path = os.path.join(JSON_FEEDS_STATUS_DIR, "json_feeds_status.json")
+        try:
+            if os.path.isfile(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    return data.get("feeds") or {}
+        except Exception:
+            pass
+        return {}

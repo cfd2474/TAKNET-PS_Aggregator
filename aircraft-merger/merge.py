@@ -14,6 +14,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.request import urlopen
 
 from aircraft_db import enrich_adsbhub_aircraft, init as init_aircraft_db, refresh_if_due
+from json_ingest import handle_ingest, merge_json_feeds, reload_config, tick_stale_feeds
 
 TAR1090_URL = os.environ.get("TAR1090_URL", "http://tar1090:80/data/aircraft.json")
 ADSBHUB_HOST = os.environ.get("ADSBHUB_HOST", "data.adsbhub.org")
@@ -216,6 +217,9 @@ def _merge_loop():
             if hex_ and hex_ not in seen_hex:
                 seen_hex.add(hex_)
                 merged.append(ac)
+        # Fill in from JSON push feeds (after local, before ADSBHub)
+        json_aircraft = merge_json_feeds(seen_hex, STALE_SECONDS)
+        merged.extend(json_aircraft)
         # Fill in from ADSBHub where we don't have local; drop if stale > STALE_SECONDS
         cutoff = time.time() - STALE_SECONDS
         for hex_, ac in list(adsbhub.items()):
@@ -234,10 +238,25 @@ def _merge_loop():
             _state["aircraft"] = merged
             _state["now"] = now_ts
             _state["messages"] = messages
+        tick_stale_feeds(STALE_SECONDS)
         time.sleep(POLL_INTERVAL)
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _client_ip(self) -> str:
+        fwd = self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP") or ""
+        if fwd:
+            return fwd.split(",")[0].strip()
+        return self.client_address[0] if self.client_address else ""
+
+    def _send_json(self, status: int, payload: dict) -> None:
+        body = json.dumps(payload).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         path = self.path.split("?")[0].rstrip("/")
         if path == "/data/aircraft.json" or path == "/aircraft.json" or path == "":
@@ -253,6 +272,32 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+
+    def do_POST(self):
+        path = self.path.split("?")[0].rstrip("/")
+        prefix = "/ingest/json/"
+        if not path.startswith(prefix):
+            self.send_response(404)
+            self.end_headers()
+            return
+        token = path[len(prefix):].strip("/")
+        if not token:
+            auth = (self.headers.get("Authorization") or "").strip()
+            if auth.lower().startswith("bearer "):
+                token = auth[7:].strip()
+        if not token:
+            self._send_json(401, {"error": "Missing token in URL or Authorization header"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            length = 0
+        if length <= 0:
+            self._send_json(400, {"error": "Missing Content-Length"})
+            return
+        body = self.rfile.read(length)
+        status, payload = handle_ingest(token, body, self._client_ip())
+        self._send_json(status, payload)
 
     def log_message(self, format, *args):
         pass
@@ -281,6 +326,7 @@ def main():
     # Use enable file if present (dashboard is source of truth); else env at startup
     receive_enabled = _is_receive_enabled()
     _write_receive_enabled_file(receive_enabled)
+    reload_config(force=True)
     if not receive_enabled:
         # Pass-through only: keep fetching local
         t = threading.Thread(target=_merge_loop, daemon=True)

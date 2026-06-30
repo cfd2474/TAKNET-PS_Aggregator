@@ -82,6 +82,89 @@
     </div>
 </div>
 
+<!-- Incoming JSON feeds -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+            <h3>Incoming JSON</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+                Accept aircraft snapshots from remote aggregators over public HTTPS. Payload: tar1090 <code>aircraft.json</code> or ADSBExchange / airplanes.live-style envelope. Merge order: local Beast feeders, then JSON feeds, then ADSBHub.
+            </p>
+        </div>
+        <button class="btn btn-primary" onclick="openJsonFeedModal()" style="white-space:nowrap;">Add Feed</button>
+    </div>
+    <div style="padding:0 20px 20px;">
+        <div class="table-wrap" style="margin:0; border:1px solid rgba(255,255,255,0.05); border-radius:6px; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bg-secondary);">
+                        <th style="padding:10px 14px; text-align:left; font-size:12px;">Name</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px;">Status</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px;">Last seen</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px;">Aircraft</th>
+                        <th style="padding:10px 14px; text-align:left; font-size:12px;">Enabled</th>
+                        <th style="padding:10px 14px; text-align:right; font-size:12px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="json-feeds-table">
+                    <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p id="json-feeds-msg" style="font-size:12px;color:var(--text-muted);margin-top:12px;margin-bottom:0;"></p>
+    </div>
+</div>
+
+<!-- JSON feed modal -->
+<div class="modal-overlay" id="json-feed-modal">
+    <div class="modal" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 id="json-feed-modal-title">Add Incoming JSON Feed</h3>
+            <button class="modal-close" onclick="closeJsonFeedModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="json-feed-edit-id" value="">
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Name</label>
+                <input type="text" id="json-feed-name" class="form-control" placeholder="e.g. West Coast aggregator" autocomplete="off">
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Merge priority</label>
+                    <input type="number" id="json-feed-priority" class="form-control" value="100" min="1" max="999" style="max-width:100px;">
+                    <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">Lower wins among JSON feeds</p>
+                </div>
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Stale (seconds)</label>
+                    <input type="number" id="json-feed-stale" class="form-control" value="10" min="3" max="120" step="1" style="max-width:100px;">
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">IP allowlist (optional, comma-separated CIDRs)</label>
+                <input type="text" id="json-feed-allowlist" class="form-control" placeholder="203.0.113.0/24, 198.51.100.10" autocomplete="off">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Notes</label>
+                <input type="text" id="json-feed-notes" class="form-control" autocomplete="off">
+            </div>
+            <label class="toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:12px;">
+                <input type="checkbox" id="json-feed-enabled" class="toggle" checked>
+                <span>Enabled</span>
+            </label>
+            <div id="json-feed-token-box" style="display:none;margin-top:12px;padding:12px;background:var(--bg-primary);border-radius:6px;border:1px solid rgba(255,255,255,0.08);">
+                <p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;"><strong>Push URL</strong> (save this token — shown once unless regenerated):</p>
+                <code id="json-feed-push-url" style="display:block;font-size:11px;word-break:break-all;color:var(--green);margin-bottom:8px;"></code>
+                <button type="button" class="btn btn-sm" onclick="copyJsonFeedUrl()">Copy URL</button>
+            </div>
+            <p id="json-feed-modal-msg" style="font-size:12px;color:var(--text-muted);margin-top:12px;margin-bottom:0;"></p>
+            <div style="text-align:right;margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+                <button class="btn" type="button" onclick="closeJsonFeedModal()">Cancel</button>
+                <button class="btn btn-primary" type="button" id="json-feed-save-btn" onclick="saveJsonFeed()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Resend transactional mail settings -->
 <div class="card" style="margin-bottom:16px;">
     <div class="card-header">
@@ -658,11 +741,182 @@ async function renewCert(domain) {
 }
 
 loadAdsbhubSettings();
+loadJsonFeeds();
 loadResendMailSettings();
 loadCotPushSettings();
 loadContainers();
 loadCaddyStatus();
 setInterval(loadContainers, 30000);
 setInterval(loadCaddyStatus, 30000);
+setInterval(loadJsonFeeds, 30000);
+
+function jsonFeedStatusBadge(status, enabled) {
+    if (!enabled) return '<span class="badge badge-offline">Disabled</span>';
+    if (status === 'active') return '<span class="badge badge-online">Active</span>';
+    if (status === 'stale') return '<span class="badge badge-stale">Stale</span>';
+    if (status === 'error') return '<span class="badge badge-offline">Error</span>';
+    return '<span class="badge badge-offline">Waiting</span>';
+}
+
+async function loadJsonFeeds() {
+    const tbody = document.getElementById('json-feeds-table');
+    const msgEl = document.getElementById('json-feeds-msg');
+    if (!tbody) return;
+    try {
+        const r = await fetch('/api/json-feeds');
+        const d = await r.json();
+        const feeds = d.feeds || [];
+        if (!feeds.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No incoming JSON feeds configured.</td></tr>';
+            msgEl.textContent = 'Remote aggregators POST tar1090 or ADSBExchange JSON to https://' + window.location.host + '/ingest/json/{token}';
+            return;
+        }
+        let html = '';
+        feeds.forEach(f => {
+            const errHint = f.last_error ? ' title="' + String(f.last_error).replace(/"/g, '&quot;') + '"' : '';
+            html += '<tr>';
+            html += '<td style="padding:10px 14px;font-size:13px;">' + escapeHtml(f.name) + '<br><span style="font-size:11px;color:var(--text-muted);">' + escapeHtml(f.source_label || '') + '</span></td>';
+            html += '<td style="padding:10px 14px;"' + errHint + '>' + jsonFeedStatusBadge(f.runtime_status, f.enabled) + '</td>';
+            html += '<td style="padding:10px 14px;font-size:12px;color:var(--text-secondary);">' + escapeHtml(f.last_seen || '—') + '</td>';
+            html += '<td style="padding:10px 14px;font-size:12px;">' + (f.aircraft_count != null ? f.aircraft_count : '—') + '</td>';
+            html += '<td style="padding:10px 14px;font-size:12px;">' + (f.enabled ? 'Yes' : 'No') + '</td>';
+            html += '<td style="padding:10px 14px;text-align:right;white-space:nowrap;">';
+            html += '<button class="btn btn-sm" onclick="editJsonFeed(' + f.id + ')">Edit</button> ';
+            if (f.token_display) {
+                html += '<button class="btn btn-sm" onclick="copyText(' + JSON.stringify(f.token_display) + ')">Copy token</button> ';
+            }
+            html += '<button class="btn btn-sm" onclick="regenerateJsonFeedToken(' + f.id + ')">New token</button> ';
+            html += '<button class="btn btn-sm btn-danger" onclick="deleteJsonFeed(' + f.id + ')">Delete</button>';
+            html += '</td></tr>';
+        });
+        tbody.innerHTML = html;
+        msgEl.textContent = '';
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red);padding:20px;">Failed to load JSON feeds.</td></tr>';
+    }
+}
+
+function escapeHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function copyText(text) {
+    navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard.')).catch(() => alert(text));
+}
+
+function openJsonFeedModal(feed) {
+    document.getElementById('json-feed-edit-id').value = feed ? feed.id : '';
+    document.getElementById('json-feed-modal-title').textContent = feed ? 'Edit Incoming JSON Feed' : 'Add Incoming JSON Feed';
+    document.getElementById('json-feed-name').value = feed ? feed.name : '';
+    document.getElementById('json-feed-priority').value = feed ? feed.merge_priority : 100;
+    document.getElementById('json-feed-stale').value = feed ? feed.stale_seconds : 10;
+    document.getElementById('json-feed-allowlist').value = feed && feed.ip_allowlist ? feed.ip_allowlist.join(', ') : '';
+    document.getElementById('json-feed-notes').value = feed ? (feed.notes || '') : '';
+    document.getElementById('json-feed-enabled').checked = feed ? !!feed.enabled : true;
+    document.getElementById('json-feed-token-box').style.display = 'none';
+    document.getElementById('json-feed-push-url').textContent = '';
+    document.getElementById('json-feed-modal-msg').textContent = '';
+    document.getElementById('json-feed-modal').classList.add('show');
+}
+
+function closeJsonFeedModal() {
+    document.getElementById('json-feed-modal').classList.remove('show');
+}
+
+async function editJsonFeed(id) {
+    try {
+        const r = await fetch('/api/json-feeds');
+        const d = await r.json();
+        const feed = (d.feeds || []).find(x => x.id === id);
+        if (feed) openJsonFeedModal(feed);
+    } catch (e) { alert('Could not load feed.'); }
+}
+
+function parseAllowlist(raw) {
+    if (!raw || !raw.trim()) return [];
+    return raw.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+}
+
+async function saveJsonFeed() {
+    const id = document.getElementById('json-feed-edit-id').value;
+    const payload = {
+        name: document.getElementById('json-feed-name').value.trim(),
+        merge_priority: parseInt(document.getElementById('json-feed-priority').value, 10) || 100,
+        stale_seconds: parseFloat(document.getElementById('json-feed-stale').value) || 10,
+        ip_allowlist: parseAllowlist(document.getElementById('json-feed-allowlist').value),
+        notes: document.getElementById('json-feed-notes').value.trim(),
+        enabled: document.getElementById('json-feed-enabled').checked,
+    };
+    const msgEl = document.getElementById('json-feed-modal-msg');
+    if (!payload.name) {
+        msgEl.textContent = 'Name is required.';
+        return;
+    }
+    msgEl.textContent = 'Saving...';
+    try {
+        let r, d;
+        if (id) {
+            r = await fetch('/api/json-feeds/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } else {
+            r = await fetch('/api/json-feeds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        }
+        d = await r.json();
+        if (!r.ok) {
+            msgEl.textContent = d.error || 'Save failed.';
+            return;
+        }
+        if (d.feed && d.feed.token) {
+            const url = window.location.origin + d.feed.ingest_url_path;
+            document.getElementById('json-feed-token-box').style.display = 'block';
+            document.getElementById('json-feed-push-url').textContent = url;
+            msgEl.textContent = 'Feed saved. Copy the push URL before closing.';
+        } else if (d.feed && d.token) {
+            const url = window.location.origin + d.ingest_url_path;
+            document.getElementById('json-feed-token-box').style.display = 'block';
+            document.getElementById('json-feed-push-url').textContent = url;
+            msgEl.textContent = 'Feed created. Copy the push URL before closing.';
+        } else {
+            closeJsonFeedModal();
+        }
+        loadJsonFeeds();
+    } catch (e) {
+        msgEl.textContent = 'Save failed: ' + e.message;
+    }
+}
+
+function copyJsonFeedUrl() {
+    const el = document.getElementById('json-feed-push-url');
+    if (el && el.textContent) copyText(el.textContent);
+}
+
+async function regenerateJsonFeedToken(id) {
+    if (!confirm('Regenerate token? Remote push clients must update their URL.')) return;
+    try {
+        const r = await fetch('/api/json-feeds/' + id + '/regenerate-token', { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) { alert(d.error || 'Failed'); return; }
+        const url = window.location.origin + d.ingest_url_path;
+        alert('New push URL (copy now):\n\n' + url);
+        loadJsonFeeds();
+    } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function deleteJsonFeed(id) {
+    if (!confirm('Delete this incoming JSON feed?')) return;
+    try {
+        const r = await fetch('/api/json-feeds/' + id, { method: 'DELETE' });
+        const d = await r.json();
+        if (!r.ok) { alert(d.error || 'Delete failed'); return; }
+        loadJsonFeeds();
+    } catch (e) { alert('Error: ' + e.message); }
+}
 </script>
 {% endblock %}

@@ -135,13 +135,60 @@ def get_netbird_client_status():
         return {"enrolled": False, "error": str(e)}
 
 
-def enroll_netbird(setup_key, management_url):
+def restart_netbird_mesh():
+    """Restart NetBird inside the existing client container (preserves peer identity)."""
+    client = get_client()
+    if not client:
+        return False, "Docker not available"
+    try:
+        container = client.containers.get(NETBIRD_CLIENT_NAME)
+    except docker.errors.NotFound:
+        return False, "NetBird client is not enrolled"
+    if container.status != "running":
+        try:
+            container.start()
+        except Exception as e:
+            return False, f"Failed to start container: {e}"
+    code, stdout, stderr = exec_in_container(
+        NETBIRD_CLIENT_NAME, ["netbird", "down"]
+    )
+    if code != 0 and stderr and "not logged in" not in stderr.lower():
+        pass  # down may fail if already down
+    code, stdout, stderr = exec_in_container(
+        NETBIRD_CLIENT_NAME, ["netbird", "up"]
+    )
+    if code != 0:
+        try:
+            container.restart(timeout=30)
+        except Exception as e:
+            return False, (stderr or stdout or str(e))[:300]
+    return True, "NetBird mesh restarted (peer identity preserved)"
+
+
+def enroll_netbird(setup_key, management_url, *, force=False):
     """Start netbird-client container with the given setup key.
     Uses network_mode=host so the WireGuard interface appears on the host.
+
+    Re-enrolling destroys the container and registers a new peer (new overlay IP),
+    which breaks all NetBird feeders until they reconnect. Pass force=True to allow
+    that when already connected; otherwise use restart_netbird_mesh().
     """
     client = get_client()
     if not client:
         return False, "Docker not available"
+
+    mesh_data, _ = get_netbird_status_json()
+    if mesh_data and not force:
+        overlay = normalize_netbird_ip(
+            mesh_data.get("netbirdIp")
+            or (mesh_data.get("Self") or {}).get("NetbirdIP")
+            or ""
+        )
+        if overlay:
+            return False, (
+                "Aggregator is already enrolled on the mesh. Use Restart mesh instead — "
+                "re-enrolling creates a new peer IP and disconnects all NetBird feeders."
+            )
 
     # Remove existing container if present
     try:

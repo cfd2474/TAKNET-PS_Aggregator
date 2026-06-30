@@ -179,6 +179,24 @@ CREATE TABLE IF NOT EXISTS cot_transforms (
 CREATE INDEX IF NOT EXISTS idx_cot_transforms_output ON cot_transforms(output_id);
 CREATE INDEX IF NOT EXISTS idx_cot_transforms_hex ON cot_transforms(output_id, hex);
 
+-- Incoming JSON feeds (push from remote aggregators; merged in aircraft-merger)
+CREATE TABLE IF NOT EXISTS json_feeds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    token_hash TEXT NOT NULL,
+    token_prefix TEXT NOT NULL,
+    token_display TEXT NOT NULL DEFAULT '',
+    source_label TEXT NOT NULL,
+    merge_priority INTEGER NOT NULL DEFAULT 100,
+    stale_seconds REAL NOT NULL DEFAULT 10,
+    ip_allowlist TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_json_feeds_enabled ON json_feeds(enabled);
+
 -- CoT push TLS client certificates (encrypted at rest; only output owner can upload/replace; never returned to UI or admins)
 CREATE TABLE IF NOT EXISTS output_cot_certs (
     output_id INTEGER PRIMARY KEY,

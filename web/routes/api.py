@@ -12,7 +12,7 @@ import psutil
 import requests as http_requests
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 
-from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel, OutputCotCertModel
+from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, UserModel, OutputModel, CotTransformModel, OutputCotCertModel, JsonFeedModel
 from models import SETTINGS_KEY_COT_PHASE_TIMING_UI, get_setting, set_setting
 from models import enrich_feeder_mlat_display
 from models import filter_feeders_for_user, feeder_stats_from_rows, user_can_access_feeder
@@ -690,17 +690,32 @@ def netbird_enroll():
     """Enroll this server as a NetBird peer using a setup key."""
     from services.netbird_enrollment import _management_url
 
-    data = request.get_json()
-    setup_key = (data or {}).get("setup_key", "").strip()
+    data = request.get_json() or {}
+    setup_key = (data.get("setup_key") or "").strip()
+    force = bool(data.get("force"))
     if not setup_key:
         return jsonify({"error": "setup_key is required"}), 400
 
     install_dir = os.environ.get("INSTALL_DIR", "/opt/taknet-aggregator")
     management_url = _management_url(install_dir)
-    ok, msg = enroll_netbird(setup_key, management_url)
+    ok, msg = enroll_netbird(setup_key, management_url, force=force)
+    if not ok and not force and "already enrolled" in msg.lower():
+        return jsonify({"success": False, "error": msg, "already_enrolled": True}), 409
     if ok:
         # Persist the setup key to .env so it survives updates
         _persist_env_var("NB_SETUP_KEY", setup_key)
+        return jsonify({"success": True, "message": msg})
+    return jsonify({"success": False, "error": msg}), 500
+
+
+@bp.route("/netbird/restart-mesh", methods=["POST"])
+@admin_required
+def netbird_restart_mesh():
+    """Restart NetBird on the aggregator without re-enrolling (preserves overlay IP)."""
+    from services.docker_service import restart_netbird_mesh
+
+    ok, msg = restart_netbird_mesh()
+    if ok:
         return jsonify({"success": True, "message": msg})
     return jsonify({"success": False, "error": msg}), 500
 
@@ -1194,6 +1209,101 @@ def set_adsbhub_settings():
     return jsonify({
         "success": True,
         "message": "ADSBHub settings saved. Services are restarting in the background (refresh containers in a moment).",
+    })
+
+
+# ── Incoming JSON feeds (Config → Services) ───────────────────────────────────
+
+def _json_feeds_with_status():
+    feeds = JsonFeedModel.list_all()
+    status_map = JsonFeedModel.read_status_from_volume()
+    for f in feeds:
+        st = status_map.get(str(f["id"])) or status_map.get(f["id"]) or {}
+        f["runtime_status"] = st.get("status") or ("active" if f.get("enabled") else "disabled")
+        f["last_seen"] = st.get("last_seen")
+        f["aircraft_count"] = st.get("aircraft_count")
+        f["last_error"] = st.get("last_error")
+        f["ingest_url_path"] = f"/ingest/json/{f.get('token_prefix', '')}…"
+        # token_display stored for admin copy; prefix-only in list URL hint
+    return feeds
+
+
+@bp.route("/json-feeds", methods=["GET"])
+@admin_required
+def list_json_feeds():
+    return jsonify({"feeds": _json_feeds_with_status()})
+
+
+@bp.route("/json-feeds", methods=["POST"])
+@admin_required
+def create_json_feed():
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    try:
+        merge_priority = int(data.get("merge_priority", 100))
+    except (TypeError, ValueError):
+        merge_priority = 100
+    try:
+        stale_seconds = float(data.get("stale_seconds", 10))
+    except (TypeError, ValueError):
+        stale_seconds = 10
+    stale_seconds = max(3.0, min(120.0, stale_seconds))
+    allowlist = data.get("ip_allowlist")
+    if allowlist is not None and not isinstance(allowlist, list):
+        return jsonify({"error": "ip_allowlist must be an array of IPs or CIDRs"}), 400
+    try:
+        feed, token = JsonFeedModel.create(
+            name=name,
+            notes=(data.get("notes") or "").strip() or None,
+            merge_priority=merge_priority,
+            stale_seconds=stale_seconds,
+            ip_allowlist=allowlist or [],
+            enabled=bool(data.get("enabled", True)),
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    feed["token"] = token
+    feed["ingest_url_path"] = f"/ingest/json/{token}"
+    return jsonify({"success": True, "feed": feed}), 201
+
+
+@bp.route("/json-feeds/<int:feed_id>", methods=["PUT"])
+@admin_required
+def update_json_feed(feed_id):
+    data = request.get_json() or {}
+    if "ip_allowlist" in data and not isinstance(data.get("ip_allowlist"), list):
+        return jsonify({"error": "ip_allowlist must be an array"}), 400
+    if not JsonFeedModel.update(feed_id, data):
+        return jsonify({"error": "Feed not found"}), 404
+    feed = JsonFeedModel.get(feed_id)
+    st = JsonFeedModel.read_status_from_volume().get(str(feed_id)) or {}
+    feed["runtime_status"] = st.get("status")
+    feed["last_seen"] = st.get("last_seen")
+    feed["aircraft_count"] = st.get("aircraft_count")
+    feed["last_error"] = st.get("last_error")
+    return jsonify({"success": True, "feed": feed})
+
+
+@bp.route("/json-feeds/<int:feed_id>", methods=["DELETE"])
+@admin_required
+def delete_json_feed(feed_id):
+    if not JsonFeedModel.delete(feed_id):
+        return jsonify({"error": "Feed not found"}), 404
+    return jsonify({"success": True})
+
+
+@bp.route("/json-feeds/<int:feed_id>/regenerate-token", methods=["POST"])
+@admin_required
+def regenerate_json_feed_token(feed_id):
+    token = JsonFeedModel.regenerate_token(feed_id)
+    if not token:
+        return jsonify({"error": "Feed not found"}), 404
+    return jsonify({
+        "success": True,
+        "token": token,
+        "ingest_url_path": f"/ingest/json/{token}",
     })
 
 

@@ -169,6 +169,13 @@ def create_app():
     except Exception:
         log.exception("Failed to start KLV ingest listener")
 
+    try:
+        from models import JsonFeedModel
+
+        JsonFeedModel.sync_config_to_volume()
+    except Exception:
+        log.exception("Failed to sync incoming JSON feed config")
+
     return app
 
 

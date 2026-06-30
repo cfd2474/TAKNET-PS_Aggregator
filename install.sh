@@ -179,6 +179,7 @@ if command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld;
         firewall-cmd --permanent --add-port="${port}/tcp" 2>/dev/null || true
     done
     firewall-cmd --permanent --add-port="443/udp" 2>/dev/null || true
+    firewall-cmd --permanent --add-port="51820/udp" 2>/dev/null || true
     firewall-cmd --reload 2>/dev/null || true
     ok "Firewall configured"
 else

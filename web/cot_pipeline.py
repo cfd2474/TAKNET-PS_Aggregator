@@ -654,6 +654,8 @@ def _transform_row_to_dict(t):
     """Normalize a DB row to the transform dict used by build_cot_xml."""
     if not t:
         return None
+    from models import _klv_cot_enabled_flag
+
     return {
         "callsign": t.get("callsign"),
         "type": t.get("type"),
@@ -667,6 +669,7 @@ def _transform_row_to_dict(t):
         "video": t.get("video"),
         "link": t.get("link"),
         "klv_ingest_token": t.get("klv_ingest_token"),
+        "klv_cot_enabled": _klv_cot_enabled_flag(t.get("klv_cot_enabled")),
     }
 
 
