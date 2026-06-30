@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY merge.py aircraft_db.py ./
+COPY merge.py aircraft_db.py json_ingest.py ./
 
 # Same Mictronics DB tar1090/readsb use (enables dbFlags on ADSBHub aircraft).
 ARG AIRCRAFT_DB_URL=https://raw.githubusercontent.com/wiedehopf/tar1090-db/csv/aircraft.csv.gz

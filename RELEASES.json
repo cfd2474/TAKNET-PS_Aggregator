@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.392",
+    "date": "2026-06-29",
+    "notes": [
+      "Fix aircraft-merger Docker image: include json_ingest.py so incoming JSON push ingest starts correctly."
+    ]
+  },
+  {
     "version": "1.0.391",
     "date": "2026-06-29",
     "notes": [
