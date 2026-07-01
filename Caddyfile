@@ -13,6 +13,10 @@
 # Main Application Domain
 {$DOMAIN_NAME:adsb.tak-solutions.com} {
     reverse_proxy nginx:80 {
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+        }
         # Keep original headers
         header_up Host {host}
         header_up X-Real-IP {remote_host}

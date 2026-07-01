@@ -21,6 +21,8 @@ Each POST **replaces** the previous snapshot for this feed. If pushes stop, airc
 
 **Payload size:** Snapshots may be up to **50 MB**. If you still hit HTTP **413**, send only aircraft with positions (`lat`/`lon` present) or strip optional trace/history fields before pushing.
 
+**Timeouts (large snapshots over VPN):** A ~8 MB upload can take more than 30 seconds on a slow or VPN path. Use a **client timeout of at least 120 seconds** (e.g. curl `--max-time 120`). **HTTP 000** with `--max-time 30` usually means the **client gave up**, not that the server rejected the body.
+
 ---
 
 ## 2. HTTP request
@@ -115,10 +117,13 @@ On the receiving aggregator, accepted aircraft are tagged with a source label li
 
 ### curl (from a file)
 
+Use a generous timeout for multi-MB snapshots (especially over VPN):
+
 ```bash
 curl -X POST \
   "https://adsb.tak-solutions.com/ingest/json/jfeed-KjZmuw6nKh2k4-xA9WTzrAPzS5I9gVXsRhJNQpsofKY" \
   -H "Content-Type: application/json" \
+  --max-time 120 \
   --data-binary @aircraft.json
 ```
 
@@ -160,6 +165,7 @@ done
 | **401** | Invalid or disabled token, or source IP not on allowlist. |
 | **400** | Invalid JSON or body is not `{ "aircraft": [ ... ] }` (or v2 envelope with `aircraft` array). |
 | **413** | Body larger than 50 MB. Trim the snapshot (e.g. only aircraft with lat/lon) or ask the receiver to raise the limit. |
+| **000** (curl) | Client timeout — increase `--max-time` (try **120** or **300**). Common with ~8 MB over VPN when `--max-time 30` is set. |
 
 **Quick test:** A POST with an empty aircraft list should return **200** if the token is valid:
 

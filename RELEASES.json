@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.395",
+    "date": "2026-06-29",
+    "notes": [
+      "Incoming JSON ingest: raise Caddy/nginx upload timeouts to 300s (fix HTTP 000 on ~8MB VPN pushes); document client --max-time 120+ in INCOMING_JSON_PUSH.md."
+    ]
+  },
+  {
     "version": "1.0.394",
     "date": "2026-06-29",
     "notes": [
