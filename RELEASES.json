@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.398",
+    "date": "2026-06-29",
+    "notes": [
+      "Outputs UI: clarify Include Network ADSB Traffic applies to ADSBHub and incoming JSON push feeds (JSON, ADSB Direct, CoT outputs)."
+    ]
+  },
+  {
     "version": "1.0.397",
     "date": "2026-06-29",
     "notes": [
