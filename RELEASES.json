@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.397",
+    "date": "2026-06-29",
+    "notes": [
+      "Dashboard aircraft breakdown: count incoming JSON push feeds as network (with ADSBHub), not direct feeders."
+    ]
+  },
+  {
     "version": "1.0.396",
     "date": "2026-06-29",
     "notes": [

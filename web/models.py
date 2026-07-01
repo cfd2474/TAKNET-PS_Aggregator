@@ -235,6 +235,16 @@ def get_setting(key, default=None):
         conn.close()
 
 
+def is_network_aircraft_source(source) -> bool:
+    """True for ADSBHub and incoming JSON push feeds; false for local Beast feeders."""
+    s = (source or "").strip().lower()
+    return s == "adsbhub" or s.startswith("json:")
+
+
+def is_direct_aircraft_source(source) -> bool:
+    return not is_network_aircraft_source(source)
+
+
 def set_setting(key, value):
     """Upsert a settings key (string value)."""
     conn = get_db()

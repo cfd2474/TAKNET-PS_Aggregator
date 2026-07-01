@@ -16,6 +16,7 @@ from models import FeederModel, ConnectionModel, ActivityModel, UpdateModel, Use
 from models import SETTINGS_KEY_COT_PHASE_TIMING_UI, get_setting, set_setting
 from models import enrich_feeder_mlat_display
 from models import filter_feeders_for_user, feeder_stats_from_rows, user_can_access_feeder
+from models import is_network_aircraft_source, is_direct_aircraft_source
 from services.docker_service import (get_containers, restart_container, get_logs,
                                       enroll_netbird,
                                       disconnect_netbird, get_client as _get_docker_client,
@@ -1452,8 +1453,8 @@ def _get_aircraft_data():
             data = resp.json()
             aircraft = data.get("aircraft", [])
             with_pos = [a for a in aircraft if "lat" in a and "lon" in a]
-            direct = sum(1 for a in aircraft if (a.get("source") or "").lower() != "adsbhub")
-            network = sum(1 for a in aircraft if (a.get("source") or "").lower() == "adsbhub")
+            direct = sum(1 for a in aircraft if is_direct_aircraft_source(a.get("source")))
+            network = sum(1 for a in aircraft if is_network_aircraft_source(a.get("source")))
             return {
                 "total": len(aircraft),
                 "with_position": len(with_pos),
@@ -2452,7 +2453,7 @@ def _filter_aircraft_for_json_output(ac_list, config: dict):
     v = config.get("include_network_adsb", True)
     include_network = bool(v) if not isinstance(v, str) else (v.strip().lower() not in ("false", "0", "no", ""))
     if not include_network:
-        ac_list = [a for a in ac_list if (a.get("source") or "").lower() != "adsbhub"]
+        ac_list = [a for a in ac_list if is_direct_aircraft_source(a.get("source"))]
 
     # Optional range-limits filter (center/radius configured on the output itself)
     if config.get("range_limit_enabled"):
@@ -2538,7 +2539,7 @@ def output_range_point(lat, lon, radius_nm):
         data = resp.json()
         aircraft = data.get("aircraft", [])
         if not include_network:
-            aircraft = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+            aircraft = [a for a in aircraft if is_direct_aircraft_source(a.get("source"))]
         matched = []
         for a in aircraft:
             a_lat, a_lon = a.get("lat"), a.get("lon")
@@ -2601,7 +2602,7 @@ def output_range_query():
         data = resp.json()
         aircraft = data.get("aircraft", [])
         if not include_network:
-            aircraft = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+            aircraft = [a for a in aircraft if is_direct_aircraft_source(a.get("source"))]
         matched = []
         for a in aircraft:
             a_lat, a_lon = a.get("lat"), a.get("lon")
@@ -2675,7 +2676,7 @@ def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
         data = resp.json()
         aircraft = data.get("aircraft", [])
         if not include_network:
-            aircraft = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+            aircraft = [a for a in aircraft if is_direct_aircraft_source(a.get("source"))]
 
         matched = []
         for a in aircraft:
@@ -2737,7 +2738,7 @@ def output_json_stream(raw_key):
     if _stream_config.get("range_api"):
         return jsonify({"error": "This key is for Range API, not Stream. Use /api/outputs/range/point/<lat>/<lon>/<radius_nm>?key=..."}), 400
 
-    # Output config: include_network_adsb False => only direct feeder traffic (exclude source=adsbhub)
+    # Output config: include_network_adsb False => only direct feeder traffic (exclude network sources)
     config = _stream_config
     # Normalize to bool: checkbox unchecked => False; default True for backward compat
     v = config.get("include_network_adsb", True)
@@ -2752,7 +2753,7 @@ def output_json_stream(raw_key):
                             headers={"Access-Control-Allow-Origin": "*"})
         data = resp.json()
         aircraft = data.get("aircraft", [])
-        direct_only = [a for a in aircraft if (a.get("source") or "").lower() != "adsbhub"]
+        direct_only = [a for a in aircraft if is_direct_aircraft_source(a.get("source"))]
         out = {"aircraft": direct_only, "now": data.get("now"), "messages": data.get("messages", 0)}
         body = json.dumps(out).encode()
         return Response(body, content_type="application/json",

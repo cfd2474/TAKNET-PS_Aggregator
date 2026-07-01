@@ -423,7 +423,7 @@ def filter_aircraft_for_output(aircraft_list, config):
     include_network = config.get("include_network_adsb", True)
 
     for ac in aircraft_list:
-        if not include_network and (ac.get("source") or "").lower() == "adsbhub":
+        if not include_network and is_network_aircraft_source(ac.get("source")):
             continue
         lat = _parse_float(ac.get("lat"))
         lon = _parse_float(ac.get("lon"))
@@ -820,7 +820,13 @@ def _compute_cot_xml_parts(
         if icon_path and isinstance(icon_path, str) and icon_path.strip():
             icon_path_raw = icon_path.strip()
 
-    feed_type = "ADSBHub" if (aircraft.get("source") or "").strip().lower() == "adsbhub" else "direct feed"
+    src = (aircraft.get("source") or "").strip().lower()
+    if src == "adsbhub":
+        feed_type = "ADSBHub"
+    elif src.startswith("json:"):
+        feed_type = "JSON feed"
+    else:
+        feed_type = "direct feed"
     rem_parts = ["taknet-ps", feed_type, f"Hex: {hex_code}"]
     if klv_live:
         rem_parts.append("KLV live")

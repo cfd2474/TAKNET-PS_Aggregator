@@ -108,7 +108,7 @@ async function loadDashboard() {
             const breakdownEl = document.getElementById('stat-aircraft-breakdown');
             if (breakdownEl) {
                 if (ac.direct != null || ac.network != null) {
-                    breakdownEl.textContent = (direct || 0) + ' direct (feeders) · ' + (network || 0) + ' network (ADSBHub)';
+                    breakdownEl.textContent = (direct || 0) + ' direct (feeders) · ' + (network || 0) + ' network (ADSBHub + JSON)';
                     breakdownEl.style.display = '';
                 } else {
                     breakdownEl.style.display = 'none';
