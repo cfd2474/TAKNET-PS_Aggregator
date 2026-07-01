@@ -22,7 +22,7 @@ CONFIG_PATH = os.environ.get(
 STATUS_PATH = os.environ.get(
     "JSON_FEEDS_STATUS_PATH", "/status/json_feeds_status.json"
 )
-MAX_BODY_BYTES = int(os.environ.get("JSON_INGEST_MAX_BYTES", str(5 * 1024 * 1024)))
+MAX_BODY_BYTES = int(os.environ.get("JSON_INGEST_MAX_BYTES", str(50 * 1024 * 1024)))
 CONFIG_RELOAD_SECONDS = float(os.environ.get("JSON_FEEDS_CONFIG_RELOAD_SEC", "5"))
 
 _lock = threading.Lock()

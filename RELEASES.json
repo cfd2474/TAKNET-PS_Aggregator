@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.394",
+    "date": "2026-06-29",
+    "notes": [
+      "Incoming JSON ingest: raise max POST body to 50 MB (nginx /ingest/ and aircraft-merger) to fix HTTP 413 on large aircraft snapshots."
+    ]
+  },
+  {
+    "version": "1.0.393",
+    "date": "2026-06-29",
+    "notes": [
+      "Add docs/INCOMING_JSON_PUSH.md with remote aggregator push instructions and assigned ingest URL."
+    ]
+  },
+  {
     "version": "1.0.392",
     "date": "2026-06-29",
     "notes": [
