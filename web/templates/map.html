@@ -21,6 +21,7 @@
             <button type="button" id="btn-tar1090" class="btn btn-sm" title="Full tar1090 UI (no sidebar here)">tar1090</button>
             <a href="/tar1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
             <span id="map-view-hint" style="font-size:11px;color:var(--text-muted);">Click a blue dot → details in sidebar</span>
+            <span id="map-perf-hint" style="display:none;font-size:11px;color:var(--text-muted);">Large feed — clustered until zoom 12</span>
         </div>
     </div>
     <div id="map-merged-wrap" style="flex:1;display:flex;min-height:0;">
@@ -300,7 +301,10 @@
 </div>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -309,8 +313,25 @@ const SITE_LAT = {{ site_lat | default(33.8753) }};
 const SITE_LON = {{ site_lon | default(-117.5664) }};
 
 let mergedMap = null;
+let mergedCluster = null;
 let mergedMarkers = {};
 let selectedHex = null;
+let refreshInFlight = false;
+let refreshTimer = null;
+let lastWithPosCount = 0;
+
+function mergedRefreshMs() {
+    if (lastWithPosCount > 8000) return 8000;
+    if (lastWithPosCount > 3000) return 6000;
+    return 4000;
+}
+
+function scheduleMergedRefresh() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(function() {
+        if (document.getElementById('map-merged-wrap').style.display !== 'none') refreshMergedAircraft();
+    }, mergedRefreshMs());
+}
 
 function showMerged() {
     document.getElementById('map-merged-wrap').style.display = 'flex';
@@ -331,28 +352,82 @@ function showTar1090() {
     document.getElementById('map-view-hint').textContent = 'Detail sidebar only in Merged view';
     document.getElementById('btn-merged').className = 'btn btn-sm';
     document.getElementById('btn-tar1090').className = 'btn btn-sm btn-primary';
+    if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
     var ifr = document.getElementById('map-tar1090-iframe');
     if (ifr.src === 'about:blank' || !ifr.src) ifr.src = '/tar1090/';
 }
 
 function initMergedMap() {
-    mergedMap = L.map('map-merged').setView([SITE_LAT, SITE_LON], 8);
+    mergedMap = L.map('map-merged', { preferCanvas: true }).setView([SITE_LAT, SITE_LON], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
     }).addTo(mergedMap);
+    mergedCluster = L.markerClusterGroup({
+        chunkedLoading: true,
+        chunkInterval: 200,
+        chunkDelay: 25,
+        maxClusterRadius: 70,
+        disableClusteringAtZoom: 12,
+        showCoverageOnHover: false,
+        spiderfyOnMaxZoom: true,
+        removeOutsideVisibleBounds: true,
+    });
+    mergedMap.addLayer(mergedCluster);
+    mergedCluster.on('clusterclick', function(ev) {
+        if (mergedMap.getZoom() >= 12) return;
+        ev.layer.zoomToBounds({ padding: [24, 24] });
+    });
+    mergedCluster.on('click', function(ev) {
+        var layer = ev.layer;
+        if (!layer || !layer._ac) return;
+        L.DomEvent.stopPropagation(ev);
+        selectAircraft(layer._ac);
+    });
     mergedMap.on('click', function(ev) {
-        // Don't clear sidebar when user clicked on an aircraft (layer)
         if (ev.originalEvent && ev.originalEvent.target && ev.originalEvent.target.closest && ev.originalEvent.target.closest('.leaflet-interactive')) return;
-        selectedHex = null;
-        showSidebar(null);
-        Object.keys(mergedMarkers).forEach(h => {
-            mergedMarkers[h].setStyle({ fillColor: '#3b82f6', color: '#1e3a5f', weight: 1 });
-        });
+        clearSelection();
     });
 }
 
 function fmtNum(v) { return v != null && v !== '' ? Number(v) : null; }
+
+function fmtSource(ac) {
+    const s = (ac && ac.source) ? String(ac.source) : '';
+    if (s === 'adsbhub') return 'ADSBHub';
+    if (s.startsWith('json:')) return 'JSON feed (' + s.slice(5) + ')';
+    if (s) return s;
+    return 'Local';
+}
+
+function styleMarker(m, selected) {
+    if (!m || !m.setStyle) return;
+    m.setStyle({
+        radius: selected ? 9 : 6,
+        fillColor: selected ? '#22c55e' : '#3b82f6',
+        color: selected ? '#16a34a' : '#1e3a5f',
+        weight: selected ? 2 : 1,
+        fillOpacity: 0.9
+    });
+}
+
+function clearSelection() {
+    if (selectedHex && mergedMarkers[selectedHex]) styleMarker(mergedMarkers[selectedHex], false);
+    selectedHex = null;
+    showSidebar(null);
+}
+
+function selectAircraft(ac) {
+    if (!ac) return;
+    const hex = (ac.hex || '').toString().replace(/^~/, '').toUpperCase();
+    if (!hex) return;
+    const prev = selectedHex;
+    selectedHex = hex;
+    if (prev && mergedMarkers[prev]) styleMarker(mergedMarkers[prev], false);
+    if (mergedMarkers[hex]) styleMarker(mergedMarkers[hex], true);
+    showSidebar(ac);
+}
+
 function showSidebar(ac) {
     if (!ac) {
         document.getElementById('map-sidebar-placeholder').style.display = 'block';
@@ -375,84 +450,77 @@ function showSidebar(ac) {
     document.getElementById('sidebar-squawk').textContent = ac.squawk || '—';
     const lat = fmtNum(ac.lat), lon = fmtNum(ac.lon);
     document.getElementById('sidebar-pos').textContent = (lat != null && lon != null) ? lat.toFixed(5) + ', ' + lon.toFixed(5) : '—';
-    document.getElementById('sidebar-source').textContent = ac.source === 'adsbhub' ? 'ADSBHub' : (ac.source || 'Local');
+    document.getElementById('sidebar-source').textContent = fmtSource(ac);
     document.getElementById('sidebar-onground').textContent = ac.on_ground === true ? 'Yes' : (ac.on_ground === false ? 'No' : '—');
 }
 
+function createMarker(a, hex, selected) {
+    const m = L.circleMarker([a.lat, a.lon], {
+        radius: selected ? 9 : 6,
+        fillColor: selected ? '#22c55e' : '#3b82f6',
+        color: selected ? '#16a34a' : '#1e3a5f',
+        weight: selected ? 2 : 1,
+        fillOpacity: 0.9
+    });
+    m._ac = a;
+    return m;
+}
+
 function refreshMergedAircraft() {
-    if (!mergedMap) return;
+    if (!mergedMap || refreshInFlight) return;
+    refreshInFlight = true;
     fetch('/api/aircraft.json?t=' + Date.now())
         .then(r => r.json())
         .then(data => {
             const aircraft = data.aircraft || [];
-            const withPos = aircraft.filter(a => a.lat != null && a.lon != null);
-            document.getElementById('map-aircraft').textContent =
-                aircraft.length + ' aircraft tracked (' + withPos.length + ' with position)';
+            const withPos = [];
             const byHex = {};
-            withPos.forEach(a => {
+            for (let i = 0; i < aircraft.length; i++) {
+                const a = aircraft[i];
+                if (a.lat == null || a.lon == null) continue;
                 const hex = (a.hex || '').toString().replace(/^~/, '').toUpperCase();
-                if (!hex) return;
+                if (!hex) continue;
                 byHex[hex] = a;
-            });
+                withPos.push(a);
+            }
+            lastWithPosCount = withPos.length;
+            document.getElementById('map-aircraft').textContent =
+                aircraft.length + ' aircraft tracked (' + withPos.length + ' on map)';
+            const perfHint = document.getElementById('map-perf-hint');
+            if (perfHint) perfHint.style.display = withPos.length > 3000 ? 'inline' : 'none';
+
             Object.keys(mergedMarkers).forEach(hex => {
                 if (!byHex[hex]) {
-                    mergedMap.removeLayer(mergedMarkers[hex]);
+                    mergedCluster.removeLayer(mergedMarkers[hex]);
                     delete mergedMarkers[hex];
-                    if (selectedHex === hex) { selectedHex = null; showSidebar(null); }
+                    if (selectedHex === hex) clearSelection();
                 }
             });
+
             Object.keys(byHex).forEach(hex => {
                 const a = byHex[hex];
                 const lat = a.lat, lon = a.lon;
-                if (lat == null || lon == null) return;
-                const flight = (a.flight || a.callsign || '').trim() || hex;
                 const isSelected = selectedHex === hex;
-                if (mergedMarkers[hex]) {
-                    mergedMarkers[hex].setLatLng([lat, lon]);
-                    if (mergedMarkers[hex].setRadius) mergedMarkers[hex].setRadius(8);
-                    mergedMarkers[hex].setTooltipContent(flight + (a.alt_baro != null ? ' · ' + a.alt_baro + ' ft' : ''));
-                    mergedMarkers[hex].setStyle({
-                        fillColor: isSelected ? '#22c55e' : '#3b82f6',
-                        color: isSelected ? '#16a34a' : '#1e3a5f',
-                        weight: isSelected ? 2 : 1
-                    });
-                    mergedMarkers[hex]._ac = a;
+                const existing = mergedMarkers[hex];
+                if (existing) {
+                    const prev = existing._ac;
+                    if (!prev || prev.lat !== lat || prev.lon !== lon) existing.setLatLng([lat, lon]);
+                    existing._ac = a;
+                    if (isSelected) styleMarker(existing, true);
                 } else {
-                    const m = L.circleMarker([lat, lon], {
-                        radius: 8,
-                        fillColor: isSelected ? '#22c55e' : '#3b82f6',
-                        color: isSelected ? '#16a34a' : '#1e3a5f',
-                        weight: isSelected ? 2 : 1,
-                        fillOpacity: 0.9
-                    });
-                    m._ac = a;
-                    m.bindTooltip(flight + (a.alt_baro != null ? ' · ' + a.alt_baro + ' ft' : ''), {
-                        permanent: false,
-                        direction: 'top'
-                    });
-                    m.on('click', function(ev) {
-                        L.DomEvent.stopPropagation(ev);
-                        if (ev.originalEvent) { ev.originalEvent.stopPropagation(); ev.originalEvent.preventDefault(); }
-                        var layer = ev.target || this;
-                        var ac = (layer && layer._ac) || this._ac;
-                        if (!ac) return;
-                        selectedHex = (ac.hex || '').toString().replace(/^~/, '').toUpperCase();
-                        showSidebar(ac);
-                        Object.keys(mergedMarkers).forEach(h => {
-                            mergedMarkers[h].setStyle({
-                                fillColor: h === selectedHex ? '#22c55e' : '#3b82f6',
-                                color: h === selectedHex ? '#16a34a' : '#1e3a5f',
-                                weight: h === selectedHex ? 2 : 1
-                            });
-                        });
-                    });
-                    m.addTo(mergedMap);
+                    const m = createMarker(a, hex, isSelected);
+                    mergedCluster.addLayer(m);
                     mergedMarkers[hex] = m;
                 }
             });
+
             if (selectedHex && byHex[selectedHex]) showSidebar(byHex[selectedHex]);
         })
-        .catch(() => {});
+        .catch(function() {})
+        .finally(function() {
+            refreshInFlight = false;
+            scheduleMergedRefresh();
+        });
 }
 
 document.getElementById('btn-merged').onclick = showMerged;
@@ -460,9 +528,6 @@ document.getElementById('btn-tar1090').onclick = showTar1090;
 
 // Default map view: full tar1090 UI (detail sidebar handled differently).
 showTar1090();
-setInterval(function() {
-    if (document.getElementById('map-merged-wrap').style.display !== 'none') refreshMergedAircraft();
-}, 4000);
 
 async function updateMapInfo() {
     try {
