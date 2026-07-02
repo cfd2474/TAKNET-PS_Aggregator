@@ -150,7 +150,7 @@ def create_app():
                     from cot_pipeline import run_cot_sender_cycle
                     run_cot_sender_cycle()
                 except Exception:
-                    pass
+                    logging.getLogger("gunicorn.error").exception("CoT sender cycle crashed")
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
         # Return immediately so scheduler never blocks; cycle uses short timeouts and single-run lock.

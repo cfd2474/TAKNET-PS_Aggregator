@@ -381,6 +381,8 @@ def filter_aircraft_for_output(aircraft_list, config):
     Apply output filters: range limit, elevation min/max, include_network_adsb.
     config: output config dict. Returns subset of aircraft_list that passes all filters.
     """
+    from models import is_network_aircraft_source
+
     if not config:
         return list(aircraft_list)
     out = []
@@ -1325,7 +1327,7 @@ def _run_cot_sender_cycle_impl(requests):
     aircraft_url = os.environ.get("AIRCRAFT_JSON_URL", "http://aircraft-merger:8090/data/aircraft.json")
     try:
         t0 = time.perf_counter()
-        r = requests.get(aircraft_url, timeout=(1, 2))
+        r = requests.get(aircraft_url, timeout=(2, 5))
         r.raise_for_status()
         data = r.json()
         http_ms = _phase_ms(t0, time.perf_counter())
@@ -1369,6 +1371,21 @@ def _run_cot_sender_cycle_impl(requests):
         )
     from models import OutputCotCertModel
     for out in output_list:
+        # One failing output must not abort the loop and starve every output after it.
+        try:
+            _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, OutputCotCertModel)
+        except Exception:
+            log.exception("CoT sender: %s — unexpected error, skipping this cycle", out.get("name") or out.get("output_id"))
+    if timing_emit:
+        _cot_phase_timing_emit(
+            "CoT phase timing: cycle_total=%.1fms" % (_phase_ms(t_cycle, time.perf_counter()),),
+            timing_gunicorn,
+        )
+    log.debug("CoT sender: cycle done")
+
+
+def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, OutputCotCertModel):
+    for _once in range(1):  # single-pass loop preserves original `continue` early-exits
         output_id = out["output_id"]
         name = out.get("name") or ("output-%s" % output_id)
         cot_url = out["cot_url"]
@@ -1763,9 +1780,3 @@ def _run_cot_sender_cycle_impl(requests):
             except Exception:
                 pass
             _persistent_sockets.pop(output_id, None)
-    if timing_emit:
-        _cot_phase_timing_emit(
-            "CoT phase timing: cycle_total=%.1fms" % (_phase_ms(t_cycle, time.perf_counter()),),
-            timing_gunicorn,
-        )
-    log.debug("CoT sender: cycle done")

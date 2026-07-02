@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.402",
+    "date": "2026-07-02",
+    "notes": [
+      "Fix CoT push outputs silently stopping: missing is_network_aircraft_source import crashed the sender cycle on any output with Include Network ADSB off, starving all later outputs (SamTAK, ECTAK, LECK, CCSOSAR, etc.).",
+      "CoT sender hardening: per-output error isolation so one bad output cannot block the rest; log cycle crashes instead of swallowing; raise aircraft fetch read timeout to 5s for large merged feeds."
+    ]
+  },
+  {
     "version": "1.0.401",
     "date": "2026-07-01",
     "notes": [
