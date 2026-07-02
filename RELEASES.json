@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.399",
+    "date": "2026-07-01",
+    "notes": [
+      "Incoming JSON feeds: persist last push snapshot to disk and reload on merger restart; 3-minute startup grace before marking stale; resilient push loop docs for remote senders.",
+      "Merger performance: multi-threaded HTTP server so large ingest uploads no longer block dashboard/map/CoT/output requests; serve aircraft.json from a per-cycle cached body instead of re-serializing per request; suppress BrokenPipe tracebacks; throttle feed snapshot disk writes to 15s."
+    ]
+  },
+  {
     "version": "1.0.398",
     "date": "2026-06-29",
     "notes": [

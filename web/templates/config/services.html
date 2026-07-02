@@ -136,7 +136,8 @@
                 </div>
                 <div>
                     <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Stale (seconds)</label>
-                    <input type="number" id="json-feed-stale" class="form-control" value="10" min="3" max="120" step="1" style="max-width:100px;">
+                    <input type="number" id="json-feed-stale" class="form-control" value="30" min="3" max="120" step="1" style="max-width:100px;">
+                    <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;">How long to keep aircraft after the last push. Use 60+ for remote feeds; snapshots survive merger restarts.</p>
                 </div>
             </div>
             <div style="margin-bottom:12px;">
@@ -809,7 +810,7 @@ function openJsonFeedModal(feed) {
     document.getElementById('json-feed-modal-title').textContent = feed ? 'Edit Incoming JSON Feed' : 'Add Incoming JSON Feed';
     document.getElementById('json-feed-name').value = feed ? feed.name : '';
     document.getElementById('json-feed-priority').value = feed ? feed.merge_priority : 100;
-    document.getElementById('json-feed-stale').value = feed ? feed.stale_seconds : 10;
+    document.getElementById('json-feed-stale').value = feed ? feed.stale_seconds : 30;
     document.getElementById('json-feed-allowlist').value = feed && feed.ip_allowlist ? feed.ip_allowlist.join(', ') : '';
     document.getElementById('json-feed-notes').value = feed ? (feed.notes || '') : '';
     document.getElementById('json-feed-enabled').checked = feed ? !!feed.enabled : true;
@@ -842,7 +843,7 @@ async function saveJsonFeed() {
     const payload = {
         name: document.getElementById('json-feed-name').value.trim(),
         merge_priority: parseInt(document.getElementById('json-feed-priority').value, 10) || 100,
-        stale_seconds: parseFloat(document.getElementById('json-feed-stale').value) || 10,
+        stale_seconds: parseFloat(document.getElementById('json-feed-stale').value) || 30,
         ip_allowlist: parseAllowlist(document.getElementById('json-feed-allowlist').value),
         notes: document.getElementById('json-feed-notes').value.trim(),
         enabled: document.getElementById('json-feed-enabled').checked,

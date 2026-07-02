@@ -141,19 +141,40 @@ Adjust the local URL if your sender uses the merger (`http://aircraft-merger:809
 
 ### Simple push loop (bash)
 
+Use a loop that **never exits** on failure. After a receiver restart, pushes may fail briefly (502, timeout). Retry with backoff until **200** returns.
+
 ```bash
 #!/bin/bash
 PUSH_URL="https://adsb.tak-solutions.com/ingest/json/jfeed-KjZmuw6nKh2k4-xA9WTzrAPzS5I9gVXsRhJNQpsofKY"
 SOURCE="http://127.0.0.1/data/aircraft.json"
+MAX_TIME=120
+INTERVAL=3
+BACKOFF=5
 
 while true; do
-  curl -sf "$SOURCE" | curl -sf -X POST "$PUSH_URL" \
-    -H "Content-Type: application/json" \
-    --data-binary @- \
-    || echo "push failed $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  sleep 2
+  if curl -sf --max-time "$MAX_TIME" "$SOURCE" | \
+    curl -sf --max-time "$MAX_TIME" -X POST "$PUSH_URL" \
+      -H "Content-Type: application/json" \
+      --data-binary @-; then
+    sleep "$INTERVAL"
+    BACKOFF=5
+  else
+    echo "push failed $(date -u +%Y-%m-%dT%H:%M:%SZ), retry in ${BACKOFF}s" >&2
+    sleep "$BACKOFF"
+    BACKOFF=$((BACKOFF < 60 ? BACKOFF * 2 : 60))
+  fi
 done
 ```
+
+### Receiver restarts
+
+When the receiver restarts merger or network services:
+
+- The last successful push is **saved to disk** and reloaded automatically.
+- A **3-minute grace period** extends the stale timeout so aircraft stay on the map while your pusher reconnects.
+- Your pusher must **keep retrying** — a one-shot cron job will not recover after an outage.
+
+Ask the receiver admin to set **stale seconds** to **60+** if your push interval is slow or outages are common (Config → Services → Incoming JSON).
 
 ---
 
@@ -192,6 +213,7 @@ Your push **fills gaps**; it does not override aircraft already tracked locally 
 
 ## 8. Checklist
 
+- [ ] Run a **persistent push loop** with retry/backoff (not cron)
 - [ ] POST every 1–5 seconds with a full snapshot
 - [ ] Use tar1090 `aircraft.json` or ADSBExchange/v2 envelope with an `aircraft` array
 - [ ] Every aircraft row has a valid 6-character hex

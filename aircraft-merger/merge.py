@@ -10,11 +10,17 @@ import os
 import socket
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.request import urlopen
 
 from aircraft_db import enrich_adsbhub_aircraft, init as init_aircraft_db, refresh_if_due
-from json_ingest import handle_ingest, merge_json_feeds, reload_config, tick_stale_feeds
+from json_ingest import (
+    handle_ingest,
+    load_snapshots_from_disk,
+    merge_json_feeds,
+    reload_config,
+    tick_stale_feeds,
+)
 
 TAR1090_URL = os.environ.get("TAR1090_URL", "http://tar1090:80/data/aircraft.json")
 ADSBHUB_HOST = os.environ.get("ADSBHUB_HOST", "data.adsbhub.org")
@@ -27,6 +33,9 @@ STALE_SECONDS = float(os.environ.get("MERGER_STALE_SECONDS", "10"))
 # Shared state: merged aircraft list, now, messages (updated by merger thread)
 _state = {"aircraft": [], "now": 0, "messages": 0}
 _lock = threading.Lock()
+# Pre-serialized aircraft.json body, rebuilt once per merge cycle so GETs don't
+# re-serialize ~14k aircraft per request (was pegging a core and blocking outputs).
+_cached_body = b'{"aircraft":[],"now":0,"messages":0}'
 # ADSBHub: last time we got an update per hex (for 10s staleness purge)
 _adsbhub_last_seen = {}
 
@@ -234,10 +243,16 @@ def _merge_loop():
         for hex_ in list(_adsbhub_last_seen.keys()):
             if _adsbhub_last_seen[hex_] < cutoff:
                 del _adsbhub_last_seen[hex_]
+        body = json.dumps(
+            {"aircraft": merged, "now": now_ts, "messages": messages},
+            separators=(",", ":"),
+        ).encode()
+        global _cached_body
         with _lock:
             _state["aircraft"] = merged
             _state["now"] = now_ts
             _state["messages"] = messages
+            _cached_body = body
         tick_stale_feeds(STALE_SECONDS)
         time.sleep(POLL_INTERVAL)
 
@@ -261,14 +276,16 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0].rstrip("/")
         if path == "/data/aircraft.json" or path == "/aircraft.json" or path == "":
             with _lock:
-                out = {"aircraft": _state["aircraft"], "now": _state["now"], "messages": _state["messages"]}
-            body = json.dumps(out).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", len(body))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(body)
+                body = _cached_body
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # client disconnected mid-response; not an error worth logging
         else:
             self.send_response(404)
             self.end_headers()
@@ -297,7 +314,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         body = self.rfile.read(length)
         status, payload = handle_ingest(token, body, self._client_ip())
-        self._send_json(status, payload)
+        try:
+            self._send_json(status, payload)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def log_message(self, format, *args):
         pass
@@ -327,6 +347,9 @@ def main():
     receive_enabled = _is_receive_enabled()
     _write_receive_enabled_file(receive_enabled)
     reload_config(force=True)
+    restored = load_snapshots_from_disk()
+    if restored:
+        print(f"json_ingest: restored {restored} feed snapshot(s) from disk", flush=True)
     if not receive_enabled:
         # Pass-through only: keep fetching local
         t = threading.Thread(target=_merge_loop, daemon=True)
@@ -338,7 +361,10 @@ def main():
         t2 = threading.Thread(target=_merge_loop, daemon=True)
         t2.start()
     port = int(os.environ.get("MERGER_PORT", "8090"))
-    server = HTTPServer(("0.0.0.0", port), Handler)
+    # Threading server: a slow client or large ingest POST must not block
+    # dashboard/map/CoT requests for aircraft.json.
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    server.daemon_threads = True
     server.serve_forever()
 
 

@@ -22,8 +22,11 @@ CONFIG_PATH = os.environ.get(
 STATUS_PATH = os.environ.get(
     "JSON_FEEDS_STATUS_PATH", "/status/json_feeds_status.json"
 )
+SNAPSHOT_DIR = os.environ.get("JSON_FEEDS_SNAPSHOT_DIR", "/status/json_feed_snapshots")
 MAX_BODY_BYTES = int(os.environ.get("JSON_INGEST_MAX_BYTES", str(50 * 1024 * 1024)))
 CONFIG_RELOAD_SECONDS = float(os.environ.get("JSON_FEEDS_CONFIG_RELOAD_SEC", "5"))
+STARTUP_GRACE_SECONDS = float(os.environ.get("JSON_INGEST_STARTUP_GRACE_SEC", "180"))
+SNAPSHOT_WRITE_INTERVAL = float(os.environ.get("JSON_FEED_SNAPSHOT_WRITE_SEC", "15"))
 
 _lock = threading.Lock()
 _feed_config: list[dict] = []
@@ -32,6 +35,8 @@ _token_index: dict[str, dict] = {}
 _by_feed: dict[int, dict[str, dict]] = {}
 _last_seen: dict[int, dict[str, float]] = {}
 _feed_status: dict[int, dict] = {}
+_boot_time = time.time()
+_last_snapshot_write: dict[int, float] = {}
 
 
 def _now() -> float:
@@ -43,6 +48,92 @@ def _slug_label(name: str, feed_id: int) -> str:
     if not slug:
         slug = str(feed_id)
     return f"json:{slug}"
+
+
+def _snapshot_path(feed_id: int) -> str:
+    return os.path.join(SNAPSHOT_DIR, f"feed_{feed_id}.json")
+
+
+def _effective_stale_seconds(stale_seconds: float) -> float:
+    """Extend staleness window briefly after merger boot so remote pushers can reconnect."""
+    elapsed = _now() - _boot_time
+    if elapsed < STARTUP_GRACE_SECONDS:
+        return stale_seconds + (STARTUP_GRACE_SECONDS - elapsed)
+    return stale_seconds
+
+
+def _write_snapshot(feed_id: int, normalized: dict[str, dict], ts: float, force: bool = False) -> None:
+    last = _last_snapshot_write.get(feed_id, 0.0)
+    if not force and (ts - last) < SNAPSHOT_WRITE_INTERVAL:
+        return
+    try:
+        os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+        payload = {
+            "feed_id": feed_id,
+            "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts)),
+            "saved_ts": ts,
+            "aircraft_count": len(normalized),
+            "aircraft": list(normalized.values()),
+        }
+        path = _snapshot_path(feed_id)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, separators=(",", ":"))
+        os.replace(tmp, path)
+        _last_snapshot_write[feed_id] = ts
+    except Exception:
+        pass
+
+
+def load_snapshots_from_disk() -> int:
+    """Restore last pushed snapshots after merger restart. Returns feeds restored."""
+    reload_config(force=True)
+    restored = 0
+    now = _now()
+    try:
+        os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+    except Exception:
+        return 0
+    with _lock:
+        enabled_ids = {meta["id"] for meta in _token_index.values()}
+        for feed_id in enabled_ids:
+            path = _snapshot_path(feed_id)
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            meta = next((m for m in _token_index.values() if m.get("id") == feed_id), None)
+            if not meta:
+                continue
+            source_label = meta.get("source_label") or _slug_label("", feed_id)
+            normalized: dict[str, dict] = {}
+            raw_list = data.get("aircraft")
+            if isinstance(raw_list, list):
+                for ac in raw_list:
+                    row = normalize_aircraft(ac, source_label)
+                    if row:
+                        normalized[row["hex"]] = row
+            if not normalized:
+                continue
+            _by_feed[feed_id] = normalized
+            # Fresh clock on restore so partner has full stale window to reconnect.
+            _last_seen[feed_id] = {hex_: now for hex_ in normalized}
+            _feed_status[feed_id] = {
+                "last_seen": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+                "aircraft_count": len(normalized),
+                "last_error": None,
+                "status": "active",
+                "restored_from_snapshot": True,
+            }
+            restored += 1
+    if restored:
+        _write_status_file()
+    return restored
 
 
 def reload_config(force: bool = False) -> int:
@@ -217,6 +308,7 @@ def handle_ingest(token: str, body: bytes, client_ip: str) -> tuple[int, dict]:
             "status": "active",
         }
 
+    _write_snapshot(feed_id, normalized, ts)
     _write_status_file()
     return 200, {
         "success": True,
@@ -257,7 +349,7 @@ def merge_json_feeds(seen_hex: set[str], cutoff_default: float) -> list[dict]:
         feed_ids = sorted(_by_feed.keys(), key=lambda fid: by_id.get(fid, {}).get("merge_priority", 100))
         for feed_id in feed_ids:
             meta = by_id.get(feed_id, {})
-            stale = float(meta.get("stale_seconds") or cutoff_default)
+            stale = _effective_stale_seconds(float(meta.get("stale_seconds") or cutoff_default))
             cutoff = _now() - stale
             ac_map = _by_feed.get(feed_id) or {}
             seen_map = _last_seen.get(feed_id) or {}
@@ -279,7 +371,7 @@ def tick_stale_feeds(default_stale: float) -> None:
         by_id = {meta["id"]: meta for meta in _token_index.values()}
         for feed_id in list(_feed_status.keys()):
             meta = by_id.get(feed_id, {})
-            stale = float(meta.get("stale_seconds") or default_stale)
+            stale = _effective_stale_seconds(float(meta.get("stale_seconds") or default_stale))
             seen_map = _last_seen.get(feed_id) or {}
             if not seen_map:
                 continue
