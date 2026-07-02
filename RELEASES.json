@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.400",
+    "date": "2026-07-01",
+    "notes": [
+      "Fix feeder stale/active status updater crashing every 30s (sqlite3.Row .get AttributeError) so feeder statuses update correctly again."
+    ]
+  },
+  {
     "version": "1.0.399",
     "date": "2026-07-01",
     "notes": [

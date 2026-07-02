@@ -653,8 +653,8 @@ def mark_stale_feeders():
 
     for row in rows:
         feeder_id = row["id"]
-        current_msgs = int(row.get("messages_received") or 0)
-        current_status = row.get("status") or "active"
+        current_msgs = int(row["messages_received"] or 0)
+        current_status = row["status"] or "active"
 
         snap = _get_feeder_stale_snapshot(conn, feeder_id)
         # First time seeing this feeder: record snapshot and move on
