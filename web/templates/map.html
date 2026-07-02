@@ -18,8 +18,9 @@
             <button type="button" id="btn-tar1090-key" class="btn btn-sm" title="Legend, filters, keyboard shortcuts, display options">tar1090 map key</button>
             <span style="font-size:12px;color:var(--text-muted);">View:</span>
             <button type="button" id="btn-merged" class="btn btn-sm btn-primary" title="Map with detail sidebar — click any aircraft">Merged (all)</button>
-            <button type="button" id="btn-tar1090" class="btn btn-sm" title="Full tar1090 UI (no sidebar here)">tar1090</button>
-            <a href="/tar1090/" target="_blank" class="btn btn-sm">Open Full Screen</a>
+            <button type="button" id="btn-tar1090" class="btn btn-sm" title="Full tar1090 UI — all sources (local + JSON feeds + ADSBHub)">tar1090 All</button>
+            <button type="button" id="btn-tar1090-direct" class="btn btn-sm" title="Full tar1090 UI — direct feeders only">tar1090 Direct</button>
+            <a href="/tar1090/" target="_blank" id="link-fullscreen" class="btn btn-sm">Open Full Screen</a>
             <span id="map-view-hint" style="font-size:11px;color:var(--text-muted);">Click a blue dot → details in sidebar</span>
             <span id="map-perf-hint" style="display:none;font-size:11px;color:var(--text-muted);">Large feed — clustered until zoom 12</span>
         </div>
@@ -346,15 +347,22 @@ function showMerged() {
     }, 50);
 }
 
-function showTar1090() {
+function showTar1090(mode) {
+    var url = (mode === 'direct') ? '/tar1090-direct/' : '/tar1090/';
     document.getElementById('map-merged-wrap').style.display = 'none';
     document.getElementById('map-iframe-wrap').style.display = 'flex';
     document.getElementById('map-view-hint').textContent = 'Detail sidebar only in Merged view';
     document.getElementById('btn-merged').className = 'btn btn-sm';
-    document.getElementById('btn-tar1090').className = 'btn btn-sm btn-primary';
+    document.getElementById('btn-tar1090').className = (mode === 'direct') ? 'btn btn-sm' : 'btn btn-sm btn-primary';
+    document.getElementById('btn-tar1090-direct').className = (mode === 'direct') ? 'btn btn-sm btn-primary' : 'btn btn-sm';
+    document.getElementById('link-fullscreen').href = url;
     if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
     var ifr = document.getElementById('map-tar1090-iframe');
-    if (ifr.src === 'about:blank' || !ifr.src) ifr.src = '/tar1090/';
+    var current = ifr.getAttribute('data-view') || '';
+    if (current !== url) {
+        ifr.src = url;
+        ifr.setAttribute('data-view', url);
+    }
 }
 
 function initMergedMap() {
@@ -524,10 +532,11 @@ function refreshMergedAircraft() {
 }
 
 document.getElementById('btn-merged').onclick = showMerged;
-document.getElementById('btn-tar1090').onclick = showTar1090;
+document.getElementById('btn-tar1090').onclick = function() { showTar1090('all'); };
+document.getElementById('btn-tar1090-direct').onclick = function() { showTar1090('direct'); };
 
-// Default map view: full tar1090 UI (detail sidebar handled differently).
-showTar1090();
+// Default map view: full tar1090 UI, all sources (detail sidebar handled differently).
+showTar1090('all');
 
 async function updateMapInfo() {
     try {

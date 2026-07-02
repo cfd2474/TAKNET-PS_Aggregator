@@ -36,6 +36,11 @@ _lock = threading.Lock()
 # Pre-serialized aircraft.json body, rebuilt once per merge cycle so GETs don't
 # re-serialize ~14k aircraft per request (was pegging a core and blocking outputs).
 _cached_body = b'{"aircraft":[],"now":0,"messages":0}'
+# Patched tar1090 receiver.json (binCraft/zstd off) so the tar1090 web UI keeps
+# polling aircraft.json — which nginx routes here — instead of switching to
+# aircraft.binCraft.zst, which only contains local (direct feeder) aircraft.
+_receiver_cache = {"body": None, "ts": 0.0}
+RECEIVER_JSON_TTL = 60.0
 # ADSBHub: last time we got an update per hex (for 10s staleness purge)
 _adsbhub_last_seen = {}
 
@@ -100,6 +105,38 @@ def _parse_sbs_line(line):
         return out
     except (IndexError, ValueError, TypeError):
         return None
+
+
+RECEIVER_URL = TAR1090_URL.rsplit("/", 1)[0] + "/receiver.json"
+
+
+def _patched_receiver_json() -> bytes:
+    """tar1090 receiver.json with binCraft/zstd disabled so the web UI polls aircraft.json (merged)."""
+    now = time.time()
+    with _lock:
+        if _receiver_cache["body"] and (now - _receiver_cache["ts"]) < RECEIVER_JSON_TTL:
+            return _receiver_cache["body"]
+    try:
+        with urlopen(RECEIVER_URL, timeout=5) as r:
+            data = json.loads(r.read().decode())
+        if not isinstance(data, dict):
+            data = {}
+    except Exception:
+        data = {}
+    data.setdefault("readsb", True)
+    data["binCraft"] = False
+    data["aircraft_binCraft"] = False
+    data["zstd"] = False
+    # ~10k merged aircraft = ~5MB JSON per poll; don't let clients poll every second
+    try:
+        data["refresh"] = max(int(data.get("refresh") or 1000), 2000)
+    except (TypeError, ValueError):
+        data["refresh"] = 2000
+    body = json.dumps(data).encode()
+    with _lock:
+        _receiver_cache["body"] = body
+        _receiver_cache["ts"] = now
+    return body
 
 
 def _fetch_local():
@@ -286,6 +323,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError):
                 pass  # client disconnected mid-response; not an error worth logging
+        elif path == "/data/receiver.json" or path == "/receiver.json":
+            body = _patched_receiver_json()
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-store, no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
         else:
             self.send_response(404)
             self.end_headers()

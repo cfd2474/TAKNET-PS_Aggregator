@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.401",
+    "date": "2026-07-01",
+    "notes": [
+      "tar1090 map: fix merged aircraft disappearing after initial load (UI was switching from merged aircraft.json to local-only binCraft feed); merger now serves patched receiver.json with binCraft disabled so /tar1090/ stays merged.",
+      "Add tar1090 Direct view (/tar1090-direct/) showing only direct feeder aircraft; map page now offers tar1090 All and tar1090 Direct buttons with matching full-screen link."
+    ]
+  },
+  {
     "version": "1.0.400",
     "date": "2026-07-01",
     "notes": [
