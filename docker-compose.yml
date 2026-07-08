@@ -169,6 +169,7 @@ services:
       - INSTALL_DIR=/opt/taknet-aggregator
       - AIRCRAFT_JSON_URL=${AIRCRAFT_JSON_URL:-http://aircraft-merger:8090/data/aircraft.json}
       - COT_PHASE_TIMING=${COT_PHASE_TIMING:-}
+      - COT_PUSH_INTERVAL_SECONDS=${COT_PUSH_INTERVAL_SECONDS:-2}
       - COT_SEND_CHUNK_MESSAGES=${COT_SEND_CHUNK_MESSAGES:-}
       - COT_XML_USE_TEMPLATE=${COT_XML_USE_TEMPLATE:-}
       - ADSBHUB_STATUS_PATH=/app/adsbhub-status
