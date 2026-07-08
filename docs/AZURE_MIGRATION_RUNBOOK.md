@@ -71,28 +71,25 @@ runbook:
 | Tailscale | **Active on the host** (`tailscaled` running) — must be installed on Azure too |
 | Authentik | Not installed |
 
-**Stale volume warning:** the old server has both `root_netbird_data` and
-`taknet-aggregator_netbird_data`. One is live, one is a leftover from an older
-setup. Confirm which one `netbird-server` actually mounts before trusting any
-copy:
+**NetBird server file layout — CONFIRMED from `/root/docker-compose.yml` and
+`docker inspect netbird-server`:**
 
-```bash
-docker inspect netbird-server \
-  --format '{{range .Mounts}}{{.Type}}  {{.Name}}{{.Source}}  ->  {{.Destination}}{{println}}{{end}}'
-docker inspect netbird-dashboard \
-  --format '{{range .Mounts}}{{.Type}}  {{.Name}}{{.Source}}  ->  {{.Destination}}{{println}}{{end}}'
-```
+- Live data volume: **`root_netbird_data`** (declared as plain `netbird_data:`
+  in the compose file; the `root_` prefix comes from the project name). The
+  other volume, `taknet-aggregator_netbird_data`, is a **stale leftover — do
+  not copy it**.
+- Server config: **bind mount `/root/config.yaml`** → `/etc/netbird/config.yaml`.
+- Dashboard env: **`/root/dashboard.env`** (via `env_file`).
+- Networks: the compose file declares `taknet-internal` as **external** and
+  joins both containers to it — no manual `docker network connect` needed on
+  Azure, but `taknet-internal` must already exist when NetBird starts (see 5.3).
+- Because `netbird_data` is a plain (non-external) volume declaration,
+  **`docker compose -p root` is mandatory on Azure** — without it, compose
+  creates an empty volume under a different name and serves an empty peer
+  database.
 
-Also capture the compose file itself (it's in `/root`) so you know the volume
-declarations, network config, and any env files it references:
-
-```bash
-ls /root/*.yml /root/*.yaml /root/*.env 2>/dev/null
-cat /root/docker-compose.yml
-```
-
-Copy whichever volume(s) the inspect output shows as mounted; the tables and
-commands below assume `root_netbird_data` — adjust if inspect says otherwise.
+Files that must reach Azure: `docker-compose.yml`, `config.yaml`,
+`dashboard.env` (all in `/root`).
 
 **Security note for the Azure VM:** the old server logged **940 failed root SSH
 login attempts** between sessions — it has password auth on a public port 22. On
@@ -181,18 +178,16 @@ On the **Azure VM**:
 OLD=root@104.225.219.254
 KEY="-i ~/.ssh/migration"
 
-# 1. NetBird server compose project — it lives in /root on the old server.
-#    Copy the compose/config files into /opt/netbird on Azure (cleaner home).
+# 1. NetBird server compose project — exactly three files, all in /root on the
+#    old server. Copy them into /opt/netbird on Azure (cleaner home).
 #    IMPORTANT: because the old project directory was /root, the compose project
 #    name is "root" (that's why the volume is root_netbird_data). On Azure you
 #    must start it with `docker compose -p root ...` (see Phase 2/3) or compose
 #    will create a fresh EMPTY netbird_data volume under a new prefix.
 sudo mkdir -p /opt/netbird
 sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
-  --include='*.yml' --include='*.yaml' --include='*.env' --include='*.json' \
-  --exclude='*' $OLD:/root/ /opt/netbird/
-# Review what arrived; grab any extra files the compose file references
-ls -la /opt/netbird/
+  $OLD:/root/docker-compose.yml $OLD:/root/config.yaml $OLD:/root/dashboard.env \
+  /opt/netbird/
 
 # 2. Aggregator install dir (mainly for .env — the repo itself comes from git)
 sudo mkdir -p /opt/taknet-aggregator
@@ -201,8 +196,7 @@ sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
 
 # 3. Docker named volumes (copy the _data dirs directly).
 #    root_netbird_data = NetBird server DB (all peer registrations) — the
-#    critical one. Swap it for taknet-aggregator_netbird_data if the Phase 0
-#    inspect showed that one mounted instead.
+#    critical one. Do NOT copy taknet-aggregator_netbird_data (stale leftover).
 for v in taknet-db-data netbird-client-data root_netbird_data \
          taknet-mlat-work taknet-mlat-logs \
          taknet-tar1090-data taknet-graphs1090-data taknet-adsbhub-status; do
@@ -229,25 +223,23 @@ solves.
 
 ```bash
 cd /opt/netbird
-# Review the compose file and config for the OLD server's public IP. v0.72.x is
-# normally all-domain-based; if you find a literal IP in NETBIRD_* env or
-# config.yaml, change it to the Azure public IP now.
-grep -rn "104.225.219.254" . || echo "clean — domain-based config"
+# Review config.yaml, dashboard.env, and docker-compose.yml for the OLD server's
+# public IP. v0.72.x is normally all-domain-based; if you find a literal IP,
+# change it to the Azure public IP now.
+grep -n "104.225.219.254" docker-compose.yml config.yaml dashboard.env \
+  || echo "clean — domain-based config"
 ```
 
 **Do not start it yet** — starting NetBird before its database has the final
-sync is pointless. Just verify the config parses, **always using `-p root`** so
-compose resolves the existing `root_netbird_data` volume instead of creating an
-empty one:
+sync is pointless. Just verify the config parses, **always using `-p root`**:
+the compose file declares the data volume as plain `netbird_data:`, which only
+resolves to the copied `root_netbird_data` volume when the project name is
+`root`. Without `-p root`, compose silently creates an empty
+`netbird_netbird_data` and you'd be serving an empty peer database.
 
 ```bash
 sudo docker compose -p root config >/dev/null && echo OK
 ```
-
-Also confirm the compose file's volume section maps to the copied volume — with
-`-p root`, a declaration like `netbird_data:` resolves to `root_netbird_data`.
-If the compose file instead declares the volume as `external` with an explicit
-name, `-p root` is harmless but not required; keep using it for consistency.
 
 ### 4.2 Aggregator
 
@@ -264,22 +256,18 @@ the final data sync is clean:
 cd /opt/taknet-aggregator && sudo docker compose down
 ```
 
-### 4.3 Recreate the network attachment for NetBird
+### 4.3 Network attachment for NetBird — handled by compose
 
-The aggregator's nginx reaches `netbird-server:80` and `netbird-dashboard:80` by
-container name, so both NetBird containers must be on the `taknet-internal`
-network (confirmed joined on the old server). Check whether the compose file in
-`/opt/netbird` declares `taknet-internal` as an external network; if it does not,
-the old setup attached them manually, so do the same on Azure after starting
-them:
+Confirmed: the NetBird compose file already declares `taknet-internal` as an
+**external** network and joins both containers to it, so nginx reaches
+`netbird-server:80` / `netbird-dashboard:80` by container name with no manual
+steps.
 
-```bash
-sudo docker network connect taknet-internal netbird-server
-sudo docker network connect taknet-internal netbird-dashboard
-```
-
-(The `taknet-internal` network is created when the aggregator stack first starts
-— run the aggregator install in 4.2 before this step.)
+The only catch is ordering: an external network must exist before the NetBird
+project starts, and `docker compose down` on the aggregator **removes**
+`taknet-internal` (the aggregator project owns it). Phase 3 handles this by
+creating the network explicitly before starting NetBird — nothing to do in this
+phase.
 
 ### 4.4 Aggregator NetBird client container
 
@@ -327,21 +315,25 @@ takes seconds and gives you byte-perfect databases:
 # Same rsync commands as Phase 1 — re-run all of them.
 ```
 
-### 5.3 Start NetBird server on Azure
+### 5.3 Start the aggregator on Azure (first — it owns `taknet-internal`)
 
-```bash
-cd /opt/netbird && sudo docker compose -p root up -d   # -p root reuses root_netbird_data
-sudo docker logs --tail 50 netbird-server   # look for clean startup, no cert/IdP errors
-# If the compose file doesn't attach taknet-internal itself (see 4.3):
-sudo docker network connect taknet-internal netbird-server 2>/dev/null || true
-sudo docker network connect taknet-internal netbird-dashboard 2>/dev/null || true
-```
-
-### 5.4 Start the aggregator on Azure
+The NetBird compose file needs `taknet-internal` to exist (external network),
+and the aggregator project is what creates it. So the aggregator starts first:
 
 ```bash
 cd /opt/taknet-aggregator && sudo docker compose up -d
-sudo docker start netbird-client
+```
+
+`taknet-nginx` may restart-loop for a moment with "host not found in upstream
+netbird-server" — expected until the next step, and it recovers on its own.
+
+### 5.4 Start NetBird server on Azure
+
+```bash
+cd /opt/netbird && sudo docker compose -p root up -d   # -p root reuses root_netbird_data
+sudo docker logs --tail 50 netbird-server    # look for clean startup, no cert/IdP errors
+sudo docker restart taknet-nginx             # clear any stale upstream failure
+sudo docker start netbird-client             # aggregator's own peer
 ```
 
 ### 5.5 Flip DNS
@@ -395,8 +387,9 @@ fresh management connection / DNS lookup).
 The old server is untouched — its data was only ever *read*. If Azure
 misbehaves:
 
-1. On the old server: `cd /root && docker compose up -d` (NetBird server),
-   `cd /opt/taknet-aggregator && docker compose up -d` (aggregator), and
+1. On the old server, same order as cutover (aggregator first — it owns the
+   `taknet-internal` network): `cd /opt/taknet-aggregator && docker compose up -d`,
+   then `cd /root && docker compose up -d` (NetBird server), then
    `docker start netbird-client`.
 2. Flip both DNS A records back to the old IP.
 3. Feeders reconnect to the old server the same way they would have to Azure.

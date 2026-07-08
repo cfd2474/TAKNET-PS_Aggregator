@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.406",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: finalize from confirmed compose file — NetBird server files are exactly /root/{docker-compose.yml,config.yaml,dashboard.env}, live volume is root_netbird_data (taknet-aggregator_netbird_data is stale, do not copy), taknet-internal is declared external in NetBird compose so no manual network connect; fixed cutover ordering (aggregator starts first since compose down removes taknet-internal) and rollback order to match."
+    ]
+  },
+  {
     "version": "1.0.405",
     "date": "2026-07-08",
     "notes": [
