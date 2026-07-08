@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.404",
+    "date": "2026-07-08",
+    "notes": [
+      "Docs: add Azure migration runbook (docs/AZURE_MIGRATION_RUNBOOK.md) — step-by-step host-to-host move of the aggregator and self-hosted NetBird server (mgmt v0.72.2) preserving all feeder enrollments: data/volume sync, NSG/firewalld ports, DNS cutover, aggregator peer identity preservation, verification checklist, and rollback plan."
+    ]
+  },
+  {
     "version": "1.0.403",
     "date": "2026-07-08",
     "notes": [
