@@ -7,6 +7,7 @@ Auth: token in URL path or Authorization: Bearer header.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import ipaddress
 import json
@@ -14,6 +15,7 @@ import os
 import re
 import threading
 import time
+import zlib
 from typing import Any, Optional
 
 CONFIG_PATH = os.environ.get(
@@ -27,6 +29,10 @@ MAX_BODY_BYTES = int(os.environ.get("JSON_INGEST_MAX_BYTES", str(50 * 1024 * 102
 CONFIG_RELOAD_SECONDS = float(os.environ.get("JSON_FEEDS_CONFIG_RELOAD_SEC", "5"))
 STARTUP_GRACE_SECONDS = float(os.environ.get("JSON_INGEST_STARTUP_GRACE_SEC", "180"))
 SNAPSHOT_WRITE_INTERVAL = float(os.environ.get("JSON_FEED_SNAPSHOT_WRITE_SEC", "15"))
+# Drop aircraft without a lat/lon at ingest: position-less rows can't be shown on the
+# map or sent as CoT, but they roughly double large feeds' memory/serialization cost.
+REQUIRE_POSITION = (os.environ.get("JSON_INGEST_REQUIRE_POSITION", "1").strip().lower()
+                    in ("1", "true", "yes", "on"))
 
 _lock = threading.Lock()
 _feed_config: list[dict] = []
@@ -271,13 +277,33 @@ def normalize_aircraft(ac: Any, source_label: str) -> Optional[dict]:
         int(hex_, 16)
     except ValueError:
         return None
+    if REQUIRE_POSITION:
+        try:
+            float(ac.get("lat"))
+            float(ac.get("lon"))
+        except (TypeError, ValueError):
+            return None
     out = dict(ac)
     out["hex"] = hex_
     out["source"] = source_label
     return out
 
 
-def handle_ingest(token: str, body: bytes, client_ip: str) -> tuple[int, dict]:
+def decompress_body(body: bytes, content_encoding: str) -> bytes:
+    """Decompress gzip/deflate request bodies (senders can cut ~10MB pushes to ~1MB)."""
+    enc = (content_encoding or "").strip().lower()
+    if enc in ("gzip", "x-gzip"):
+        out = gzip.decompress(body)
+    elif enc == "deflate":
+        out = zlib.decompress(body)
+    else:
+        return body
+    if len(out) > MAX_BODY_BYTES:
+        raise ValueError(f"Decompressed payload too large (max {MAX_BODY_BYTES} bytes)")
+    return out
+
+
+def handle_ingest(token: str, body: bytes, client_ip: str, content_encoding: str = "") -> tuple[int, dict]:
     meta, err = _resolve_feed(token, client_ip)
     if not meta:
         return 401, {"error": err or "Unauthorized"}
@@ -286,10 +312,15 @@ def handle_ingest(token: str, body: bytes, client_ip: str) -> tuple[int, dict]:
     source_label = meta["source_label"]
 
     try:
+        body = decompress_body(body, content_encoding)
         raw_list, _payload_now = parse_payload(body)
     except ValueError as e:
         _set_feed_error(feed_id, str(e))
         return 400, {"error": str(e)}
+    except Exception as e:
+        msg = f"Failed to decompress body ({content_encoding}): {e}"
+        _set_feed_error(feed_id, msg)
+        return 400, {"error": msg}
 
     normalized: dict[str, dict] = {}
     ts = _now()

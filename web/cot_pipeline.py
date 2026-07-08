@@ -1359,6 +1359,10 @@ def _run_cot_sender_cycle_impl(requests):
         a["baro_rate"] = _parse_float(a.get("baro_rate"))
         a["_norm_hex"] = (a.get("hex") or "").strip().upper()
         if a["_norm_hex"]:
+            # Cache per-aircraft values once per cycle; with many outputs these were
+            # recomputed output_count times per aircraft (17 outputs x ~19k aircraft).
+            a["_tisb_cached"] = _is_tisb(a)
+            a["_state_cached"] = _state_key(a)
             with_pos.append(a)
 
     if not with_pos:
@@ -1449,8 +1453,8 @@ def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, O
             hex_code = ac.get("_norm_hex") if isinstance(ac, dict) else ""
             if not hex_code:
                 continue
-            is_tisb = _is_tisb(ac)
-            state = _state_key(ac)
+            is_tisb = ac["_tisb_cached"] if "_tisb_cached" in ac else _is_tisb(ac)
+            state = ac["_state_cached"] if "_state_cached" in ac else _state_key(ac)
             state_by_hex[hex_code] = state
             if last_sent.get(hex_code) != state:
                 delta_hexes.add(hex_code)
@@ -1527,7 +1531,7 @@ def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, O
             if not hex_code:
                 continue
             transform = transforms_by_hex.get(hex_code) if use_cotproxy else None
-            is_tisb = _is_tisb(ac)
+            is_tisb = ac["_tisb_cached"] if "_tisb_cached" in ac else _is_tisb(ac)
             if not pass_all and not transform and not (pass_only_tisb and is_tisb):
                 continue
             seen_hexes.add(hex_code)
@@ -1547,7 +1551,11 @@ def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, O
                 klv_active_now.add(hex_code)
                 ac_send = apply_klv_platform(ac, token)
 
-            state = _state_key(ac_send)
+            state = (
+                ac["_state_cached"]
+                if (ac_send is ac and "_state_cached" in ac)
+                else _state_key(ac_send)
+            )
             prev_klv = hex_code in _last_klv_active.get(output_id, set())
             force_adsb_resync = prev_klv and not klv_live
             if not klv_live and not force_adsb_resync and last_sent.get(hex_code) == state:

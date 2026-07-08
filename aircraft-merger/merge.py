@@ -362,7 +362,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Missing Content-Length"})
             return
         body = self.rfile.read(length)
-        status, payload = handle_ingest(token, body, self._client_ip())
+        status, payload = handle_ingest(
+            token, body, self._client_ip(),
+            content_encoding=self.headers.get("Content-Encoding") or "",
+        )
         try:
             self._send_json(status, payload)
         except (BrokenPipeError, ConnectionResetError):

@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.403",
+    "date": "2026-07-08",
+    "notes": [
+      "Large JSON feed performance: skip aircraft without lat/lon at ingest (JSON_INGEST_REQUIRE_POSITION, default on) — position-less rows roughly doubled processing cost of ~19k-aircraft feeds with no map/CoT value.",
+      "Incoming JSON push now accepts gzip/deflate-compressed bodies (Content-Encoding header) so ~10MB snapshots upload as ~1MB.",
+      "CoT sender: compute per-aircraft state key and TIS-B flag once per cycle instead of once per output (17 outputs x 19k aircraft), cutting dashboard CPU."
+    ]
+  },
+  {
     "version": "1.0.402",
     "date": "2026-07-02",
     "notes": [

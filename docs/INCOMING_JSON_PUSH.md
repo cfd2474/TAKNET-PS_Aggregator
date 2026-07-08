@@ -104,12 +104,27 @@ If you export from `/v2/all` or a similar API, the wrapper is fine — only the 
 | Field | Required | Notes |
 |-------|----------|--------|
 | **ICAO hex** | **Yes** | Field name may be `hex`, `icao`, `ICAO`, or `addr`. Must be **6 hexadecimal characters** (e.g. `A12345`). |
-| **lat / lon** | Strongly recommended | Required for map positions. |
+| **lat / lon** | **Yes** | Aircraft **without a numeric lat/lon are skipped** — they cannot be shown on the map or sent as CoT, and they double processing cost on large feeds. Filter them out before pushing to save bandwidth. |
 | **flight, r, alt_baro, gs, track, squawk, seen, …** | Optional | Any tar1090/readsb fields are passed through. |
 
-Rows without a valid hex are **skipped** (not an error).
+Rows without a valid hex or position are **skipped** (not an error). The `accepted` count in the response reflects only rows that were kept.
 
 On the receiving aggregator, accepted aircraft are tagged with a source label like `json:{feed-name}` so they can be distinguished from local Beast feeders and ADSBHub.
+
+### Compression (strongly recommended for large feeds)
+
+Gzip the body and set `Content-Encoding: gzip` — a ~10 MB snapshot compresses to roughly 1 MB, uploads far faster, and avoids timeouts:
+
+```bash
+curl -sf "$SOURCE" | jq -c "{now, aircraft: [.aircraft[] | select(.lat != null and .lon != null)]}" \
+  | gzip -c \
+  | curl -sf --max-time 60 -X POST "$PUSH_URL" \
+      -H "Content-Type: application/json" \
+      -H "Content-Encoding: gzip" \
+      --data-binary @-
+```
+
+`deflate` is also accepted. The 50 MB limit applies to the payload **after** decompression.
 
 ---
 
