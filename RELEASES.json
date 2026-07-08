@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.405",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: fill in confirmed source-server inventory — NetBird compose project lives in /root (must start with `docker compose -p root` on Azure to reuse root_netbird_data), client container is netbird-client with netbird-client-data identity volume, no coturn (3478/udp only, no TURN port range), Tailscale active, stale-volume check for taknet-aggregator_netbird_data, and SSH hardening note."
+    ]
+  },
+  {
     "version": "1.0.404",
     "date": "2026-07-08",
     "notes": [

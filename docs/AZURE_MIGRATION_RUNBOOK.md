@@ -52,43 +52,52 @@ At your DNS provider, drop the TTL on both records to **300 seconds (5 min)**:
 
 Do this at least 24 h before cutover so old TTLs expire everywhere.
 
-### 2.2 Inventory the source server
+### 2.2 Inventory the source server — CONFIRMED 2026-07-08
 
-SSH to the current dev server and record what's actually running:
+Inventory was run on the old server (`104.225.219.254`, hostname
+`leckliter-takserver`). Confirmed facts, used throughout the rest of this
+runbook:
 
-```bash
-docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
-docker volume ls
-```
+| Item | Confirmed value |
+|---|---|
+| Old server public IP | `104.225.219.254` |
+| NetBird server compose dir (`$NB_DIR`) | **`/root`** — compose project name is `root` |
+| NetBird server container | `netbird-server` (`netbirdio/netbird-server:latest`), config `/etc/netbird/config.yaml`, publishes `3478/udp` + `127.0.0.1:8081->80` |
+| NetBird dashboard container | `netbird-dashboard` (`netbirdio/dashboard:latest`), publishes `127.0.0.1:8080->80` |
+| NetBird server data volume | `root_netbird_data` (also see stale-volume check below) |
+| Aggregator NetBird client container | **`netbird-client`** (`netbirdio/netbird:latest`, host network) — identity volume `netbird-client-data` |
+| Network attachment | `netbird-server` and `netbird-dashboard` are already joined to `taknet-internal` (nginx reaches them by container name) |
+| coturn | **None** — no separate coturn container; only `3478/udp` published by `netbird-server` |
+| Tailscale | **Active on the host** (`tailscaled` running) — must be installed on Azure too |
+| Authentik | Not installed |
 
-Find the NetBird server's compose directory (it is a separate project from the
-aggregator):
+**Stale volume warning:** the old server has both `root_netbird_data` and
+`taknet-aggregator_netbird_data`. One is live, one is a leftover from an older
+setup. Confirm which one `netbird-server` actually mounts before trusting any
+copy:
 
 ```bash
 docker inspect netbird-server \
-  --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'
-# Typical answer: /opt/netbird or similar — call it $NB_DIR below
+  --format '{{range .Mounts}}{{.Type}}  {{.Name}}{{.Source}}  ->  {{.Destination}}{{println}}{{end}}'
+docker inspect netbird-dashboard \
+  --format '{{range .Mounts}}{{.Type}}  {{.Name}}{{.Source}}  ->  {{.Destination}}{{println}}{{end}}'
 ```
 
-Check how the NetBird containers join the aggregator's nginx network (the
-aggregator nginx proxies `netbird.tak-solutions.com` to `netbird-server:80` and
-`netbird-dashboard:80`, so they must share the `taknet-internal` network):
+Also capture the compose file itself (it's in `/root`) so you know the volume
+declarations, network config, and any env files it references:
 
 ```bash
-docker network inspect taknet-internal --format '{{range .Containers}}{{.Name}} {{end}}'
+ls /root/*.yml /root/*.yaml /root/*.env 2>/dev/null
+cat /root/docker-compose.yml
 ```
 
-Note whether a `coturn` container exists (older installs). v0.72.x normally uses
-the embedded relay over the domain on 443, but if coturn is present its
-`turnserver.conf` contains the **old public IP** and must be updated on Azure.
+Copy whichever volume(s) the inspect output shows as mounted; the tables and
+commands below assume `root_netbird_data` — adjust if inspect says otherwise.
 
-Check for other co-located services you also need to move (Tailscale on the host,
-Authentik at `/opt/authentik` if you installed it):
-
-```bash
-systemctl is-active tailscaled
-ls -d /opt/authentik 2>/dev/null
-```
+**Security note for the Azure VM:** the old server logged **940 failed root SSH
+login attempts** between sessions — it has password auth on a public port 22. On
+Azure, do not expose 22 publicly: use Bastion only, and disable password
+authentication (`PasswordAuthentication no` in `sshd_config`).
 
 ### 2.3 Prepare the Azure VM (Rocky 9)
 
@@ -123,13 +132,15 @@ sudo modprobe wireguard && lsmod | grep wireguard
 | 39001 | TCP | MLAT results |
 | 9000 | TCP | KLV ingest (only if using MediaMTX/KLV) |
 | 51820 | UDP | WireGuard (NetBird client direct connections) |
-| 3478 | UDP | STUN/TURN — **only if coturn exists on the source** |
-| 49152–65535 | UDP | TURN relay range — **only if coturn exists** |
+| 3478 | UDP | STUN — published by `netbird-server` (confirmed on source) |
+
+(No 49152–65535 TURN range needed — the source has no coturn container; relay
+traffic rides 443 through Caddy/nginx.)
 
 firewalld on the VM:
 
 ```bash
-for p in 80/tcp 443/tcp 443/udp 30003/tcp 30004/tcp 30005/tcp 30105/tcp 39001/tcp 9000/tcp 51820/udp; do
+for p in 80/tcp 443/tcp 443/udp 30003/tcp 30004/tcp 30005/tcp 30105/tcp 39001/tcp 9000/tcp 51820/udp 3478/udp; do
   sudo firewall-cmd --permanent --add-port=$p
 done
 sudo firewall-cmd --reload
@@ -149,7 +160,7 @@ server:
 ssh-keygen -t ed25519 -f ~/.ssh/migration
 cat ~/.ssh/migration.pub
 # Append that line to /root/.ssh/authorized_keys (or your user) on the OLD server
-ssh -i ~/.ssh/migration root@OLD_SERVER_IP hostname   # verify
+ssh -i ~/.ssh/migration root@104.225.219.254 hostname   # verify
 ```
 
 If the old server is not directly reachable from Azure, reverse the direction
@@ -164,32 +175,41 @@ Do a full copy **while everything is still running** on the old server. This is 
 warm-up: it moves 95%+ of the bytes so the final cutover sync takes seconds, and
 it lets you rehearse bringing the stack up on Azure.
 
-On the **Azure VM** (adjust `OLD` and `$NB_DIR`):
+On the **Azure VM**:
 
 ```bash
-OLD=root@OLD_SERVER_IP
+OLD=root@104.225.219.254
 KEY="-i ~/.ssh/migration"
 
-# 1. NetBird server compose project (configs + any bind-mounted data)
-sudo rsync -aHAX --numeric-ids -e "ssh $KEY" $OLD:/opt/netbird/ /opt/netbird/
+# 1. NetBird server compose project — it lives in /root on the old server.
+#    Copy the compose/config files into /opt/netbird on Azure (cleaner home).
+#    IMPORTANT: because the old project directory was /root, the compose project
+#    name is "root" (that's why the volume is root_netbird_data). On Azure you
+#    must start it with `docker compose -p root ...` (see Phase 2/3) or compose
+#    will create a fresh EMPTY netbird_data volume under a new prefix.
+sudo mkdir -p /opt/netbird
+sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
+  --include='*.yml' --include='*.yaml' --include='*.env' --include='*.json' \
+  --exclude='*' $OLD:/root/ /opt/netbird/
+# Review what arrived; grab any extra files the compose file references
+ls -la /opt/netbird/
 
 # 2. Aggregator install dir (mainly for .env — the repo itself comes from git)
 sudo mkdir -p /opt/taknet-aggregator
 sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
   $OLD:/opt/taknet-aggregator/.env /opt/taknet-aggregator/.env
 
-# 3. Docker named volumes (copy the _data dirs directly)
-for v in taknet-db-data netbird-client-data taknet-mlat-work \
+# 3. Docker named volumes (copy the _data dirs directly).
+#    root_netbird_data = NetBird server DB (all peer registrations) — the
+#    critical one. Swap it for taknet-aggregator_netbird_data if the Phase 0
+#    inspect showed that one mounted instead.
+for v in taknet-db-data netbird-client-data root_netbird_data \
+         taknet-mlat-work taknet-mlat-logs \
          taknet-tar1090-data taknet-graphs1090-data taknet-adsbhub-status; do
   sudo docker volume create $v
   sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
     $OLD:/var/lib/docker/volumes/$v/_data/ /var/lib/docker/volumes/$v/_data/
 done
-
-# 4. NetBird server volumes — list them on the old server first:
-#    ssh $OLD "docker volume ls | grep -i netbird"
-#    then copy each the same way (names vary by install: netbird_management,
-#    netbird-mgmt-data, etc.). The critical file is store.db / management.json.
 ```
 
 > **SQLite caveat:** copying `store.db` and `aggregator.db` while services are
@@ -209,20 +229,25 @@ solves.
 
 ```bash
 cd /opt/netbird
-# Review docker-compose.yml / management.json / setup.env for the OLD server's
-# public IP. v0.72.x is normally all-domain-based; if you find a literal IP
-# (common in coturn/turnserver.conf or NETBIRD_* env), change it to the Azure
-# public IP now.
-grep -rn "OLD_SERVER_IP" . || echo "clean — domain-based config"
+# Review the compose file and config for the OLD server's public IP. v0.72.x is
+# normally all-domain-based; if you find a literal IP in NETBIRD_* env or
+# config.yaml, change it to the Azure public IP now.
+grep -rn "104.225.219.254" . || echo "clean — domain-based config"
 ```
 
-**Do not start it yet** if the compose file publishes 80/443 directly — it will
-conflict with nothing right now, but starting NetBird before its database has the
-final sync is pointless. Just verify the config parses:
+**Do not start it yet** — starting NetBird before its database has the final
+sync is pointless. Just verify the config parses, **always using `-p root`** so
+compose resolves the existing `root_netbird_data` volume instead of creating an
+empty one:
 
 ```bash
-docker compose config >/dev/null && echo OK
+sudo docker compose -p root config >/dev/null && echo OK
 ```
+
+Also confirm the compose file's volume section maps to the copied volume — with
+`-p root`, a declaration like `netbird_data:` resolves to `root_netbird_data`.
+If the compose file instead declares the volume as `external` with an explicit
+name, `-p root` is harmless but not required; keep using it for consistency.
 
 ### 4.2 Aggregator
 
@@ -241,21 +266,30 @@ cd /opt/taknet-aggregator && sudo docker compose down
 
 ### 4.3 Recreate the network attachment for NetBird
 
-The aggregator's nginx expects to reach `netbird-server` and `netbird-dashboard`
-on the `taknet-internal` Docker network. Replicate whatever the old server did
-(from your Phase 0 inventory) — typically the NetBird compose file declares
-`taknet-internal` as an external network, or the old setup used
-`docker network connect taknet-internal netbird-server`. Make sure the same
-mechanism exists on Azure before cutover.
+The aggregator's nginx reaches `netbird-server:80` and `netbird-dashboard:80` by
+container name, so both NetBird containers must be on the `taknet-internal`
+network (confirmed joined on the old server). Check whether the compose file in
+`/opt/netbird` declares `taknet-internal` as an external network; if it does not,
+the old setup attached them manually, so do the same on Azure after starting
+them:
+
+```bash
+sudo docker network connect taknet-internal netbird-server
+sudo docker network connect taknet-internal netbird-dashboard
+```
+
+(The `taknet-internal` network is created when the aggregator stack first starts
+— run the aggregator install in 4.2 before this step.)
 
 ### 4.4 Aggregator NetBird client container
 
-The `taknet-netbird-client` container is created by the dashboard (Server
-Enrollment), not by compose. On Azure, recreate it manually **reusing the copied
+On the old server this is the `netbird-client` container (image
+`netbirdio/netbird:latest`, host network) — created by the dashboard's Server
+Enrollment, not by compose. On Azure, recreate it manually **reusing the copied
 identity volume** — do NOT enroll with a setup key:
 
 ```bash
-sudo docker run -d --name taknet-netbird-client \
+sudo docker run -d --name netbird-client \
   --cap-add NET_ADMIN --cap-add SYS_MODULE \
   --device /dev/net/tun:/dev/net/tun \
   -v netbird-client-data:/etc/netbird \
@@ -265,11 +299,8 @@ sudo docker run -d --name taknet-netbird-client \
 
 Because `/etc/netbird/config.json` (private key + peer config) came from the old
 server, this container is the **same peer** with the **same overlay IP**. It will
-show disconnected until the NetBird server is live on Azure — that's expected.
-
-> Check the exact image used on the old server with
-> `ssh $OLD "docker inspect taknet-netbird-client --format '{{.Config.Image}}'"`
-> and use that.
+show disconnected until the NetBird server is live on Azure and DNS has flipped —
+that's expected.
 
 ---
 
@@ -283,8 +314,8 @@ a gap in feed data from "old server stopped" until "feeders reconnect to Azure."
 
 ```bash
 cd /opt/taknet-aggregator && docker compose down
-docker stop taknet-netbird-client
-cd $NB_DIR && docker compose down        # NetBird server
+docker stop netbird-client
+cd /root && docker compose down          # NetBird server (project dir is /root)
 ```
 
 ### 5.2 Final data sync (consistent, containers stopped)
@@ -299,15 +330,18 @@ takes seconds and gives you byte-perfect databases:
 ### 5.3 Start NetBird server on Azure
 
 ```bash
-cd /opt/netbird && sudo docker compose up -d
-docker logs --tail 50 netbird-server   # look for clean startup, no cert/IdP errors
+cd /opt/netbird && sudo docker compose -p root up -d   # -p root reuses root_netbird_data
+sudo docker logs --tail 50 netbird-server   # look for clean startup, no cert/IdP errors
+# If the compose file doesn't attach taknet-internal itself (see 4.3):
+sudo docker network connect taknet-internal netbird-server 2>/dev/null || true
+sudo docker network connect taknet-internal netbird-dashboard 2>/dev/null || true
 ```
 
 ### 5.4 Start the aggregator on Azure
 
 ```bash
 cd /opt/taknet-aggregator && sudo docker compose up -d
-sudo docker start taknet-netbird-client
+sudo docker start netbird-client
 ```
 
 ### 5.5 Flip DNS
@@ -329,7 +363,7 @@ curl -s https://netbird.tak-solutions.com/api/peers \
   -H "Authorization: Bearer $NETBIRD_API_TOKEN" | head -c 300
 
 # Aggregator's own peer identity intact? (should show the SAME overlay IP as before)
-sudo docker exec taknet-netbird-client netbird status
+sudo docker exec netbird-client netbird status
 ```
 
 Feeders' NetBird clients retry the management connection continuously; as DNS
@@ -341,7 +375,7 @@ dashboard (`https://netbird.tak-solutions.com`) to repopulate over 5–20 minute
 ## 6. Phase 4 — Verification checklist
 
 - [ ] `https://netbird.tak-solutions.com` dashboard loads, login works, all peers listed
-- [ ] Aggregator peer shows its **original** overlay IP (`netbird status` in `taknet-netbird-client`)
+- [ ] Aggregator peer shows its **original** overlay IP (`netbird status` in `netbird-client`)
 - [ ] `https://adsb.tak-solutions.com` dashboard loads; VPN page shows NetBird connected and API token valid
 - [ ] Feeders reappear on the dashboard Feeders page with VPN classification intact
 - [ ] Beast data flowing: dashboard map shows aircraft from direct feeders
@@ -361,8 +395,9 @@ fresh management connection / DNS lookup).
 The old server is untouched — its data was only ever *read*. If Azure
 misbehaves:
 
-1. `docker compose up -d` the NetBird server and aggregator on the old server,
-   `docker start taknet-netbird-client`.
+1. On the old server: `cd /root && docker compose up -d` (NetBird server),
+   `cd /opt/taknet-aggregator && docker compose up -d` (aggregator), and
+   `docker start netbird-client`.
 2. Flip both DNS A records back to the old IP.
 3. Feeders reconnect to the old server the same way they would have to Azure.
 
@@ -376,6 +411,6 @@ before decommissioning.
 - Restore DNS TTLs to their normal values (e.g. 3600).
 - Remove the migration SSH key from the old server.
 - Confirm `health-snapshot-host.timer` is active on Azure (`systemctl status health-snapshot-host.timer`) — `install.sh` sets it up.
-- If Tailscale was in use on the old host (`TAILSCALE_ENABLED=true` in `.env`), install and `tailscale up` on Azure, or set `TAILSCALE_ENABLED=false`.
-- If Authentik was running on the old server, migrate `/opt/authentik` the same way (compose dir + its postgres volume) — it's independent of NetBird and can move later.
+- Tailscale is confirmed active on the old host: install it on Azure (`dnf install tailscale`, `tailscale up`) or set `TAILSCALE_ENABLED=false` in `.env` if it's no longer needed.
+- Harden SSH on the Azure VM: Bastion-only access, `PasswordAuthentication no` (the old server accumulated 940 failed root login attempts on its public port 22).
 - Snapshot the Azure VM once everything is verified (Portal → VM → Capture / disk snapshot) so you have a known-good restore point.
