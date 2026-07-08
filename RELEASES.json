@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.408",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: add firewalld troubleshooting — nftables/libnftnl version mismatch on the Azure Rocky 9 image makes firewalld hang in activating and time out; fix is dnf update + reboot before enabling firewalld (now the recommended first step on the fresh VM)."
+    ]
+  },
+  {
     "version": "1.0.407",
     "date": "2026-07-08",
     "notes": [

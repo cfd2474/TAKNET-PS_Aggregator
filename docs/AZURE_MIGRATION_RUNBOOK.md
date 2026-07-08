@@ -136,9 +136,19 @@ traffic rides 443 through Caddy/nginx.)
 
 firewalld on the VM — **the Azure Rocky 9 image does not ship firewalld**, so
 install and enable it first (safe mid-session: the default zone allows `ssh`,
-so the Bastion connection survives):
+so the Bastion connection survives).
+
+> **Troubleshooting (hit on 2026-07-08):** if firewalld hangs in
+> `activating (start)` and times out after 90 s, check
+> `journalctl -u firewalld` for
+> `libnftables.so.1: undefined symbol ... LIBNFTNL_11` — a
+> nftables/libnftnl package version mismatch from a partially-updated image.
+> Fix on a not-yet-in-service VM: `sudo dnf update -y && sudo reboot`, then
+> retry. (Targeted alternative: `sudo dnf update -y nftables libnftnl`.)
 
 ```bash
+sudo dnf update -y && sudo reboot   # recommended first on a fresh VM: consistent packages + current kernel
+# ...reconnect...
 sudo dnf install -y firewalld
 sudo systemctl enable --now firewalld
 sudo firewall-cmd --state                # "running"
