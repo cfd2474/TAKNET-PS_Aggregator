@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.407",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: Azure Rocky 9 image ships without firewalld — add install/enable steps before the port-opening loop, plus verification commands and a note that host-network netbird-client (WireGuard 51820/udp) requires the host firewall openings even though Docker-published ports bypass firewalld."
+    ]
+  },
+  {
     "version": "1.0.406",
     "date": "2026-07-08",
     "notes": [

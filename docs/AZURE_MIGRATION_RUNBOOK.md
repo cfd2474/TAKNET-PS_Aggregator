@@ -134,14 +134,26 @@ sudo modprobe wireguard && lsmod | grep wireguard
 (No 49152–65535 TURN range needed — the source has no coturn container; relay
 traffic rides 443 through Caddy/nginx.)
 
-firewalld on the VM:
+firewalld on the VM — **the Azure Rocky 9 image does not ship firewalld**, so
+install and enable it first (safe mid-session: the default zone allows `ssh`,
+so the Bastion connection survives):
 
 ```bash
+sudo dnf install -y firewalld
+sudo systemctl enable --now firewalld
+sudo firewall-cmd --state                # "running"
+sudo firewall-cmd --list-services        # should include: ssh
+
 for p in 80/tcp 443/tcp 443/udp 30003/tcp 30004/tcp 30005/tcp 30105/tcp 39001/tcp 9000/tcp 51820/udp 3478/udp; do
   sudo firewall-cmd --permanent --add-port=$p
 done
 sudo firewall-cmd --reload
+sudo firewall-cmd --list-ports           # confirm all 11 entries
 ```
+
+Docker-published container ports bypass firewalld via Docker's own iptables
+rules, but the host-network `netbird-client` container (WireGuard 51820/udp)
+genuinely needs these openings — don't skip this step.
 
 (Running `install.sh` later also opens the core ports, but do the NSG rules
 manually — Azure blocks everything inbound by default.)
