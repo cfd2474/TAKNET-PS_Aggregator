@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.409",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: fix Phase 1 rsync commands — absolute SSH key path (sudo resolves ~ to /root so the key was silently skipped), drop -A/-X flags (SELinux xattr copy is blocked by destination policy and cross-host labels are wrong anyway), and add restorecon after each volume copy for correct local labels."
+    ]
+  },
+  {
     "version": "1.0.408",
     "date": "2026-07-08",
     "notes": [

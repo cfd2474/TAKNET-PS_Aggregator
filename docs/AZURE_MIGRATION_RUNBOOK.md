@@ -194,11 +194,21 @@ Do a full copy **while everything is still running** on the old server. This is 
 warm-up: it moves 95%+ of the bytes so the final cutover sync takes seconds, and
 it lets you rehearse bringing the stack up on Azure.
 
-On the **Azure VM**:
+On the **Azure VM**. Two gotchas baked into these commands (both hit on
+2026-07-08):
+
+- **Absolute key path:** the rsyncs run under `sudo`, where `~` resolves to
+  `/root`, not your login user's home. Use the absolute path to the key or SSH
+  silently falls back to password prompts.
+- **No `-A -X` flags:** `-X` tries to copy SELinux xattrs from the old server;
+  the destination SELinux policy blocks that (rsync exit code 23,
+  `lremovexattr ... Permission denied`) and cross-host labels are wrong anyway.
+  Use `-aH` and run `restorecon` on volume data so files get correct local
+  labels.
 
 ```bash
 OLD=root@104.225.219.254
-KEY="-i ~/.ssh/migration"
+KEY="-i /home/atakuser/.ssh/migration"   # ABSOLUTE path — see note above
 
 # 1. NetBird server compose project — exactly three files, all in /root on the
 #    old server. Copy them into /opt/netbird on Azure (cleaner home).
@@ -207,13 +217,13 @@ KEY="-i ~/.ssh/migration"
 #    must start it with `docker compose -p root ...` (see Phase 2/3) or compose
 #    will create a fresh EMPTY netbird_data volume under a new prefix.
 sudo mkdir -p /opt/netbird
-sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
+sudo rsync -aH --numeric-ids -e "ssh $KEY" \
   $OLD:/root/docker-compose.yml $OLD:/root/config.yaml $OLD:/root/dashboard.env \
   /opt/netbird/
 
 # 2. Aggregator install dir (mainly for .env — the repo itself comes from git)
 sudo mkdir -p /opt/taknet-aggregator
-sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
+sudo rsync -aH --numeric-ids -e "ssh $KEY" \
   $OLD:/opt/taknet-aggregator/.env /opt/taknet-aggregator/.env
 
 # 3. Docker named volumes (copy the _data dirs directly).
@@ -223,8 +233,9 @@ for v in taknet-db-data netbird-client-data root_netbird_data \
          taknet-mlat-work taknet-mlat-logs \
          taknet-tar1090-data taknet-graphs1090-data taknet-adsbhub-status; do
   sudo docker volume create $v
-  sudo rsync -aHAX --numeric-ids -e "ssh $KEY" \
+  sudo rsync -aH --numeric-ids -e "ssh $KEY" \
     $OLD:/var/lib/docker/volumes/$v/_data/ /var/lib/docker/volumes/$v/_data/
+  sudo restorecon -R /var/lib/docker/volumes/$v/_data
 done
 ```
 
