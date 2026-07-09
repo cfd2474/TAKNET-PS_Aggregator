@@ -121,21 +121,30 @@ sudo modprobe wireguard && lsmod | grep wireguard
 `firewalld` on the VM:
 
 
-| Port  | Proto | Purpose                                                           |
-| ----- | ----- | ----------------------------------------------------------------- |
-| 22    | TCP   | SSH (Bastion handles this; restrict source)                       |
-| 80    | TCP   | HTTP → Caddy (ACME challenges, redirect)                          |
-| 443   | TCP   | HTTPS — dashboard, NetBird mgmt/signal/relay gRPC+WS all ride 443 |
-| 443   | UDP   | HTTP/3 (Caddy)                                                    |
-| 30004 | TCP   | Beast input from feeders                                          |
-| 30003 | TCP   | SBS output                                                        |
-| 30005 | TCP   | Beast output                                                      |
-| 30105 | TCP   | MLAT input                                                        |
-| 39001 | TCP   | MLAT results                                                      |
-| 9000  | TCP   | KLV ingest (only if using MediaMTX/KLV)                           |
-| 51820 | UDP   | WireGuard (NetBird client direct connections)                     |
-| 3478  | UDP   | STUN — published by `netbird-server` (confirmed on source)        |
+Traffic sources: most ports must allow **Any** source — the clients are a fleet
+of feeder devices on residential/cellular connections with dynamic IPs, so there
+is no fixed range to scope to. Security is enforced at the service layer
+(WireGuard keys, TLS, dashboard auth), not by source filtering. This mirrors the
+exposure profile of the old server, which serves the same fleet today.
+**Do not add a public inbound rule for port 22** — SSH stays Bastion-only.
 
+| Port  | Proto | Source | Purpose                                                           |
+| ----- | ----- | ------ | ----------------------------------------------------------------- |
+| 80    | TCP   | Any (Let's Encrypt validators have no published ranges) | HTTP → Caddy (ACME challenges, redirect) |
+| 443   | TCP   | Any (all NetBird feeder clients + dashboard browsers)   | HTTPS — dashboard, NetBird mgmt/signal/relay gRPC+WS all ride 443 |
+| 443   | UDP   | Any (browsers; optional — omit if undesired)            | HTTP/3 (Caddy)                          |
+| 30004 | TCP   | Any (feeders, dynamic IPs)                              | Beast input from feeders                |
+| 30003 | TCP   | Scope to known consumer IPs, or omit if none            | SBS output                              |
+| 30005 | TCP   | Scope to known consumer IPs, or omit if none            | Beast output                            |
+| 30105 | TCP   | Any (feeders, dynamic IPs)                              | MLAT input                              |
+| 39001 | TCP   | Any (feeders, dynamic IPs)                              | MLAT results                            |
+| 9000  | TCP   | Scope to known MediaMTX IPs, or omit (KLV normally rides the VPN overlay) | KLV ingest |
+| 51820 | UDP   | Any (all NetBird peers, dynamic IPs)                    | WireGuard direct connections            |
+| 3478  | UDP   | Any (all NetBird peers, dynamic IPs)                    | STUN — published by `netbird-server`    |
+
+Minimal set for the migration to succeed: 80/tcp, 443/tcp, 30004/tcp,
+30105/tcp, 39001/tcp, 51820/udp, 3478/udp — all source Any. The rest can be
+added later if a consumer needs them.
 
 (No 49152–65535 TURN range needed — the source has no coturn container; relay
 traffic rides 443 through Caddy/nginx.)

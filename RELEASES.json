@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.412",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: add traffic-source column to the NSG rule table for the network admin — most ports need source Any (dynamic feeder IPs; service-layer auth), which ports can be scoped or omitted (30003/30005/9000), the minimal rule set for migration, and explicit no-public-22 instruction."
+    ]
+  },
+  {
     "version": "1.0.411",
     "date": "2026-07-08",
     "notes": [
