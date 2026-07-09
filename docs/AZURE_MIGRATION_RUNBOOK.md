@@ -485,5 +485,6 @@ before decommissioning.
 - Confirm `health-snapshot-host.timer` is active on Azure (`systemctl status health-snapshot-host.timer`) — `install.sh` sets it up.
 - Tailscale is confirmed active on the old host: install it on Azure (`dnf install tailscale`, `tailscale up`) or set `TAILSCALE_ENABLED=false` in `.env` if it's no longer needed.
 - Harden SSH on the Azure VM: Bastion-only access, `PasswordAuthentication no` (the old server accumulated 940 failed root login attempts on its public port 22).
+- Optional day-to-day SSH: once `netbird-client` is running, the VM is reachable at its overlay IP (`ssh atakuser@100.64.x.x`) from any enrolled peer — no NSG rule needed since WireGuard encapsulates it. Requires your admin device enrolled as a peer and an access policy allowing it to reach the aggregator on TCP 22 (default all-to-all policy already covers this). Keep Bastion as break-glass: the NetBird server runs on this same VM, so a NetBird outage takes SSH-over-NetBird down with it.
 - Snapshot the Azure VM once everything is verified (Portal → VM → Capture / disk snapshot) so you have a known-good restore point.
 

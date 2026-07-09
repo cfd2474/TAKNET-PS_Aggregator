@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.413",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: document SSH over the NetBird overlay (no NSG rule needed, requires enrolled admin device + access policy) with Bastion retained as break-glass since the NetBird server runs on the same VM."
+    ]
+  },
+  {
     "version": "1.0.412",
     "date": "2026-07-08",
     "notes": [
