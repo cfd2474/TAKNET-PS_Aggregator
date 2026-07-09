@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.411",
+    "date": "2026-07-08",
+    "notes": [
+      "Azure migration runbook: staged netbird-client container must be stopped immediately after creation — with DNS still pointing at the old server it connects to the live management plane and duels the old aggregator's client for the same peer identity, flapping the overlay IP that feeders send Beast/MLAT data to. Added stop command, explanation, and accidental-start recovery."
+    ]
+  },
+  {
     "version": "1.0.410",
     "date": "2026-07-08",
     "notes": [

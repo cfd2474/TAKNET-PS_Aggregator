@@ -340,12 +340,25 @@ sudo docker run -d --name netbird-client \
   -v netbird-client-data:/etc/netbird \
   --network host --restart unless-stopped \
   netbirdio/netbird:latest
+
+# CRITICAL: stop it immediately — it stays stopped until Phase 3 step 5.4
+sudo docker stop netbird-client
 ```
 
 Because `/etc/netbird/config.json` (private key + peer config) came from the old
-server, this container is the **same peer** with the **same overlay IP**. It will
-show disconnected until the NetBird server is live on Azure and DNS has flipped —
-that's expected.
+server, this container is the **same peer** with the **same overlay IP**.
+
+**Why it must be stopped until cutover:** DNS still points
+`netbird.tak-solutions.com` at the old server's live management plane, so if
+this container runs now it connects there and duels with the old server's
+still-running `netbird-client` for the same peer identity. The aggregator's
+overlay IP — the address every feeder sends Beast/MLAT data to — flaps between
+the two hosts, and traffic following the Azure endpoint dies against the stopped
+aggregator stack. If you started it by accident: `sudo docker stop
+netbird-client` on Azure, then on the old server run
+`docker exec netbird-client netbird status` to confirm it reclaims Management:
+Connected with its usual NetBird IP; disrupted feeders self-heal within a couple
+of minutes.
 
 ---
 
