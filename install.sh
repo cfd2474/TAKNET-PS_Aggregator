@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# TAKNET-PS Aggregator v1.0.373 — Installer
+# TAKNET-PS Aggregator v1.0.410 — Installer
 # Target: Rocky Linux 8.x / 9.x
 #
 # Install methods:
@@ -50,8 +50,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" 2>/dev/null && pwd
 CLEANUP_DIR=""
 
 # Use local repo only if script is being run directly from a real directory
-# (not piped via curl, which sets SCRIPT_DIR to cwd e.g. /root)
-if [ -f "$SCRIPT_DIR/docker-compose.yml" ] && [ "$SCRIPT_DIR" != "/root" ] && [ "$SCRIPT_DIR" != "/tmp" ]; then
+# (not piped via curl, which sets SCRIPT_DIR to cwd e.g. /root).
+# Verify the compose file is actually OURS — any unrelated docker-compose.yml
+# in cwd (e.g. a NetBird server project) must not be deployed as the aggregator.
+if [ -f "$SCRIPT_DIR/docker-compose.yml" ] \
+   && grep -q '^name: taknet-aggregator' "$SCRIPT_DIR/docker-compose.yml" 2>/dev/null \
+   && [ "$SCRIPT_DIR" != "/root" ] && [ "$SCRIPT_DIR" != "/tmp" ]; then
     SOURCE_DIR="$SCRIPT_DIR"
     ok "Running from local repo: $SOURCE_DIR"
 elif [ -f "$INSTALL_DIR/docker-compose.yml" ]; then

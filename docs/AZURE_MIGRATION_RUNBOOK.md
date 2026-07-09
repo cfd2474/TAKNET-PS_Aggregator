@@ -14,23 +14,25 @@ architecture migration needed, this is a straight host-to-host move).
 
 Feeders never point at a server IP. They are configured with:
 
-| What feeders use | Where it lives | Must survive the move |
-|---|---|---|
-| Management URL `https://netbird.tak-solutions.com` | Hardcoded in feeder image | DNS flips to Azure IP — nothing changes on feeders |
-| Their WireGuard peer identity | NetBird management database (`store.db` inside the NetBird server data volume) | **Copy the database. Never do a fresh NetBird install.** |
-| Aggregator overlay IP (Beast 30004 / MLAT 30105 targets, e.g. `100.64.x.x`) | `netbird-client-data` Docker volume (the aggregator's own peer identity) | **Copy this volume so the aggregator keeps the same overlay IP.** |
-| Aggregator dashboard/tunnel `https://adsb.tak-solutions.com` | DNS | DNS flips to Azure IP |
+
+| What feeders use                                                            | Where it lives                                                                 | Must survive the move                                             |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Management URL `https://netbird.tak-solutions.com`                          | Hardcoded in feeder image                                                      | DNS flips to Azure IP — nothing changes on feeders                |
+| Their WireGuard peer identity                                               | NetBird management database (`store.db` inside the NetBird server data volume) | **Copy the database. Never do a fresh NetBird install.**          |
+| Aggregator overlay IP (Beast 30004 / MLAT 30105 targets, e.g. `100.64.x.x`) | `netbird-client-data` Docker volume (the aggregator's own peer identity)       | **Copy this volume so the aggregator keeps the same overlay IP.** |
+| Aggregator dashboard/tunnel `https://adsb.tak-solutions.com`                | DNS                                                                            | DNS flips to Azure IP                                             |
+
 
 Three identities must move intact:
 
 1. **NetBird management data** — all peer registrations, groups, policies, setup
-   keys, and API tokens (`NETBIRD_API_TOKEN` in `.env` stays valid because PATs
+  keys, and API tokens (`NETBIRD_API_TOKEN` in `.env` stays valid because PATs
    live in this database).
 2. **Aggregator NetBird peer identity** — the `netbird-client-data` volume. If
-   this is lost, the aggregator gets a **new overlay IP** and every feeder's
+  this is lost, the aggregator gets a **new overlay IP** and every feeder's
    Beast/MLAT target breaks.
 3. **Aggregator database** — the `taknet-db-data` volume (`aggregator.db`:
-   feeders, users, outputs, tunnel registrations).
+  feeders, users, outputs, tunnel registrations).
 
 If all three move, feeders reconnect on their own after DNS cutover. Nothing is
 touched on any feeder.
@@ -58,35 +60,37 @@ Inventory was run on the old server (`104.225.219.254`, hostname
 `leckliter-takserver`). Confirmed facts, used throughout the rest of this
 runbook:
 
-| Item | Confirmed value |
-|---|---|
-| Old server public IP | `104.225.219.254` |
-| NetBird server compose dir (`$NB_DIR`) | **`/root`** — compose project name is `root` |
-| NetBird server container | `netbird-server` (`netbirdio/netbird-server:latest`), config `/etc/netbird/config.yaml`, publishes `3478/udp` + `127.0.0.1:8081->80` |
-| NetBird dashboard container | `netbird-dashboard` (`netbirdio/dashboard:latest`), publishes `127.0.0.1:8080->80` |
-| NetBird server data volume | `root_netbird_data` (also see stale-volume check below) |
-| Aggregator NetBird client container | **`netbird-client`** (`netbirdio/netbird:latest`, host network) — identity volume `netbird-client-data` |
-| Network attachment | `netbird-server` and `netbird-dashboard` are already joined to `taknet-internal` (nginx reaches them by container name) |
-| coturn | **None** — no separate coturn container; only `3478/udp` published by `netbird-server` |
-| Tailscale | **Active on the host** (`tailscaled` running) — must be installed on Azure too |
-| Authentik | Not installed |
+
+| Item                                   | Confirmed value                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Old server public IP                   | `104.225.219.254`                                                                                                                    |
+| NetBird server compose dir (`$NB_DIR`) | `**/root**` — compose project name is `root`                                                                                         |
+| NetBird server container               | `netbird-server` (`netbirdio/netbird-server:latest`), config `/etc/netbird/config.yaml`, publishes `3478/udp` + `127.0.0.1:8081->80` |
+| NetBird dashboard container            | `netbird-dashboard` (`netbirdio/dashboard:latest`), publishes `127.0.0.1:8080->80`                                                   |
+| NetBird server data volume             | `root_netbird_data` (also see stale-volume check below)                                                                              |
+| Aggregator NetBird client container    | `**netbird-client**` (`netbirdio/netbird:latest`, host network) — identity volume `netbird-client-data`                              |
+| Network attachment                     | `netbird-server` and `netbird-dashboard` are already joined to `taknet-internal` (nginx reaches them by container name)              |
+| coturn                                 | **None** — no separate coturn container; only `3478/udp` published by `netbird-server`                                               |
+| Tailscale                              | **Active on the host** (`tailscaled` running) — must be installed on Azure too                                                       |
+| Authentik                              | Not installed                                                                                                                        |
+
 
 **NetBird server file layout — CONFIRMED from `/root/docker-compose.yml` and
 `docker inspect netbird-server`:**
 
-- Live data volume: **`root_netbird_data`** (declared as plain `netbird_data:`
-  in the compose file; the `root_` prefix comes from the project name). The
-  other volume, `taknet-aggregator_netbird_data`, is a **stale leftover — do
-  not copy it**.
+- Live data volume: `**root_netbird_data**` (declared as plain `netbird_data:`
+in the compose file; the `root_` prefix comes from the project name). The
+other volume, `taknet-aggregator_netbird_data`, is a **stale leftover — do
+not copy it**.
 - Server config: **bind mount `/root/config.yaml`** → `/etc/netbird/config.yaml`.
-- Dashboard env: **`/root/dashboard.env`** (via `env_file`).
+- Dashboard env: `**/root/dashboard.env**` (via `env_file`).
 - Networks: the compose file declares `taknet-internal` as **external** and
-  joins both containers to it — no manual `docker network connect` needed on
-  Azure, but `taknet-internal` must already exist when NetBird starts (see 5.3).
+joins both containers to it — no manual `docker network connect` needed on
+Azure, but `taknet-internal` must already exist when NetBird starts (see 5.3).
 - Because `netbird_data` is a plain (non-external) volume declaration,
-  **`docker compose -p root` is mandatory on Azure** — without it, compose
-  creates an empty volume under a different name and serves an empty peer
-  database.
+`**docker compose -p root` is mandatory on Azure** — without it, compose
+creates an empty volume under a different name and serves an empty peer
+database.
 
 Files that must reach Azure: `docker-compose.yml`, `config.yaml`,
 `dashboard.env` (all in `/root`).
@@ -116,20 +120,22 @@ sudo modprobe wireguard && lsmod | grep wireguard
 **Azure NSG inbound rules** (Portal → VM → Networking), and the same on
 `firewalld` on the VM:
 
-| Port | Proto | Purpose |
-|---|---|---|
-| 22 | TCP | SSH (Bastion handles this; restrict source) |
-| 80 | TCP | HTTP → Caddy (ACME challenges, redirect) |
-| 443 | TCP | HTTPS — dashboard, NetBird mgmt/signal/relay gRPC+WS all ride 443 |
-| 443 | UDP | HTTP/3 (Caddy) |
-| 30004 | TCP | Beast input from feeders |
-| 30003 | TCP | SBS output |
-| 30005 | TCP | Beast output |
-| 30105 | TCP | MLAT input |
-| 39001 | TCP | MLAT results |
-| 9000 | TCP | KLV ingest (only if using MediaMTX/KLV) |
-| 51820 | UDP | WireGuard (NetBird client direct connections) |
-| 3478 | UDP | STUN — published by `netbird-server` (confirmed on source) |
+
+| Port  | Proto | Purpose                                                           |
+| ----- | ----- | ----------------------------------------------------------------- |
+| 22    | TCP   | SSH (Bastion handles this; restrict source)                       |
+| 80    | TCP   | HTTP → Caddy (ACME challenges, redirect)                          |
+| 443   | TCP   | HTTPS — dashboard, NetBird mgmt/signal/relay gRPC+WS all ride 443 |
+| 443   | UDP   | HTTP/3 (Caddy)                                                    |
+| 30004 | TCP   | Beast input from feeders                                          |
+| 30003 | TCP   | SBS output                                                        |
+| 30005 | TCP   | Beast output                                                      |
+| 30105 | TCP   | MLAT input                                                        |
+| 39001 | TCP   | MLAT results                                                      |
+| 9000  | TCP   | KLV ingest (only if using MediaMTX/KLV)                           |
+| 51820 | UDP   | WireGuard (NetBird client direct connections)                     |
+| 3478  | UDP   | STUN — published by `netbird-server` (confirmed on source)        |
+
 
 (No 49152–65535 TURN range needed — the source has no coturn container; relay
 traffic rides 443 through Caddy/nginx.)
@@ -198,13 +204,13 @@ On the **Azure VM**. Two gotchas baked into these commands (both hit on
 2026-07-08):
 
 - **Absolute key path:** the rsyncs run under `sudo`, where `~` resolves to
-  `/root`, not your login user's home. Use the absolute path to the key or SSH
-  silently falls back to password prompts.
+`/root`, not your login user's home. Use the absolute path to the key or SSH
+silently falls back to password prompts.
 - **No `-A -X` flags:** `-X` tries to copy SELinux xattrs from the old server;
-  the destination SELinux policy blocks that (rsync exit code 23,
-  `lremovexattr ... Permission denied`) and cross-host labels are wrong anyway.
-  Use `-aH` and run `restorecon` on volume data so files get correct local
-  labels.
+the destination SELinux policy blocks that (rsync exit code 23,
+`lremovexattr ... Permission denied`) and cross-host labels are wrong anyway.
+Use `-aH` and run `restorecon` on volume data so files get correct local
+labels.
 
 ```bash
 OLD=root@104.225.219.254
@@ -276,14 +282,32 @@ sudo docker compose -p root config >/dev/null && echo OK
 
 ### 4.2 Aggregator
 
+Run the installer **from your home directory, not from `/opt/netbird`** — when
+piped through curl, installer versions before v1.0.410 treated any
+`docker-compose.yml` in the current directory as the aggregator repo and would
+deploy the NetBird server files into `/opt/taknet-aggregator` by mistake (fixed
+in v1.0.410, but `cd ~` first regardless):
+
 ```bash
+cd ~
 curl -sSL https://raw.githubusercontent.com/cfd2474/TAKNET-PS_Aggregator/main/install.sh | sudo bash
+```
+
+Expect `Cloning from GitHub...` and a real version number in the output. If it
+says `Running from local repo` with `Version: vunknown`, stop — it picked up the
+wrong directory. Recover with:
+
+```bash
+sudo docker network rm taknet-aggregator_netbird 2>/dev/null
+sudo rm -rf /opt/taknet-aggregator
+cd ~   # then re-run the installer
 ```
 
 The installer preserves the `.env` you rsynced, deploys to
 `/opt/taknet-aggregator`, and starts the stack. That's fine — the aggregator can
-run on Azure ahead of cutover; nothing points at it yet. Then stop it again so
-the final data sync is clean:
+run on Azure ahead of cutover; nothing points at it yet. (If the installer
+created a default `.env` instead of preserving the copied one, re-run the Phase 1
+step 2 rsync now.) Then stop the stack again so the final data sync is clean:
 
 ```bash
 cd /opt/taknet-aggregator && sudo docker compose down
@@ -421,7 +445,7 @@ The old server is untouched — its data was only ever *read*. If Azure
 misbehaves:
 
 1. On the old server, same order as cutover (aggregator first — it owns the
-   `taknet-internal` network): `cd /opt/taknet-aggregator && docker compose up -d`,
+  `taknet-internal` network): `cd /opt/taknet-aggregator && docker compose up -d`,
    then `cd /root && docker compose up -d` (NetBird server), then
    `docker start netbird-client`.
 2. Flip both DNS A records back to the old IP.
@@ -440,3 +464,4 @@ before decommissioning.
 - Tailscale is confirmed active on the old host: install it on Azure (`dnf install tailscale`, `tailscale up`) or set `TAILSCALE_ENABLED=false` in `.env` if it's no longer needed.
 - Harden SSH on the Azure VM: Bastion-only access, `PasswordAuthentication no` (the old server accumulated 940 failed root login attempts on its public port 22).
 - Snapshot the Azure VM once everything is verified (Portal → VM → Capture / disk snapshot) so you have a known-good restore point.
+

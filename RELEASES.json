@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.410",
+    "date": "2026-07-08",
+    "notes": [
+      "install.sh: fix local-repo detection — require the docker-compose.yml to declare 'name: taknet-aggregator' before treating the current directory as the repo. Previously, piping the installer while sitting in any directory with a compose file (e.g. a staged NetBird server project) deployed those foreign files to /opt/taknet-aggregator.",
+      "Azure migration runbook: run the installer from the home directory, how to recognize the wrong-directory failure (Version: vunknown), and recovery steps."
+    ]
+  },
+  {
     "version": "1.0.409",
     "date": "2026-07-08",
     "notes": [
