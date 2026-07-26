@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.415",
+    "date": "2026-07-25",
+    "notes": [
+      "/tar1090d redirect uses a relative Location so HTTPS is preserved behind Caddy."
+    ]
+  },
+  {
     "version": "1.0.414",
     "date": "2026-07-25",
     "notes": [
