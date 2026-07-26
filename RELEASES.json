@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.414",
+    "date": "2026-07-25",
+    "notes": [
+      "Add /tar1090d short URL for the tar1090 Direct view (local feeders only); /tar1090/ remains the merged All view."
+    ]
+  },
+  {
     "version": "1.0.413",
     "date": "2026-07-08",
     "notes": [
