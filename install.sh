@@ -91,7 +91,7 @@ info "Deploying to ${INSTALL_DIR}..."
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"
 
 if command -v rsync &>/dev/null; then
-    rsync -a --exclude='.git' "$SOURCE_DIR/" "$INSTALL_DIR/"
+    rsync -a --exclude='.git' --exclude='ARCHIVE/' --exclude='.venv/' --exclude='__pycache__/' "$SOURCE_DIR/" "$INSTALL_DIR/"
 else
     shopt -s dotglob
     cp -a "$SOURCE_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true

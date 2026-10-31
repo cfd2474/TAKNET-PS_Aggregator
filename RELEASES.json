@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.416",
+    "date": "2026-10-31",
+    "notes": [
+      "Repo cleanup: remove unused taknet-api/ (superseded by api-server/) and v139_work/ snapshot; untrack accidentally committed .venv and __pycache__.",
+      "Remove unused NATO Friend Air icon set and the unreferenced /api/nato-icons and /api/ps-air-icons endpoints (PS Air icons on the COTProxy page are unaffected).",
+      "Add .dockerignore to custom images; installer no longer copies ARCHIVE/, .venv/ or __pycache__/ into the install dir."
+    ]
+  },
+  {
     "version": "1.0.415",
     "date": "2026-07-25",
     "notes": [
