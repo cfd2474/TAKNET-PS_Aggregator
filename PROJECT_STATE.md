@@ -45,7 +45,7 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 - Stale docs: README says v1.0.373 and "seven containers"; the root `*.md` notes have not been reviewed for currency.
 
 ## Known bugs / open items
-1. `web/routes/feeder_tunnel.py:470`: the NetBird fast path sends dashboard traffic to feeder :5000. It should go to :80 (nginx), because feeder `/fr24/` and `/piaware/` return 404 otherwise. This mirrors the feeder v3.1.10 fix.
+1. ~~NetBird fast path sends dashboard traffic to :5000~~: fixed in v1.0.417.
 2. Compose publishes dashboard `9000:9000`. That port is the KLV listener, not the UI. This is intentional, but the label is misleading.
 3. Planned with the feeder agent, not started: "Chunk E", per-feeder hostnames `<feeder>.feeders.tak-solutions.com`. Most of the work is on the aggregator side (DB column, single-host auth token, Caddy on-demand TLS with an `ask` guard, nginx vhost). Details are in the feeder repo's PROJECT_STATE.md.
 
@@ -54,7 +54,12 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 - Python changes need `docker compose up -d --build`.
 - CLAUDE.md §6 and §8 (the Android reference, `docs/REMOTE_SERVER.md` and host 209.182.235.108) were copied from another project and do not apply here. How to reach this project's production host is not documented yet.
 
-## Completed — Chunk A: repo cleanup (v1.0.416, committed locally, NOT pushed)
+## Completed — Chunk B: NetBird fast-path port fix (v1.0.417, pushed with A on 2026-10-31)
+- `_proxy_to_feeder` now sends dashboard traffic to feeder nginx :80, with a fallback to :5000 only on connection refused. Timeouts return 503 without a retry. tar1090 traffic still goes to :8080.
+- Verified with py_compile and a stubbed-session test of all four branches. Not yet exercised against a real NetBird feeder.
+- Risk: if a feeder's nginx emits absolute `Location`/URLs without a port, the existing :8080/:8082 rewrites won't catch them. The relay tunnel path (feeder v3.1.10) has the same exposure.
+
+## Completed — Chunk A: repo cleanup (v1.0.416, pushed 2026-10-31)
 Verified: py_compile on all web/ Python, `bash -n install.sh`, `docker compose config -q`, and no remaining references to the removed code. The images have not been rebuilt or deployed.
 Note: `CLAUDE.md` has never been tracked in git. It is left untracked until §6/§8 are fixed (Chunk C).
 

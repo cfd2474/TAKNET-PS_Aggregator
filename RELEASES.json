@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.417",
+    "date": "2026-10-31",
+    "notes": [
+      "Feeder web view over NetBird: dashboard requests now go to the feeder's nginx (:80) instead of Flask (:5000), fixing 404s on /fr24/ and /piaware/; falls back to :5000 if nginx refuses the connection."
+    ]
+  },
+  {
     "version": "1.0.416",
     "date": "2026-10-31",
     "notes": [

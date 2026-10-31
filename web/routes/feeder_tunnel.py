@@ -467,24 +467,32 @@ def _proxy_to_feeder(feeder: dict | None, feeder_id: str, path: str, method: str
     if feeder and feeder.get("conn_type") == "netbird" and feeder.get("ip_address"):
         ip = feeder["ip_address"]
         target = headers.get("X-Tunnel-Target", "dashboard")
-        port = 8080 if target == "tar1090" else 5000
-        url = f"http://{ip}:{port}{path}"
-        
+        # Dashboard goes to the feeder's nginx (:80), which also serves /fr24/, /piaware/ and
+        # static assets; Flask (:5000) alone 404s on those. Fall back to :5000 only when nginx
+        # refuses the connection, mirroring the feeder tunnel client (feeder v3.1.10).
+        ports = (8080,) if target == "tar1090" else (80, 5000)
+
         req_headers = dict(headers)
         req_headers.pop("Host", None)
-        
-        try:
-            r = _TUNNEL_HTTP.request(
-                method=method,
-                url=url,
-                headers=req_headers,
-                data=raw_body,
-                timeout=PROXY_TIMEOUT,
-                allow_redirects=False
-            )
-            return r.status_code, dict(r.headers), r.content
-        except requests.RequestException:
-            return 503, {}, None
+
+        for port in ports:
+            try:
+                r = _TUNNEL_HTTP.request(
+                    method=method,
+                    url=f"http://{ip}:{port}{path}",
+                    headers=req_headers,
+                    data=raw_body,
+                    timeout=PROXY_TIMEOUT,
+                    allow_redirects=False
+                )
+                return r.status_code, dict(r.headers), r.content
+            except requests.Timeout:  # before ConnectionError: ConnectTimeout is both
+                return 503, {}, None
+            except requests.ConnectionError:
+                continue
+            except requests.RequestException:
+                return 503, {}, None
+        return 503, {}, None
 
     url = f"{TUNNEL_SERVICE_URL.rstrip('/')}/proxy"
     payload = {
