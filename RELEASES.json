@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.418",
+    "date": "2026-10-31",
+    "notes": [
+      "Docs only: Azure migration runbook marked cancelled (kept for its host inventory); PROJECT_STATE.md updated. No code changes."
+    ]
+  },
+  {
     "version": "1.0.417",
     "date": "2026-10-31",
     "notes": [

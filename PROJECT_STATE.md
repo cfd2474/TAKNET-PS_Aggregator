@@ -33,7 +33,7 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 - Inbound over NetBird to the feeder: :5000, :80, :8080, :8081, :8082, :8754, through `/feeder-view/` and the NetBird fast path.
 - Tailscale on the feeder is personal remote access only. It is no longer an aggregator link.
 
-## Dead / unused (identified, NOT yet removed)
+## Dead / unused (removed in v1.0.416, except the local ARCHIVE/ and .db files and the README)
 - `taknet-api/`: superseded by `api-server/`. Nothing builds it.
 - `v139_work/`: an old snapshot. It is still rsynced into /opt by `install.sh:94`.
 - `ARCHIVE/*.tar.gz`: gitignored local tarballs.
@@ -47,12 +47,13 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 ## Known bugs / open items
 1. ~~NetBird fast path sends dashboard traffic to :5000~~: fixed in v1.0.417.
 2. Compose publishes dashboard `9000:9000`. That port is the KLV listener, not the UI. This is intentional, but the label is misleading.
-3. Planned with the feeder agent, not started: "Chunk E", per-feeder hostnames `<feeder>.feeders.tak-solutions.com`. Most of the work is on the aggregator side (DB column, single-host auth token, Caddy on-demand TLS with an `ask` guard, nginx vhost). Details are in the feeder repo's PROJECT_STATE.md.
+3. The update paths (Config → Updates and `taknet-agg update`) fetch GitHub anonymously, but the repo is private, so they may fail. Unverified.
+4. Planned with the feeder agent, not started: "Chunk E", per-feeder hostnames `<feeder>.feeders.tak-solutions.com`. Most of the work is on the aggregator side (DB column, single-host auth token, Caddy on-demand TLS with an `ask` guard, nginx vhost). Details are in the feeder repo's PROJECT_STATE.md.
 
 ## Constraints
 - Release rule (`.cursor/rules/release-checklist.mdc`): every push bumps `VERSION`, `web/VERSION`, `RELEASES.json` (new entry at the top, using the `notes` key) and the `env.example` header. Tarballs are never committed.
 - Python changes need `docker compose up -d --build`.
-- CLAUDE.md §6 and §8 (the Android reference, `docs/REMOTE_SERVER.md` and host 209.182.235.108) were copied from another project and do not apply here. How to reach this project's production host is not documented yet.
+- CLAUDE.md §6 and §8 were copied from another project. §8's host 209.182.235.108 is the sim_sensor server. The production host for this project (104.225.219.254) is now documented in `docs/REMOTE_SERVER.md` (2026-10-31, compiled from docs, no access exercised).
 
 ## Completed — Chunk B: NetBird fast-path port fix (v1.0.417, pushed with A on 2026-10-31)
 - `_proxy_to_feeder` now sends dashboard traffic to feeder nginx :80, with a fallback to :5000 only on connection refused. Timeouts return 503 without a retry. tar1090 traffic still goes to :8080.
@@ -73,3 +74,4 @@ Out of scope: the local untracked `ARCHIVE/*.tar.gz` and `*.db` files (gitignore
 
 ## Decisions
 - 2026-10-31: no deletions until the operator approves a cleanup chunk.
+- 2026-10-31, operator: the **Azure migration is cancelled**, and 104.225.219.254 stays production. The runbook is kept for its host inventory and marked cancelled.

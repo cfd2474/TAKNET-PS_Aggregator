@@ -11,3 +11,6 @@ taknet.db
 .cursor/
 .venv/
 __pycache__/
+
+# Server access details (root SSH, host layout) — local only; repo is public
+docs/REMOTE_SERVER.md

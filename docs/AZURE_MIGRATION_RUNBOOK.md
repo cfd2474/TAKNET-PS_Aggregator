@@ -1,5 +1,9 @@
 # Azure Migration Runbook — Aggregator + Self-Hosted NetBird
 
+> **CANCELLED 2026-10-31.** The migration will not happen, and `104.225.219.254` stays the
+> production host. This file is kept for its §2.2 inventory of that host, which is still
+> accurate. Do not follow the Azure steps. Current access details are in `docs/REMOTE_SERVER.md`.
+
 **Goal:** Move the TAKNET-PS Aggregator and the self-hosted NetBird server from the
 current Rocky 8 dev server to the new Rocky 9 Azure server, **without any feeder
 needing to be re-enrolled or reconfigured**.
