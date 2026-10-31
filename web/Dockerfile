@@ -14,4 +14,6 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "1", "--timeout", "120", "--keep-alive", "75", "app:app"]
+# One worker keeps APScheduler/KLV singletons; gthread lets long SSE streams (update log)
+# run without blocking other requests or tripping the worker timeout.
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "1", "-k", "gthread", "--threads", "8", "--timeout", "120", "--keep-alive", "75", "app:app"]

@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.419",
+    "date": "2026-10-31",
+    "notes": [
+      "Config → Updates no longer reports 'Update Failed' for successful updates: the dashboard now runs gunicorn with threads, so the live update log is not killed by the 120 s worker timeout (and no longer blocks other dashboard requests while open).",
+      "Web UI updates are recorded in Update History again (with the correct from-version): the updater writes its result to var/update_result.json and the restarted dashboard records it. The page waits for that result instead of guessing from the connection.",
+      "Web UI updates now rebuild every locally built service (previously tunnel, aircraft-merger and adsbhub-feeder changes were never deployed by the Updates button).",
+      "The updater container is named taknet-updater and kept for `docker logs taknet-updater` until the next run; a second update cannot start while one is running."
+    ]
+  },
+  {
     "version": "1.0.418",
     "date": "2026-10-31",
     "notes": [

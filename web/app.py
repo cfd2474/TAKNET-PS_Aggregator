@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
@@ -10,6 +11,7 @@ from flask_login import LoginManager, UserMixin, current_user
 from models import mark_stale_feeders, ActivityModel, UserModel
 from services.health_snapshot import collect_health_snapshot
 from services.cert_monitor import check_caddy_certs_job
+from services.update_result import record_update_result
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +143,10 @@ def create_app():
     scheduler.add_job(collect_health_snapshot, "interval", seconds=30, id="health_snapshot")
     scheduler.add_job(UserModel.seed_default, "interval", minutes=1, id="seed_user")
     scheduler.add_job(check_caddy_certs_job, "interval", minutes=15, id="caddy_certs_check")
+    # The updater's result file can land after this process starts (it writes on exit,
+    # after recreating us), so poll it rather than reading it once.
+    scheduler.add_job(record_update_result, "interval", seconds=30, id="update_result",
+                      next_run_time=datetime.now())
 
     def _run_cot_sender():
         import threading

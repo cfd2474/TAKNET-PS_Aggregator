@@ -47,13 +47,29 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 ## Known bugs / open items
 1. ~~NetBird fast path sends dashboard traffic to :5000~~: fixed in v1.0.417.
 2. Compose publishes dashboard `9000:9000`. That port is the KLV listener, not the UI. This is intentional, but the label is misleading.
-3. The update paths (Config → Updates and `taknet-agg update`) fetch GitHub anonymously, but the repo is private, so they may fail. Unverified.
-4. Planned with the feeder agent, not started: "Chunk E", per-feeder hostnames `<feeder>.feeders.tak-solutions.com`. Most of the work is on the aggregator side (DB column, single-host auth token, Caddy on-demand TLS with an `ask` guard, nginx vhost). Details are in the feeder repo's PROJECT_STATE.md.
+3. ~~Update paths blocked because the repo was private~~: the repo was made **public** on 2026-10-31 (operator decision). Anonymous raw fetch and clone verified working. `docs/REMOTE_SERVER.md` is gitignored and stays local.
+4. The dashboard updater only builds `dashboard beast-proxy mlat-server api` (`web/routes/api.py:98`), so changes to tunnel, aircraft-merger and adsbhub-feeder never deploy through Config → Updates.
+5. **Config → Updates reports "Update Failed" even though the update succeeds** (diagnosed 2026-10-31 on the v1.0.418 update):
+   - The dashboard runs a single gunicorn **sync** worker with `--timeout 120` (`web/Dockerfile:17`). The SSE stream `/api/updates/stream` holds that worker for the whole build, which took 3.5 min. Gunicorn kills the worker at 120 s, the stream drops before `pre_restart`, and the UI shows "Connection lost unexpectedly".
+   - The `docker:cli` updater container finishes independently: `DONE:1.0.418`, and the fix is confirmed in the running dashboard.
+   - Side effects: the `_run_update` thread dies, so no `update_history` row is written and the updater container is left behind (`vibrant_perlman`). Even without the kill, `up -d` recreates the dashboard and would also kill that thread. While a stream is open, the single sync worker also blocks every other dashboard request.
+   - Only 1 web-UI update has ever been recorded (2026-02-23) out of 97; the operator has used `taknet-agg update`.
+   - Fixed in v1.0.419 (Chunk D). Verified: the updater exit trap was tested in the real `docker:cli` image (success and failure both write valid JSON), and idempotent recording was tested against a scratch DB. The app boots locally.
+   - **Inferred**: the worker-timeout log line was lost when the dashboard container was recreated. The timeline fits exactly.
+6. Planned with the feeder agent, not started: "Chunk E", per-feeder hostnames `<feeder>.feeders.tak-solutions.com`. Most of the work is on the aggregator side (DB column, single-host auth token, Caddy on-demand TLS with an `ask` guard, nginx vhost). Details are in the feeder repo's PROJECT_STATE.md.
 
 ## Constraints
 - Release rule (`.cursor/rules/release-checklist.mdc`): every push bumps `VERSION`, `web/VERSION`, `RELEASES.json` (new entry at the top, using the `notes` key) and the `env.example` header. Tarballs are never committed.
 - Python changes need `docker compose up -d --build`.
 - CLAUDE.md §6 and §8 were copied from another project. §8's host 209.182.235.108 is the sim_sensor server. The production host for this project (104.225.219.254) is now documented in `docs/REMOTE_SERVER.md` (2026-10-31, compiled from docs, no access exercised).
+
+## Chunk D: make Config → Updates reliable (approved 2026-10-31). Code done in v1.0.419; deploy + end-to-end UI test pending
+1. Gunicorn: switch to the `gthread` worker with threads, so the SSE stream isn't killed at 120 s and doesn't block other requests. Keep 1 worker (APScheduler/KLV must stay singletons). Check thread safety of `models.py`/SQLite and the module globals first.
+2. Record the update outcome from inside the updater script (a marker file), and have the new dashboard log the `update_history` row on startup.
+3. The updater builds all locally-built services (plain `docker compose build`), not just 4.
+4. Name the updater container `taknet-updater`: keep the last one for its logs, replace it on the next run, refuse to start while one is running. Remove the leftover `vibrant_perlman` on the host.
+5. UI: if the stream drops before `pre_restart`, poll the version instead of declaring failure.
+6. Bump to v1.0.419, verify, push, deploy, and run a full web-UI update to confirm it completes and is recorded.
 
 ## Completed — Chunk B: NetBird fast-path port fix (v1.0.417, pushed with A on 2026-10-31)
 - `_proxy_to_feeder` now sends dashboard traffic to feeder nginx :80, with a fallback to :5000 only on connection refused. Timeouts return 503 without a retry. tar1090 traffic still goes to :8080.
@@ -73,5 +89,6 @@ Note: `CLAUDE.md` has never been tracked in git. It is left untracked until §6/
 Out of scope: the local untracked `ARCHIVE/*.tar.gz` and `*.db` files (gitignored operator data, left on disk), the README rewrite, and the port bug (Chunk B).
 
 ## Decisions
+- 2026-10-31, operator: SSH as root to the production host is authorized for investigation (password kept in the gitignored `docs/REMOTE_SERVER.md`).
 - 2026-10-31: no deletions until the operator approves a cleanup chunk.
 - 2026-10-31, operator: the **Azure migration is cancelled**, and 104.225.219.254 stays production. The runbook is kept for its host inventory and marked cancelled.

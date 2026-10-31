@@ -591,10 +591,19 @@ class UpdateModel:
         conn.close()
 
     @staticmethod
+    def has_output(output):
+        conn = get_db()
+        row = conn.execute(
+            "SELECT 1 FROM update_history WHERE output = ? LIMIT 1", (output,)
+        ).fetchone()
+        conn.close()
+        return row is not None
+
+    @staticmethod
     def get_history(limit=6):
         conn = get_db()
         rows = conn.execute(
-            "SELECT * FROM update_history ORDER BY timestamp DESC LIMIT ?",
+            "SELECT * FROM update_history ORDER BY timestamp DESC, id DESC LIMIT ?",
             (limit,),
         ).fetchall()
         conn.close()

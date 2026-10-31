@@ -71,6 +71,16 @@ const currentVersion = '{{ version }}';
 let eventSource = null;
 let preRestartSeen = false;
 let reconnectTimer = null;
+let historyBaselineId = null;   // newest update_history id before this run
+let resultDeadline = 0;
+const RESULT_WAIT_MS = 20 * 60 * 1000;
+
+async function latestHistoryRow() {
+    const r = await fetch('/api/updates/history?limit=1', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    return (d.history && d.history[0]) || null;
+}
 
 async function checkUpdate() {
     const el = document.getElementById('latest-version');
@@ -124,6 +134,10 @@ async function runUpdate() {
     openModal();
     preRestartSeen = false;
     try {
+        const last = await latestHistoryRow();
+        historyBaselineId = last ? last.id : null;
+    } catch(e) { historyBaselineId = null; }
+    try {
         const r = await fetch('/api/updates/run', { method: 'POST' });
         const d = await r.json();
         if (!d.success) { setModalError(d.error || 'Failed to start update'); return; }
@@ -152,31 +166,38 @@ function startStream() {
     };
     eventSource.onerror = function() {
         eventSource.close();
-        // Give a 500ms grace period — pre_restart event and onerror can race
-        // if the container restarts before the browser fully processes the event.
-        setTimeout(function() {
-            if (preRestartSeen) {
-                setModalStatus('Dashboard restarting — reconnecting...', '#eab308');
-                pollUntilBack();
-            } else {
-                setModalError('Connection lost unexpectedly. Check server logs.');
-            }
-        }, 500);
+        // The live log ends when the dashboard is recreated (or the connection drops).
+        // The updater keeps running server-side and records its outcome in Update History,
+        // so wait for that row rather than guessing from the connection state.
+        setModalStatus(preRestartSeen
+            ? 'Dashboard restarting — waiting for the update result...'
+            : 'Live log disconnected — waiting for the update result...', '#eab308');
+        resultDeadline = Date.now() + RESULT_WAIT_MS;
+        pollForResult();
     };
 }
 
-function pollUntilBack() {
+function pollForResult() {
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(async function() {
         try {
-            const r = await fetch('/api/status', { cache: 'no-store' });
-            if (r.ok) {
-                setModalDone('Update complete — reloading...');
-                setTimeout(() => window.location.reload(), 1000);
+            const row = await latestHistoryRow();
+            if (row && row.id !== historyBaselineId) {
+                if (row.success) {
+                    setModalDone('Update complete: v' + row.from_version + ' → v' + row.to_version + ' — reloading...');
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    setModalError('Update failed (v' + row.from_version + '). See server logs: docker logs taknet-updater');
+                }
+                return;
             }
-            else { pollUntilBack(); }
-        } catch(e) { pollUntilBack(); }
-    }, 2500);
+        } catch(e) { /* dashboard still restarting */ }
+        if (Date.now() > resultDeadline) {
+            setModalError('No update result after 20 minutes. Check Update History and server logs.');
+            return;
+        }
+        pollForResult();
+    }, 3000);
 }
 
 function openModal() {

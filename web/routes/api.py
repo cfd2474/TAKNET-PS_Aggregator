@@ -23,6 +23,7 @@ from services.docker_service import (get_containers, restart_container, get_logs
                                       get_caddy_status, get_caddy_certs, force_renew_caddy_cert)
 from services.vpn_service import get_combined_status
 from services.health_snapshot import get_health_history, get_host_snapshot
+from services.update_result import record_update_result
 from routes.auth_utils import login_required_any, network_admin_required, admin_required
 from flask_login import current_user
 
@@ -42,6 +43,19 @@ _start_time = time.time()
 # ── Update streaming state ────────────────────────────────────────────────────
 _update_queue = queue.Queue()
 _update_running = False
+_update_lock = threading.Lock()
+UPDATER_CONTAINER_NAME = "taknet-updater"
+
+
+def _updater_container_running():
+    """True if an updater from a previous dashboard process is still running."""
+    client = _get_docker_client()
+    if not client:
+        return False
+    try:
+        return client.containers.get(UPDATER_CONTAINER_NAME).status == "running"
+    except Exception:
+        return False
 
 
 def _run_update():
@@ -54,16 +68,7 @@ def _run_update():
             if line:
                 _update_queue.put({"type": log_type, "msg": line})
 
-    old_ver = "unknown"
-    new_ver = "unknown"
-
     try:
-        # Read current version from .env-mounted path
-        try:
-            old_ver = open(os.path.join(INSTALL_DIR, "VERSION")).read().strip()
-        except Exception:
-            pass
-
         client = _get_docker_client()
         if not client:
             log("Docker not available", "error")
@@ -74,10 +79,23 @@ def _run_update():
         except Exception:
             pass
 
+        run_id = str(int(time.time()))
         # Shell script that runs entirely inside docker:cli which has INSTALL_DIR
         # bind-mounted from the host — so all file writes land on the host filesystem.
+        # The EXIT trap writes the outcome to var/update_result.json, because the restart
+        # below recreates this dashboard and kills the thread that launched the script.
         script = f"""
 set -e
+RUN_ID={run_id}
+OLD_VER=$(cat {INSTALL_DIR}/VERSION 2>/dev/null || echo unknown)
+NEW_VER=unknown
+write_result() {{
+    rc=$?
+    ok=false; [ "$rc" -eq 0 ] && ok=true
+    mkdir -p {INSTALL_DIR}/var
+    printf '{{"id":"%s","from":"%s","to":"%s","success":%s}}\\n' "$RUN_ID" "$OLD_VER" "$NEW_VER" "$ok" > {INSTALL_DIR}/var/update_result.json
+}}
+trap write_result EXIT
 echo "Cloning https://github.com/{GITHUB_REPO}.git ..."
 TMPDIR=$(mktemp -d)
 git clone --depth 1 https://github.com/{GITHUB_REPO}.git $TMPDIR/repo
@@ -95,7 +113,7 @@ echo "Pulling updated images..."
 cd {INSTALL_DIR}
 docker compose pull 2>&1
 echo "Building local images..."
-docker compose build dashboard beast-proxy mlat-server api 2>&1
+docker compose build 2>&1
 echo "PRE_RESTART"
 sleep 3
 echo "Restarting containers..."
@@ -109,14 +127,21 @@ echo "DONE:$NEW_VER"
             "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
             INSTALL_DIR:            {"bind": INSTALL_DIR,            "mode": "rw"},
         }
+        # updates_run() has already refused if a container by this name is running.
+        try:
+            client.containers.get(UPDATER_CONTAINER_NAME).remove(force=True)
+        except Exception:
+            pass
         compose_container = client.containers.create(
             "docker:cli",
             command=["sh", "-c", script],
             volumes=volumes,
             working_dir=INSTALL_DIR,
+            name=UPDATER_CONTAINER_NAME,
         )
         compose_container.start()
 
+        new_ver = "unknown"
         for chunk in compose_container.logs(stream=True, follow=True):
             line = chunk.decode("utf-8", errors="replace").strip()
             if line.startswith("DONE:"):
@@ -126,19 +151,17 @@ echo "DONE:$NEW_VER"
             elif line:
                 log(line)
 
+        # Reached only when the restart did not recreate this dashboard. The container is
+        # kept for `docker logs taknet-updater` and replaced by the next run.
         result = compose_container.wait()
+        exit_code = result.get("StatusCode", -1)
         try:
-            compose_container.remove()
+            record_update_result()
         except Exception:
             pass
-        exit_code = result.get("StatusCode", -1)
 
         if exit_code == 0:
-            try:
-                UpdateModel.log_update(old_ver, new_ver, True, "Updated via web UI")
-            except Exception:
-                pass
-            log(f"✓ Update complete: v{old_ver} → v{new_ver}", "done")
+            log(f"✓ Update complete: v{new_ver}", "done")
         else:
             log(f"docker:cli exited with code {exit_code}", "error")
 
@@ -1001,9 +1024,10 @@ def updates_check():
 def updates_run():
     """Kick off the update process in a background thread."""
     global _update_running
-    if _update_running:
-        return jsonify({"error": "Update already in progress"}), 409
-    _update_running = True
+    with _update_lock:
+        if _update_running or _updater_container_running():
+            return jsonify({"error": "Update already in progress"}), 409
+        _update_running = True
     while not _update_queue.empty():
         try:
             _update_queue.get_nowait()
