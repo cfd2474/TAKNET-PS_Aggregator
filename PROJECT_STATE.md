@@ -63,7 +63,7 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 - Python changes need `docker compose up -d --build`.
 - CLAUDE.md §6 and §8 were copied from another project. §8's host 209.182.235.108 is the sim_sensor server. The production host for this project (104.225.219.254) is now documented in `docs/REMOTE_SERVER.md` (2026-10-31, compiled from docs, no access exercised).
 
-## Chunk D: make Config → Updates reliable (approved 2026-10-31). Code done in v1.0.419; deploy + end-to-end UI test pending
+## Chunk D: make Config → Updates reliable (approved 2026-10-31). v1.0.419 deployed 2026-10-31 via `taknet-agg update` (gthread worker confirmed, CoT flowing, leftover `vibrant_perlman` removed). Pending: operator runs the Updates page to v1.0.420 as the end-to-end test
 1. Gunicorn: switch to the `gthread` worker with threads, so the SSE stream isn't killed at 120 s and doesn't block other requests. Keep 1 worker (APScheduler/KLV must stay singletons). Check thread safety of `models.py`/SQLite and the module globals first.
 2. Record the update outcome from inside the updater script (a marker file), and have the new dashboard log the `update_history` row on startup.
 3. The updater builds all locally-built services (plain `docker compose build`), not just 4.

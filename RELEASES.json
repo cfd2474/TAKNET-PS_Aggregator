@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.420",
+    "date": "2026-10-31",
+    "notes": [
+      "Docs only: PROJECT_STATE.md records the v1.0.419 deployment. Use this release to confirm a Config → Updates run completes and appears in Update History."
+    ]
+  },
+  {
     "version": "1.0.419",
     "date": "2026-10-31",
     "notes": [
