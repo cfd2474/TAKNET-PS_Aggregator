@@ -8,18 +8,11 @@ import os
 from services.mail_client import ResendMailClient, get_resend_from_email
 
 
-def send_output_paused_notification(output_id: int, output_name: str) -> None:
-    """Send notification email to the output creator when a CoT output is paused.
+OUTPUTS_URL = "https://adsb.tak-solutions.com/outputs"
 
-    Safe to call: failures are logged and not re-raised.
-    """
-    from models import OutputModel, UserModel
 
-    # Use a dummy user_id/role since we need a single output without permission checks
-    # OutputModel.get_by_id checks permissions, but we are in a background worker.
-    # We can use direct DB query or an "admin" context if we had one.
-    # Let's use get_for_user with admin role to find it.
-    output = None
+def _output_creator(output_id: int) -> dict | None:
+    """The output row joined with its creator's email and name, or None."""
     try:
         from models import get_db
         conn = get_db()
@@ -31,34 +24,33 @@ def send_output_paused_notification(output_id: int, output_name: str) -> None:
             (output_id,)
         ).fetchone()
         conn.close()
-        if row:
-            output = dict(row)
+        return dict(row) if row else None
     except Exception as e:
         print(f"[output_watchdog_email] Failed to fetch output/user for id {output_id}: {e}")
-        return
+        return None
 
+
+def _send_to_creator(output_id: int, subject: str, heading: str, color: str, paragraphs: list[str]) -> bool:
+    """Email the output's creator. paragraphs are plain text. Returns True if Resend accepted it.
+
+    Safe to call: failures are logged and not re-raised.
+    """
+    output = _output_creator(output_id)
     if not output:
-        return
-
+        return False
     to = (output.get("email") or "").strip()
     if not to:
-        return
+        return False
 
     mail = ResendMailClient.from_env()
     if not mail.enabled or not mail.api_key:
-        return
+        return False
 
-    site_name = (os.environ.get("SITE_NAME") or "TAKNET-PS Aggregator").strip()
-    outputs_url = "https://adsb.tak-solutions.com/outputs"
-
-    raw_first = (output.get("first_name") or "").strip()
-    raw_user = (output.get("username") or "").strip()
-    greet_name = raw_first or raw_user or "there"
-    greet_safe = html.escape(greet_name)
-    site_safe = html.escape(site_name)
-    output_safe = html.escape(output_name)
-
-    subject = f"{site_name} ALERT — Output '{output_name}' Paused"
+    greet_name = (output.get("first_name") or "").strip() or (output.get("username") or "").strip() or "there"
+    url_safe = html.escape(OUTPUTS_URL, quote=True)
+    paras_html = "".join(
+        f'<p style="margin:0 0 14px 0;">{html.escape(p)}</p>' for p in paragraphs
+    )
 
     html_body = f"""\
 <!DOCTYPE html>
@@ -67,27 +59,20 @@ def send_output_paused_notification(output_id: int, output_name: str) -> None:
     <tr><td align="center">
       <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;">
         <tr><td style="padding:24px 28px 8px 28px;">
-          <h1 style="margin:0 0 12px 0;font-size:20px;color:#991b1b;">Output Feed Paused</h1>
-          <p style="margin:0 0 14px 0;">Hi {greet_safe},</p>
-          <p style="margin:0 0 14px 0;">The output feed <strong>{output_safe}</strong> on <strong>{site_safe}</strong> has experienced a pause due to repeated TLS handshake failure.</p>
-          <p style="margin:0 0 14px 0;">Feed has been suspended until manual handshake has been restored. Open the output details and select <strong>"Test TLS connection"</strong> to re-establish the handshake. The feed can be resumed upon a successful handshake.</p>
+          <h1 style="margin:0 0 12px 0;font-size:20px;color:{color};">{html.escape(heading)}</h1>
+          <p style="margin:0 0 14px 0;">Hi {html.escape(greet_name)},</p>
+          {paras_html}
           <p style="margin:20px 0 8px 0;">
-            <a href="{html.escape(outputs_url, quote=True)}" style="display:inline-block;padding:12px 22px;background:#991b1b;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Manage Outputs</a>
+            <a href="{url_safe}" style="display:inline-block;padding:12px 22px;background:{color};color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Manage Outputs</a>
           </p>
-          <p style="margin:16px 0 0 0;font-size:13px;color:#6b7280;">If the button does not work, copy this link into your browser:<br><span style="word-break:break-all;color:#2563eb;">{html.escape(outputs_url, quote=True)}</span></p>
+          <p style="margin:16px 0 0 0;font-size:13px;color:#6b7280;">If the button does not work, copy this link into your browser:<br><span style="word-break:break-all;color:#2563eb;">{url_safe}</span></p>
         </td></tr>
       </table>
     </td></tr>
   </table>
 </body></html>
 """
-
-    text_body = (
-        f"Hi {greet_name},\n\n"
-        f"The output feed '{output_name}' on {site_name} has experienced a pause due to repeated TLS handshake failure.\n\n"
-        f"Feed has been suspended until manual handshake has been restored. Open output details and select \"Test TLS connection\" to re-establish handshake. Feed can be resumed on successful handshake.\n\n"
-        f"Manage Outputs: {outputs_url}\n"
-    )
+    text_body = f"Hi {greet_name},\n\n" + "".join(p + "\n\n" for p in paragraphs) + f"Manage Outputs: {OUTPUTS_URL}\n"
 
     try:
         out = mail.send_email(
@@ -99,5 +84,46 @@ def send_output_paused_notification(output_id: int, output_name: str) -> None:
         )
         if not out.get("success"):
             print(f"[output_watchdog_email] Resend error: {out}")
+            return False
+        return True
     except Exception as e:
         print(f"[output_watchdog_email] send failed: {e}")
+        return False
+
+
+def _site_name() -> str:
+    return (os.environ.get("SITE_NAME") or "TAKNET-PS Aggregator").strip()
+
+
+def send_output_paused_notification(output_id: int, output_name: str, reason: str) -> bool:
+    """Tell the output creator a CoT output was paused. Returns True if the email was sent."""
+    site = _site_name()
+    return _send_to_creator(
+        output_id,
+        subject=f"{site} ALERT — Output '{output_name}' Paused",
+        heading="Output Feed Paused",
+        color="#991b1b",
+        paragraphs=[
+            f"The output feed '{output_name}' on {site} has been paused: {reason}.",
+            "No action is needed if the TAK server is just restarting or briefly unreachable. "
+            "The aggregator keeps retrying in the background (every 2 minutes for the first "
+            "30 minutes, then every 10 minutes) and resumes the feed on its own; you will get "
+            "another email when it does.",
+            "If the server address or client certificate has changed, update the output and "
+            "select \"Test TLS connection\" to resume immediately.",
+        ],
+    )
+
+
+def send_output_resumed_notification(output_id: int, output_name: str) -> bool:
+    """Tell the output creator a paused CoT output reconnected on its own."""
+    site = _site_name()
+    return _send_to_creator(
+        output_id,
+        subject=f"{site} — Output '{output_name}' Resumed",
+        heading="Output Feed Resumed",
+        color="#166534",
+        paragraphs=[
+            f"The output feed '{output_name}' on {site} reconnected to its TAK server and is sending again. No action is needed.",
+        ],
+    )

@@ -37,6 +37,15 @@ import threading
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
+from services.cot_output_health import (
+    ConnectOutcome,
+    CotOutputHealth,
+    classify_handshake_error,
+    pause_email_due,
+    paused_config,
+    recheck_due,
+)
+
 # Use gunicorn's error logger so CoT sender messages appear in `taknet-agg logs dashboard`
 _logger = logging.getLogger("gunicorn.error")
 if not _logger.handlers:
@@ -105,6 +114,9 @@ COT_TYPE_SPI = "b-m-p-s-p-i"
 # Persistent sockets per output_id so we don't connect+TLS every cycle (saves 100–500ms+ per run).
 # Cleared on send failure; next cycle reconnects. Single-threaded per cycle so no lock needed.
 _persistent_sockets = {}
+
+# Failure window and retry backoff per output; decides when an unreachable output is paused.
+_health = CotOutputHealth()
 
 # Last-sent state per (output_id, hex) for delta updates: only send when position/state changed.
 # Format: output_id -> { hex -> (lat, lon, alt_baro, track, gs) }. Pruned to hexes seen recently.
@@ -1126,7 +1138,7 @@ def _state_key(ac):
 def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connect_timeout_sec=3):
     """
     Create and return a connected socket (plain or TLS), or None on failure.
-    Returns (sock, is_tls_error) tuple.
+    Returns (sock, ConnectOutcome) tuple.
     """
     sock = None
     try:
@@ -1141,7 +1153,7 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connec
                 sock.close()
             except Exception:
                 pass
-        return None, False
+        return None, ConnectOutcome.TRANSIENT
     except Exception as e:
         log.warning("CoT sender: %s — TCP connect failed to %s:%s: %s", name, host, port, e)
         if sock:
@@ -1149,7 +1161,7 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connec
                 sock.close()
             except Exception:
                 pass
-        return None, False
+        return None, ConnectOutcome.TRANSIENT
 
     if is_tls and cert_key:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as cf:
@@ -1171,16 +1183,20 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connec
                     sock.close()
                 except Exception:
                     pass
-            return None, False
+            return None, ConnectOutcome.TRANSIENT
         except Exception as e:
-            # Catch SSLError, SSL_ERROR_SYSCALL, ConnectionResetError, EOFError representing bad cert rejection/drop
-            log.warning("CoT sender: %s — TLS handshake failed/rejected to %s:%s: %s", name, host, port, e)
+            # A TLS verdict (alert, bad cert/key) is a rejection; a reset/EOF mid-handshake is
+            # what a restarting TAK server looks like, so it stays transient.
+            outcome = classify_handshake_error(e)
+            log.warning("CoT sender: %s — TLS handshake %s to %s:%s: %s", name,
+                        "rejected" if outcome is ConnectOutcome.REJECTED else "interrupted (transient)",
+                        host, port, e)
             if sock:
                 try:
                     sock.close()
                 except Exception:
                     pass
-            return None, True
+            return None, outcome
         finally:
             try:
                 os.unlink(cert_path)
@@ -1190,11 +1206,13 @@ def _connect_cot_socket(name, output_id, host, port, is_tls, cert_key, *, connec
                 os.unlink(key_path)
             except Exception:
                 pass
-    return sock, False
+    return sock, ConnectOutcome.OK
 
 
 def drop_cot_persistent_socket(output_id):
-    """Close and remove cached TLS socket for an output (e.g. after cert or URL change)."""
+    """Forget an output's connection: close the cached TLS socket and clear its failure window
+    (after a pause, or a cert/URL change that makes past failures irrelevant)."""
+    _health.reset(output_id)
     sock = _persistent_sockets.pop(output_id, None)
     if sock:
         try:
@@ -1223,25 +1241,39 @@ def _cot_pause_tls_push(output_id, name, reason: str):
     if cfg.get("cot_tls_paused") is True:
         drop_cot_persistent_socket(output_id)
         return
-    import time
-    OutputModel.merge_config(output_id, {
-        "cot_tls_paused": True, 
-        "cot_tls_fail_count": 0, 
-        "cot_tls_last_check": time.time()
-    })
+    now = time.time()
+    patch = paused_config(now)
     drop_cot_persistent_socket(output_id)
 
-    # Watchdog: notify account creator that feed is paused
-    try:
-        from services.output_watchdog_email import send_output_paused_notification
-        send_output_paused_notification(output_id, name)
-    except Exception as e:
-        log.error("CoT sender: %s — failed to send watchdog notification: %s", name, e)
+    # Watchdog: tell the output's creator, at most once per output per email interval.
+    if pause_email_due(cfg, now):
+        try:
+            from services.output_watchdog_email import send_output_paused_notification
+            if send_output_paused_notification(output_id, name, reason):
+                patch.update(cot_pause_emailed=True, cot_pause_last_email_at=now)
+        except Exception as e:
+            log.error("CoT sender: %s — failed to send watchdog notification: %s", name, e)
+    OutputModel.merge_config(output_id, patch)
     log.warning(
-        "CoT sender: %s — Connection paused (%s). System will auto-retry in 10 minutes, or you can use Outputs → Test TLS connection.",
+        "CoT sender: %s — Connection paused (%s). Auto-retrying in the background, or use Outputs → Test TLS connection.",
         name,
         reason,
     )
+
+
+def _cot_resume_after_recheck(output_id, name, config):
+    """Unpause after a successful auto-recheck; tell the creator if they were told of the pause."""
+    from models import OutputModel
+
+    OutputModel.merge_config(output_id, {"cot_tls_paused": False, "cot_tls_last_check": 0, "cot_pause_emailed": False})
+    drop_cot_persistent_socket(output_id)
+    log.info("CoT sender: auto-recheck succeeded for %s — resumed.", name)
+    if config.get("cot_pause_emailed") is True:
+        try:
+            from services.output_watchdog_email import send_output_resumed_notification
+            send_output_resumed_notification(output_id, name)
+        except Exception as e:
+            log.error("CoT sender: %s — failed to send resumed notification: %s", name, e)
 
 
 def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, *, connect_timeout_sec=8) -> tuple[bool, str, bool]:
@@ -1271,7 +1303,7 @@ def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, 
     cert_key = OutputCotCertModel.get_decrypted(output_id)
     if not cert_key or not cert_key.get("cert_pem") or not cert_key.get("key_pem"):
         return False, "Upload a client certificate and private key before testing.", False
-    sock, is_tls_error = _connect_cot_socket(
+    sock, outcome = _connect_cot_socket(
         "cot-tls-test",
         output_id,
         host,
@@ -1281,9 +1313,9 @@ def test_cot_tls_handshake(output_id: int, cot_url_override: str | None = None, 
         connect_timeout_sec=connect_timeout_sec,
     )
     if sock is None:
-        if is_tls_error:
+        if outcome is ConnectOutcome.REJECTED:
             return False, "TLS handshake failed (invalid certificate, wrong protocol, or remote rejection).", True
-        return False, "Could not connect to host:port (check network, firewall, or TAK server status).", False
+        return False, "Could not connect to host:port, or the connection dropped during the handshake (check network, firewall, or TAK server status).", False
     try:
         sock.close()
     except Exception:
@@ -1399,25 +1431,26 @@ def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, O
         is_paused = out.get("paused")
         
         if is_paused:
-            last_checked = config.get("cot_tls_last_check") or 0.0
-            if time.time() - last_checked > 600:
+            if recheck_due(config):
                 log.info("CoT sender: auto-rechecking paused output %s", name)
                 parsed = _parse_tls_cot_endpoint(cot_url)
                 if parsed:
                     host, port = parsed
                     from models import OutputCotCertModel, OutputModel
                     cert_key = OutputCotCertModel.get_decrypted(output_id)
-                    sock, is_tls_error = _connect_cot_socket("auto-recheck", output_id, host, port, True, cert_key, connect_timeout_sec=5)
+                    sock, _ = _connect_cot_socket("auto-recheck", output_id, host, port, True, cert_key, connect_timeout_sec=5)
                     if sock is not None:
                         try:
                             sock.close()
                         except Exception:
                             pass
-                        log.info("CoT sender: auto-recheck succeeded for %s! Unpausing.", name)
-                        OutputModel.merge_config(output_id, {"cot_tls_paused": False, "cot_tls_fail_count": 0, "cot_tls_last_check": 0})
-                        drop_cot_persistent_socket(output_id)
+                        _cot_resume_after_recheck(output_id, name, config)
                     else:
                         OutputModel.merge_config(output_id, {"cot_tls_last_check": time.time()})
+            continue
+
+        # Backing off after a failed connect: skip building CoT until the next attempt is due.
+        if not _health.should_attempt(output_id):
             continue
 
         pass_only_tisb = bool(config.get("pass_only_tisb"))
@@ -1631,10 +1664,6 @@ def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, O
                     % (name, output_id, len(aircraft), filter_ms, transforms_ms, build_loop_ms),
                     timing_gunicorn,
                 )
-            # clear basic failure streak on native no-send success cycle
-            if config.get("cot_tls_fail_count", 0) > 0:
-                from models import OutputModel
-                OutputModel.merge_config(output_id, {"cot_tls_fail_count": 0})
             continue
         parsed = _parse_tls_cot_endpoint(cot_url)
         if parsed is None:
@@ -1679,16 +1708,14 @@ def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, O
         # Reuse persistent socket to avoid connect+TLS every cycle (saves 100–500ms+)
         sock = _persistent_sockets.get(output_id)
         connect_ms = 0.0
-        is_tls_error = False
+        pause_reason = None
         if sock is None:
             t0 = time.perf_counter()
-            sock, is_tls_error = _connect_cot_socket(name, output_id, host, port, is_tls, cert_key)
+            sock, outcome = _connect_cot_socket(name, output_id, host, port, is_tls, cert_key)
             connect_ms = _phase_ms(t0, time.perf_counter())
+            pause_reason = _health.record(output_id, outcome)
             if sock is not None:
                 _persistent_sockets[output_id] = sock
-                if config.get("cot_tls_fail_count", 0) > 0:
-                    from models import OutputModel
-                    OutputModel.merge_config(output_id, {"cot_tls_fail_count": 0})
         if sock is None:
             if timing_emit:
                 _cot_phase_timing_emit(
@@ -1706,15 +1733,8 @@ def _process_cot_output(out, with_pos, requests, timing_emit, timing_gunicorn, O
                     ),
                     timing_gunicorn,
                 )
-            if is_tls_error:
-                _cot_pause_tls_push(output_id, name, "TLS handshake failed")
-            else:
-                fail_streak = config.get("cot_tls_fail_count", 0) + 1
-                from models import OutputModel
-                if fail_streak >= 3:
-                     _cot_pause_tls_push(output_id, name, "TCP timeout/drop limit reached")
-                else:
-                     OutputModel.merge_config(output_id, {"cot_tls_fail_count": fail_streak})
+            if pause_reason:
+                _cot_pause_tls_push(output_id, name, pause_reason)
             continue
         try:
             # Chunked send: complete messages only (space between XML events, trailing space per chunk).

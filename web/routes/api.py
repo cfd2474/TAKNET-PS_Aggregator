@@ -2168,14 +2168,20 @@ def cot_test_tls(output_id):
         drop_cot_persistent_socket(output_id)
         return jsonify({"ok": True, "message": msg, "cot_url_saved": bool(override)})
     
-    import time
-    OutputModel.merge_config(output_id, {
-        "cot_tls_paused": True,
-        "cot_tls_fail_count": 0,
-        "cot_tls_last_check": time.time()
-    })
+    from services.cot_output_health import paused_config
+    patch = paused_config()
+    cfg = item.get("config") or {}
+    if isinstance(cfg, str):
+        try:
+            cfg = json.loads(cfg)
+        except (TypeError, ValueError):
+            cfg = {}
+    if isinstance(cfg, dict) and cfg.get("cot_tls_paused") is True:
+        # Already paused: a failed manual test only restarts the recheck clock.
+        patch = {"cot_tls_last_check": patch["cot_tls_last_check"]}
+    OutputModel.merge_config(output_id, patch)
     drop_cot_persistent_socket(output_id)
-        
+
     return jsonify({"ok": False, "error": msg, "paused": True}), 400
 
 

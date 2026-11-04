@@ -81,8 +81,54 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 - Python changes need `docker compose up -d --build`.
 - CLAUDE.md §6 and §8 were copied from another project. §8's host 209.182.235.108 is the sim_sensor server. The production host for this project (104.225.219.254) is now documented in `docs/REMOTE_SERVER.md` (2026-10-31, compiled from docs, no access exercised).
 
+## Chunk G: CoT output pause is too aggressive (approved 2026-11-04: 5 min / 6 h limits; emails go to output creators only)
+**Status:** implemented as v1.0.422, tested locally and pushed. The operator deploys it through Config → Updates.
+- Design:
+  - `web/services/cot_output_health.py` holds the pure policy with an injectable clock: failure window, backoff, rejection streak, recheck cadence, email rate limit, and the `paused_config` patch.
+  - `cot_pipeline` reports each connect outcome to it.
+  - `_connect_cot_socket` now returns `(sock, ConnectOutcome)`.
+  - `drop_cot_persistent_socket` also clears the failure window.
+  - The `cot_tls_fail_count` config key is no longer used.
+  - New config keys: `cot_tls_paused_at`, `cot_pause_emailed`, `cot_pause_last_email_at`.
+- Tests:
+  - Policy, with a fake clock: blip; 3.5-min restart, no pause; sustained outage, pause at 300 s; 3 rejections, pause at 6 s; rejection streak reset; classification; recheck cadence; 6 h email limit.
+  - End to end through `_run_cot_sender_cycle_impl` (scratch DB, scripted server):
+    - The LECK restart pattern no longer pauses and makes 11 connect attempts in 210 s, against about 70 before.
+    - A sustained outage pauses at 300 s with 1 email. Rechecks come every 120 s, with no sends while paused. Recovery sends the "resumed" email and the feed flows again.
+    - A second pause within 6 h sends no email and no "resumed" email.
+  - Test TLS route, via the Flask test client: a failure pauses; a repeat failure keeps `paused_at` and the emailed flag; success unpauses.
+- Open (not in this chunk): the test6/test12 outputs' constant connection resets after a successful handshake. With TLS 1.3 a server's client-certificate rejection arrives *after* the handshake, on the first send. Those failures count as successful connects, so they never pause; they reconnect every few cycles.
+**Evidence (prod logs, 05:34–16:28 UTC 2026-11-04, the only logs since the container was recreated):**
+- 1 pause: "LECK CoT".
+  - 16:25:37 broken pipe, :41 refused, :48 timeout, :56 timeout. **Paused and emailed 19 s after the first error.** This looks like a TAK server restart.
+  - Port 8060 was reachable again at 16:29. The output stays paused until the 10-min recheck, and the email tells the user that manual "Test TLS" is required.
+- Separately: about 13.9 k "send failed" (connection reset / broken pipe) in 11 h across 3 test outputs (`takserver.test6.takwerx.com`, `takserver.test12.taktical.net`). They never pause, but each one reconnects (a TLS handshake) every few cycles.
+
+**Causes (`web/cot_pipeline.py`):**
+- `:1714`: 3 consecutive connect failures trigger a pause. At a 2 s cycle with 3 s connect timeouts that is about 15–20 s of outage.
+- `:1709`: a *single* TLS handshake error pauses immediately. `_connect_cot_socket` `:1175` classes every non-timeout handshake exception as a TLS error, including reset/EOF while a server is starting.
+- `:1236`: the email is sent on every pause. There is no rate limit and no "resumed" mail, and it says "suspended until manual handshake" although the auto-recheck (`:1401`, every 10 min) silently resumes the feed.
+
+**Plan:**
+1. Pause on time, not count: pause only after failing continuously for `COT_PAUSE_AFTER_SECONDS` (default 300). Until then, retry with backoff (2 s doubling to 30 s) so a down server isn't hit every cycle.
+2. Classify handshake failures: an `SSLError` carrying a TLS alert (bad/unknown/expired certificate, unknown CA) is a real rejection and pauses after 3 in a row. Reset/EOF/timeout during the handshake is transient and goes into the time window from item 1.
+3. Paused outputs: recheck every 2 min for the first 30 min, then every 10 min.
+4. Email:
+   - Pause mail only after the threshold, at most once per output per 6 h, with corrected wording (auto-retrying; Test TLS is optional).
+   - A short "resumed" mail if auto-recheck clears a pause that was emailed.
+5. Unit-test the state machine (transient blip, server restart under 5 min, sustained outage, cert rejection, recovery) with a fake clock and socket. Bump the version, push, and the operator deploys via Config → Updates.
+
 ## Chunk F: optimize on the current box (2026-11-03: operator approved items 1, 3, 4 only)
-**Status:** 1, 3 and 4 are implemented as v1.0.421 and verified locally. They are **not yet committed, pushed or deployed**; waiting on the operator's OK. Items 2, 5 and 6 are not started.
+**Status:** 1, 3 and 4 are implemented as v1.0.421, verified locally, pushed (b3ef5bf), and **deployed and verified 2026-11-04**.
+- Deploy: the operator ran Config → Updates 1.0.420 → 1.0.421. It was recorded as `Web UI update (run 1793770425)`, success. This is the second clean web-UI update.
+- beast-proxy at 11 min uptime: 39 fds and 28 established sockets (before: 526 and about 450 at 3.3 h).
+  - Last 5 min: 128 new connections and 127 disconnects.
+  - Of the connections opened in the last 10 min, 242 closed and 13 are open, one per live feeder.
+  - Status reports 14 feeders, which matches the DB (14 active).
+- First maintenance run: removed 451,725 `cot_transforms`, 40 `output_cot_certs`, 39 `output_api_keys` and 6,172,888 `connections` rows.
+- VACUUM at 05:45 UTC: took 5.0 s, `quick_check` ok, DB file went from 1,051 MB to 206 MB. Afterwards: 0 lock or error lines in beast-proxy, dashboard or api, and no feeders dropped.
+- Merged aircraft at 05:45 UTC was 2,798 (the baseline of about 7,300 was daytime). Assumed to be diurnal; not compared like for like.
+- Items 2, 5 and 6 are not started. Item 2 (30 s reconnects) is now the main source of DB churn: about 250 disconnect activity rows per 10 min.
 - Item 1:
   - Keepalive was dropped: the existing 120 s idle timeout already closes dead feeders, and closing the transport gives the reader an EOF.
   - Added `log_disconnection(mark_offline=False)` for a feeder that has another live session.

@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.422",
+    "date": "2026-11-04",
+    "notes": [
+      "CoT outputs no longer pause on a brief outage. A connection problem pauses an output only after the TAK server has been unreachable for 5 minutes (COT_PAUSE_AFTER_SECONDS); until then the aggregator retries, backing off from every 2 s to every 30 s. Previously about 20 s of outage (e.g. a TAK server restart) paused the feed and emailed its creator.",
+      "A dropped connection during the TLS handshake (a server restarting) is no longer treated as a certificate rejection. Only a real TLS rejection (bad, unknown or expired certificate) pauses quickly, after 3 in a row.",
+      "Paused outputs are retried every 2 minutes for the first 30 minutes, then every 10 minutes.",
+      "Pause emails: at most one per output every 6 hours, reworded to say the aggregator retries and resumes on its own, and followed by a 'Resumed' email when it does."
+    ]
+  },
+  {
     "version": "1.0.421",
     "date": "2026-11-03",
     "notes": [
