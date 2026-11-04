@@ -548,6 +548,48 @@ class ConnectionModel:
         return dict_rows(rows)
 
 
+# ── Maintenance ──────────────────────────────────────────────────────────────
+
+# Tables keyed by output_id whose rows die with their output.
+OUTPUT_DEPENDENT_TABLES = ("cot_transforms", "output_cot_certs", "output_api_keys")
+# Rows per delete transaction: keeps each write lock short for beast-proxy and the CoT pipeline.
+_PURGE_BATCH = 5000
+
+
+def _delete_in_batches(table, where, params=()):
+    """Delete rows of `table` matching `where` in short transactions. Returns rows deleted."""
+    total = 0
+    conn = get_db()
+    try:
+        while True:
+            cur = conn.execute(
+                f"DELETE FROM {table} WHERE rowid IN "
+                f"(SELECT rowid FROM {table} WHERE {where} LIMIT {_PURGE_BATCH})",
+                params,
+            )
+            conn.commit()
+            total += cur.rowcount
+            if cur.rowcount < _PURGE_BATCH:
+                return total
+    finally:
+        conn.close()
+
+
+class MaintenanceModel:
+    @staticmethod
+    def purge_orphan_output_rows():
+        """Remove rows left behind by outputs deleted before OutputModel.delete cleaned up."""
+        return {
+            table: _delete_in_batches(table, "output_id NOT IN (SELECT id FROM outputs)")
+            for table in OUTPUT_DEPENDENT_TABLES
+        }
+
+    @staticmethod
+    def prune_connections(days):
+        """Drop connection history older than `days` (uses idx_connections_connected)."""
+        return _delete_in_batches("connections", "connected_at < datetime('now', ?)", (f"-{days} days",))
+
+
 # ── Activity Log ─────────────────────────────────────────────────────────────
 
 class ActivityModel:
@@ -1236,7 +1278,11 @@ class OutputModel:
 
     @staticmethod
     def delete(output_id):
+        # The schema's ON DELETE CASCADE is inert (foreign_keys is never enabled), so remove
+        # dependents explicitly. output_drop_signals is left for beast-proxy to consume.
         conn = get_db()
+        for table in OUTPUT_DEPENDENT_TABLES:
+            conn.execute(f"DELETE FROM {table} WHERE output_id = ?", (output_id,))
         conn.execute("DELETE FROM outputs WHERE id = ?", (output_id,))
         conn.commit()
         conn.close()

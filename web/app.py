@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
@@ -12,6 +12,7 @@ from models import mark_stale_feeders, ActivityModel, UserModel
 from services.health_snapshot import collect_health_snapshot
 from services.cert_monitor import check_caddy_certs_job
 from services.update_result import record_update_result
+from services.db_maintenance import run_db_maintenance
 
 log = logging.getLogger(__name__)
 
@@ -147,6 +148,9 @@ def create_app():
     # after recreating us), so poll it rather than reading it once.
     scheduler.add_job(record_update_result, "interval", seconds=30, id="update_result",
                       next_run_time=datetime.now())
+    # First run shortly after start-up (clears the existing backlog), then hourly.
+    scheduler.add_job(run_db_maintenance, "interval", hours=1, id="db_maintenance",
+                      next_run_time=datetime.now() + timedelta(minutes=2))
 
     def _run_cot_sender():
         import threading

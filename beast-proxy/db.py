@@ -271,8 +271,11 @@ def log_connection(feeder_id, ip_address):
     return cursor.lastrowid
 
 
-def log_disconnection(feeder_id, connection_id, bytes_transferred=0):
-    """Log disconnection and compute duration."""
+def log_disconnection(feeder_id, connection_id, bytes_transferred=0, mark_offline=True):
+    """Log disconnection and compute duration.
+
+    mark_offline=False when the feeder still has another live session.
+    """
     conn = _get_conn()
     ts = now_utc()
     conn.execute(
@@ -283,10 +286,11 @@ def log_disconnection(feeder_id, connection_id, bytes_transferred=0):
         WHERE id = ?""",
         (ts, ts, bytes_transferred, connection_id),
     )
-    conn.execute(
-        "UPDATE feeders SET status = 'offline', last_seen = ?, updated_at = ? WHERE id = ?",
-        (ts, ts, feeder_id),
-    )
+    if mark_offline:
+        conn.execute(
+            "UPDATE feeders SET status = 'offline', last_seen = ?, updated_at = ? WHERE id = ?",
+            (ts, ts, feeder_id),
+        )
     conn.execute(
         "INSERT INTO activity_log (event_type, feeder_id, message) VALUES (?, ?, ?)",
         ("feeder_disconnected", feeder_id, "Feeder disconnected"),

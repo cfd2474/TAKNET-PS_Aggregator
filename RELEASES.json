@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.421",
+    "date": "2026-11-03",
+    "notes": [
+      "beast-proxy: a feeder session now ends when either side closes. Previously every disconnected feeder session stayed open forever, leaking its sockets (about 450 after 3 hours in production) and never recording the disconnect.",
+      "A feeder that reconnects before its old session closes is no longer briefly marked offline.",
+      "Deleting an output now also deletes its CoT transform rules, TLS certificate and API keys. The schema's ON DELETE CASCADE never applied because SQLite foreign keys are off.",
+      "New hourly database maintenance: purges rows left by previously deleted outputs (about 450k transform rules in production) and keeps 30 days of feeder connection history (CONNECTION_RETENTION_DAYS). Deletes run in small batches so feeds are never blocked."
+    ]
+  },
+  {
     "version": "1.0.420",
     "date": "2026-10-31",
     "notes": [

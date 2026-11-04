@@ -58,12 +58,50 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
    - **Inferred**: the worker-timeout log line was lost when the dashboard container was recreated. The timeline fits exactly.
 6. Planned with the feeder agent, not started: "Chunk E", per-feeder hostnames `<feeder>.feeders.tak-solutions.com`. Most of the work is on the aggregator side (DB column, single-host auth token, Caddy on-demand TLS with an `ask` guard, nginx vhost). Details are in the feeder repo's PROJECT_STATE.md.
 
+## Production load baseline (measured 2026-11-03, for AWS sizing)
+- Host: 8 vCPU Xeon Silver 4216, 32 GB RAM, 480 GB disk (40 GB used). CPU 74–83% idle (about 2 cores busy); about 2 GB RAM used by the stack.
+- **VPS CPU topology is poor (operator, 2026-11-03):** the provider presents each vCPU as its own socket with no L3 cache.
+  - `lscpu` confirms 8 sockets × 1 core × 1 thread on KVM. The guest does report a 16 MB L3, but KVM passes the host's cache info through, so this doesn't prove the cache is usable.
+  - Per-core throughput here is worse than the spec suggests, so CPU % from this box overstates what AWS will need, which keeps the AWS sizing conservative.
+  - Benchmark numbers from this box should only be compared before/after on the same box, never extrapolated to AWS.
+- Workload: 14 active feeders (13 NetBird, 1 public), 20 offline. About 7,300 merged aircraft, mostly from inbound JSON push feeds. 39 outputs (23 CoT, 9 JSON, 6 adsb_direct, 1 beast_raw).
+- Busiest processes: dashboard/CoT pipeline 43–66% of one core, aircraft-merger 30–40%, netbird client about 28%, Caddy about 25%, beast-proxy about 15%.
+- Network: host NIC about 16 Mbit/s in and 15 Mbit/s out (live sample). 18-day average about 130 GB/day each way, roughly 4 TB/month egress.
+- **Scaling walls (architecture, not instance size):** the dashboard (CoT pipeline) and the merger are each a single Python process, so the GIL caps each at about 1 core however big the VM is.
+- **Data findings:** `connections` has 7.3 M rows and is never pruned (DB is 1 GB). `cot_transforms` has 536 k rows for 39 outputs, which is a likely duplication bug. Not yet investigated.
+- **Investigated 2026-11-03 (read-only on prod):**
+  - `cot_transforms`: no duplicates within any output. **451,725 rows (84%) are orphans** of deleted outputs, because `OutputModel.delete` (`web/models.py:1238`) never removes an output's transforms. Output ids are AUTOINCREMENT (seq 128), so orphans cannot leak into a new output. They only waste space.
+  - `connections`: about 36 k new rows a day. All 13 NetBird feeders plus the public ones open a new Beast connection **every ~30 s**, and **no row ever gets `disconnected_at`**.
+  - beast-proxy (up 3.3 h): 526 fds, about 450 established sockets, 47 "New connection" log lines in 2 min and 0 "Disconnected".
+  - Cause (from code): `handle_client` gathers both forward directions. The readsb→feeder side never sees EOF, so `gather` never returns, `finally` never runs, and the sockets leak.
+  - **Unknown:** why feeders reconnect every 30 s. To be asked of the feeder agent.
+
 ## Constraints
 - Release rule (`.cursor/rules/release-checklist.mdc`): every push bumps `VERSION`, `web/VERSION`, `RELEASES.json` (new entry at the top, using the `notes` key) and the `env.example` header. Tarballs are never committed.
 - Python changes need `docker compose up -d --build`.
 - CLAUDE.md §6 and §8 were copied from another project. §8's host 209.182.235.108 is the sim_sensor server. The production host for this project (104.225.219.254) is now documented in `docs/REMOTE_SERVER.md` (2026-10-31, compiled from docs, no access exercised).
 
-## Chunk D: make Config → Updates reliable (approved 2026-10-31). v1.0.419 deployed 2026-10-31 via `taknet-agg update` (gthread worker confirmed, CoT flowing, leftover `vibrant_perlman` removed). Pending: operator runs the Updates page to v1.0.420 as the end-to-end test
+## Chunk F: optimize on the current box (2026-11-03: operator approved items 1, 3, 4 only)
+**Status:** 1, 3 and 4 are implemented as v1.0.421 and verified locally. They are **not yet committed, pushed or deployed**; waiting on the operator's OK. Items 2, 5 and 6 are not started.
+- Item 1:
+  - Keepalive was dropped: the existing 120 s idle timeout already closes dead feeders, and closing the transport gives the reader an EOF.
+  - Added `log_disconnection(mark_offline=False)` for a feeder that has another live session.
+  - Test: a local asyncio harness with a readsb stub that never closes. HEAD records no disconnect at all (leak reproduced). The fix records both disconnects with byte counts and marks offline only on the last session.
+- Item 3: `OutputModel.delete` now deletes `cot_transforms`, `output_cot_certs` and `output_api_keys`. `output_drop_signals` is kept for beast-proxy. The schema's `ON DELETE CASCADE` is inert because `PRAGMA foreign_keys` is never enabled; turning it on globally was rejected as too broad.
+- Item 4:
+  - `services/db_maintenance.py`, scheduled hourly (first run 2 min after start), with `MaintenanceModel` in models.py.
+  - Batched 5,000-row deletes. Retention is `CONNECTION_RETENTION_DAYS`, default 30.
+  - Local timing: 6.37 M rows in 12 s, 9 ms per batch.
+  - VACUUM was **not** automated. It takes an exclusive lock longer than beast-proxy's 5 s busy_timeout, so it needs a quiet window. Without it the freed pages are reused and the file stops growing.
+- Behavior change to watch after deploy: disconnects now get recorded, so `activity_log` gains about 36 k "feeder_disconnected" rows a day (7-day retention) until the 30 s reconnects (item 2) are understood.
+1. beast-proxy: end the session when *either* direction ends (`asyncio.wait(FIRST_COMPLETED)`, cancel the other side, close both). This fixes the socket and fd leak and makes disconnects get recorded. Add TCP keepalive so dead peers are noticed.
+2. Find out why feeders reconnect every 30 s: troubleshoot with the feeder agent (`taknet-ps-ads-b-feeder-cb`) using feeder logs. No fix until there is evidence.
+3. Make output delete also remove its `cot_transforms` (and certs and keys), plus a one-time purge of the 451 k orphan rows.
+4. Retention: prune `connections` older than 30 days in the existing cleanup job. Then run a one-time `VACUUM` in a quiet window (1 GB DB, a few seconds of write lock).
+5. Measure before tuning: CoT phase timing (the built-in flag), plus Caddy (44% CPU), nginx (24%) and merger (50%) request and CPU profiles. Findings only; no changes in this chunk.
+6. Bump the version, verify locally, push, deploy, then re-measure CPU, fds and DB size against the 2026-11-03 baseline.
+
+## Chunk D: make Config → Updates reliable (approved 2026-10-31). v1.0.419 deployed 2026-10-31 via `taknet-agg update` (gthread worker confirmed, CoT flowing, leftover `vibrant_perlman` removed). End-to-end test PASSED 2026-11-03: the operator ran Config → Updates 1.0.419 → 1.0.420, and it was recorded as `Web UI update (run 1793737065)`, success
 1. Gunicorn: switch to the `gthread` worker with threads, so the SSE stream isn't killed at 120 s and doesn't block other requests. Keep 1 worker (APScheduler/KLV must stay singletons). Check thread safety of `models.py`/SQLite and the module globals first.
 2. Record the update outcome from inside the updater script (a marker file), and have the new dashboard log the `update_history` row on startup.
 3. The updater builds all locally-built services (plain `docker compose build`), not just 4.
@@ -91,4 +129,5 @@ Out of scope: the local untracked `ARCHIVE/*.tar.gz` and `*.db` files (gitignore
 ## Decisions
 - 2026-10-31, operator: SSH as root to the production host is authorized for investigation (password kept in the gitignored `docs/REMOTE_SERVER.md`).
 - 2026-10-31: no deletions until the operator approves a cleanup chunk.
+- 2026-11-03, operator: planning a move to **AWS** for national scale (CONUS public-safety agencies, many more feeders; future Remote ID and AIS).
 - 2026-10-31, operator: the **Azure migration is cancelled**, and 104.225.219.254 stays production. The runbook is kept for its host inventory and marked cancelled.

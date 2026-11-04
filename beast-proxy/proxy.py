@@ -281,10 +281,18 @@ async def handle_client(reader, writer):
         readsb_reader, readsb_writer = await asyncio.open_connection(READSB_HOST, READSB_PORT)
         print(f"[proxy] Forwarding {ip_address} → readsb:{READSB_PORT}")
 
-        await asyncio.gather(
-            forward_stream(reader, readsb_writer, conn_info, "inbound", lead_in=lead),
-            forward_stream(readsb_reader, writer, conn_info, "outbound"),
-        )
+        # End the session when either side ends: readsb never closes its side, so
+        # waiting for both directions leaked every session (and its sockets) for good.
+        tasks = {
+            asyncio.create_task(forward_stream(reader, readsb_writer, conn_info, "inbound", lead_in=lead)),
+            asyncio.create_task(forward_stream(readsb_reader, writer, conn_info, "outbound")),
+        }
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
     except (ConnectionRefusedError, OSError) as e:
         print(f"[proxy] Cannot connect to readsb: {e}")
     except asyncio.CancelledError:
@@ -296,9 +304,11 @@ async def handle_client(reader, writer):
         if unflushed_bytes > 0 or unflushed_msgs > 0:
             db.update_feeder_stats(feeder_id, unflushed_bytes, unflushed_msgs, unflushed_pos)
 
-        db.log_disconnection(feeder_id, connection_id, conn_info["bytes"])
-
         active_connections.pop(id(writer), None)
+        # A feeder that reconnected before this session closed is still online.
+        still_connected = any(c["feeder_id"] == feeder_id for c in active_connections.values())
+        db.log_disconnection(feeder_id, connection_id, conn_info["bytes"],
+                             mark_offline=not still_connected)
         display = hostname or location or ip_address
         print(f"[proxy] Disconnected: {display} ({conn_type})")
 
