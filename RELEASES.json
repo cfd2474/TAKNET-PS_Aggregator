@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.0.423",
+    "date": "2026-11-07",
+    "notes": [
+      "Outputs: \"Test TLS connection\" now shows its result. The test always ran, but the page cleared the pass/fail message as soon as it arrived, leaving only a brief \"Testing…\"."
+    ]
+  },
+  {
     "version": "1.0.422",
     "date": "2026-11-04",
     "notes": [

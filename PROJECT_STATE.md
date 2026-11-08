@@ -81,8 +81,17 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 - Python changes need `docker compose up -d --build`.
 - CLAUDE.md §6 and §8 were copied from another project. §8's host 209.182.235.108 is the sim_sensor server. The production host for this project (104.225.219.254) is now documented in `docs/REMOTE_SERVER.md` (2026-10-31, compiled from docs, no access exercised).
 
+## v1.0.423: "Test TLS connection" showed no result (2026-11-07)
+- Symptom (operator): clicking Test TLS shows "Testing…", then nothing.
+- Evidence:
+  - On prod, `test_cot_tls_handshake` returns within 0.0–0.5 s for most outputs and within 8.1 s at worst (the connect timeout), so the request does not hang.
+  - The JS in `outputs.html` writes the result, then calls `updateCotTlsPausedBanner()`, which clears the message once `dataset.sticky` is gone. This has been there since v1.0.347 and is not a v1.0.422 regression.
+- Fix: refresh the banner before writing the result.
+- Verified by running the handler in Node with a stubbed DOM. The old code leaves an empty message on both pass and fail; the new code shows the green or red result.
+- Also seen: "SamTAK Emergency" (id 67) has no client cert uploaded, and both TN TriCities outputs (31, 119) cannot reach their servers.
+
 ## Chunk G: CoT output pause is too aggressive (approved 2026-11-04: 5 min / 6 h limits; emails go to output creators only)
-**Status:** implemented as v1.0.422, tested locally and pushed. The operator deploys it through Config → Updates.
+**Status:** implemented as v1.0.422, tested locally and pushed. Deployed by the operator (prod reported 1.0.422 on 2026-11-07); 48 h of logs show no pauses, rejections or tracebacks, but a real outage has not exercised it yet.
 - Design:
   - `web/services/cot_output_health.py` holds the pure policy with an injectable clock: failure window, backoff, rejection streak, recheck cadence, email rate limit, and the `paused_config` patch.
   - `cot_pipeline` reports each connect outcome to it.

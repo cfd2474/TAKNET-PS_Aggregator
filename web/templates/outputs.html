@@ -539,18 +539,19 @@ async function testCotTlsConnection() {
                 window._outputModalCfg.cot_tls_paused = false;
                 if (body.cot_url) window._outputModalCfg.cot_url = body.cot_url;
             }
+            // Refresh the banner before writing the result: it clears the message.
+            updateCotTlsPausedBanner();
             msg.textContent = (d.message || 'TLS OK') + (d.cot_url_saved ? ' Address saved to this output.' : '');
             msg.style.color = 'var(--green)';
-            updateCotTlsPausedBanner();
             loadOutputs();
         } else {
-            msg.textContent = d.error || 'Test failed';
-            msg.style.color = 'var(--red)';
             if (d.paused && window._outputModalCfg) {
                 window._outputModalCfg.cot_tls_paused = true;
                 updateCotTlsPausedBanner();
                 loadOutputs();
             }
+            msg.textContent = d.error || 'Test failed';
+            msg.style.color = 'var(--red)';
         }
     } catch (e) {
         if (msg) delete msg.dataset.sticky;
