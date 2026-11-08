@@ -81,6 +81,32 @@ Host side: `scripts/health_snapshot_host.py` runs from a systemd timer that `ins
 - Python changes need `docker compose up -d --build`.
 - CLAUDE.md §6 and §8 were copied from another project. §8's host 209.182.235.108 is the sim_sensor server. The production host for this project (104.225.219.254) is now documented in `docs/REMOTE_SERVER.md` (2026-10-31, compiled from docs, no access exercised).
 
+## Chunk H: ADSB Direct output speaks the ADSBExchange RapidAPI convention (2026-11-08)
+**Status:** implemented as v1.0.424 and tested locally; committed but not pushed.
+- Plugin facts (operator's screenshot of the plugin's API Config): Server Mode "ADSBEx RapidApi" has an API Key field and an API URL field (default `https://adsbexchange-com1.p.rapidapi.com/v2`). It requests `<base>/lat/44.010000/lon/-88.580000/dist/120/`, so the `lat44.01` form in the request was a typo and is not supported. The header name is still inferred from RapidAPI convention (`X-RapidAPI-Key`), not observed.
+- The edit modal's Base URL panel (`adsb-direct-url-wrap`) had lost its markup in v1.0.342 (c15a4fb) while its JS stayed. Restored it, showing the keyless base.
+- `openCreateModal` now clears `window._outputModalOutput`, so a previously edited output's key cannot appear in a new output's instructions.
+- Tests (Flask test client, mocked aircraft.json):
+  - The key is accepted from the header, from `api-auth` and from `?key=`.
+  - A missing or invalid key → 401; a key for another output type → 400; a bad lat → 400.
+  - Works with and without the trailing slash.
+  - Range, altitude and network filters behave as before; dist is capped at 250.
+  - The legacy path-key route gives the same result; an inactive output → 401.
+  - In Node, the panel shows the base URL only once a key exists, and the instructions never contain the key.
+- Request (operator): the plugin that ingests the ADSB Direct output changed. It now takes a base URL plus a separate API key, like the ADSBExchange RapidAPI (`https://adsbexchange-com1.p.rapidapi.com/v2`), and appends `/lat/<lat>/lon/<lon>/dist/<nm>/`. The output details should show only the base URL and the key.
+- Today: `output_type = adsb_direct`. The key is embedded in the path: `/api/outputs/direct/<key>/point/<lat>/<lon>/<nm>`. The response uses `aircraft`.
+- Prod: 6 ADSB Direct outputs (ids 38, 43, 45, 111, 122, 128). No key has been used since 2026-10-06, which suggests the plugin already stopped calling the old URL.
+- Assumptions, to be confirmed against the plugin, which we don't have:
+  - Key header: `X-RapidAPI-Key` (RapidAPI convention). Also accept `api-auth` (ADSBx's own direct API) and `?key=`. `X-RapidAPI-Host` is ignored.
+  - Response: ADSBx v2 uses `ac`. Return `ac` and also keep `aircraft`, plus `msg`, `now`, `total`, `ctime`, `ptime`.
+  - `dist` is in nautical miles (ADSBx), capped at 250.
+- Plan:
+  1. Route `GET /api/outputs/direct/v2/lat/<lat>/lon/<lon>/dist/<dist>/`, trailing slash optional. Key from header or query → `OutputKeyModel.validate`; must be `adsb_direct`.
+  2. Move the shared filtering (range, network ADS-B, altitude, category/registration stripping) out of `output_adsb_direct_point` into one function. Keep the old path-key route as a thin wrapper, so existing configs keep working.
+  3. Response gains `ac` alongside `aircraft`.
+  4. UI (`outputs.html`): the edit-modal URL panel and the key-generated modal show **Base URL** `https://<host>/api/outputs/direct/v2` and the **API key**, each with Copy.
+  5. Tests: header/query/missing/wrong-type key, both path forms, filtering parity with the old route, response shape. Release v1.0.424.
+
 ## v1.0.423: "Test TLS connection" showed no result (2026-11-07)
 - Symptom (operator): clicking Test TLS shows "Testing…", then nothing.
 - Evidence:

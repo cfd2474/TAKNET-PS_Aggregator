@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.424",
+    "date": "2026-11-08",
+    "notes": [
+      "ADSB Direct outputs now work with the ATAK plugin's \"ADSBEx RapidApi\" server mode. Enter the Base URL (https://adsb.tak-solutions.com/api/outputs/direct/v2) as the API URL and the output's key as the API Key. The plugin adds /lat/<lat>/lon/<lon>/dist/<nm>/ and sends the key in the X-RapidAPI-Key header (an api-auth header or ?key= also work).",
+      "Responses list aircraft under \"ac\", as ADSBExchange v2 does, as well as under \"aircraft\". The output's altitude, network-traffic and category filters apply as before.",
+      "The output's details show just the Base URL and the API key, each with a Copy button.",
+      "Existing keys work with the new URL unchanged. The old URL with the key in its path still works."
+    ]
+  },
+  {
     "version": "1.0.423",
     "date": "2026-11-07",
     "notes": [

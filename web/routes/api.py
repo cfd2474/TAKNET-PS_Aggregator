@@ -2631,13 +2631,37 @@ def output_range_query():
         return jsonify({"error": str(e), "aircraft": []}), 503
 
 
+@bp.route("/outputs/direct/v2/lat/<string:lat>/lon/<string:lon>/dist/<string:dist>")
+@bp.route("/outputs/direct/v2/lat/<string:lat>/lon/<string:lon>/dist/<string:dist>/")
+def output_adsb_direct_rapidapi(lat, lon, dist):
+    """ADSB Direct in the ADSBExchange RapidAPI shape: the client is given the base URL
+    .../outputs/direct/v2 and an API key, appends lat/lon/dist (nm), and sends the key in
+    X-RapidAPI-Key (also accepted: api-auth header, ?key=)."""
+    raw_key = (
+        request.headers.get("X-RapidAPI-Key")
+        or request.headers.get("api-auth")
+        or request.args.get("key")
+        or ""
+    ).strip()
+    if not raw_key:
+        return jsonify({"error": "Missing API key (send it in the X-RapidAPI-Key header)", "ac": [], "aircraft": []}), 401
+    return _adsb_direct_response(raw_key, lat, lon, dist)
+
+
 @bp.route("/outputs/direct/<string:raw_key>/point/<string:lat>/<string:lon>/<string:radius_nm>")
 def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
-    """ADSB Direct API: key in URL path; range by point/radius plus output-level filters.
+    """ADSB Direct, original form with the key in the URL path. Kept for existing clients."""
+    return _adsb_direct_response(raw_key, lat, lon, radius_nm)
+
+
+def _adsb_direct_response(raw_key, lat, lon, radius_nm):
+    """Aircraft within radius_nm of lat/lon, after the output's own filters.
 
     Output-level filters:
     - include_network_adsb (bool)
     - direct_alt_min_ft / direct_alt_max_ft (optional ints)
+    - direct_show_category (bool)
+    The aircraft list is returned as both "ac" (ADSBExchange v2) and "aircraft".
     """
     from models import OutputKeyModel
     try:
@@ -2645,13 +2669,13 @@ def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
         lon = float(lon)
         radius_nm = min(max(0, float(radius_nm)), 250.0)
     except (TypeError, ValueError):
-        return jsonify({"error": "Invalid lat, lon, or radius_nm", "aircraft": []}), 400
+        return jsonify({"error": "Invalid lat, lon, or radius_nm", "ac": [], "aircraft": []}), 400
 
     output = OutputKeyModel.validate(raw_key)
     if not output:
-        return jsonify({"error": "Invalid or inactive API key", "aircraft": []}), 401
+        return jsonify({"error": "Invalid or inactive API key", "ac": [], "aircraft": []}), 401
     if output.get("output_type") != "adsb_direct":
-        return jsonify({"error": "This key is not for ADSB Direct", "aircraft": []}), 400
+        return jsonify({"error": "This key is not for ADSB Direct", "ac": [], "aircraft": []}), 400
 
     raw_config = output.get("config")
     if isinstance(raw_config, dict):
@@ -2673,12 +2697,12 @@ def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
     if max_alt is not None:
         max_alt = max(0, min(40000, max_alt))
     if min_alt is not None and max_alt is not None and min_alt > max_alt:
-        return jsonify({"error": "Invalid ADSB Direct config: min altitude exceeds max altitude", "aircraft": []}), 400
+        return jsonify({"error": "Invalid ADSB Direct config: min altitude exceeds max altitude", "ac": [], "aircraft": []}), 400
 
     try:
         resp = http_requests.get(AIRCRAFT_JSON_URL, timeout=5)
         if resp.status_code != 200:
-            return jsonify({"error": "Upstream data unavailable", "aircraft": []}), 503
+            return jsonify({"error": "Upstream data unavailable", "ac": [], "aircraft": []}), 503
         data = resp.json()
         aircraft = data.get("aircraft", [])
         if not include_network:
@@ -2718,10 +2742,11 @@ def output_adsb_direct_point(raw_key, lat, lon, radius_nm):
             "total": len(matched),
             "ctime": now_ts,
             "ptime": 0,
+            "ac": matched,
             "aircraft": matched,
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e), "aircraft": []}), 503
+        return jsonify({"error": str(e), "ac": [], "aircraft": []}), 503
 
 
 @bp.route("/outputs/stream/<string:raw_key>")

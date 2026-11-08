@@ -203,6 +203,14 @@
 
             <!-- API config info (shown when mode=api) -->
             <div id="api-config" style="margin-top:4px;">
+                <div id="adsb-direct-url-wrap" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    <strong style="color:var(--text-primary);">Base URL</strong>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                        <code id="adsb-direct-url-val" style="color:var(--green);font-size:12px;word-break:break-all;"></code>
+                        <button type="button" class="btn btn-sm" onclick="copyAdsbDirectUrl()" style="font-size:11px;padding:4px 8px;">Copy</button>
+                    </div>
+                    <div id="adsb-direct-url-copy-msg" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
+                </div>
                 <div id="api-key-detail-wrap" style="display:none;background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
                     <strong style="color:var(--text-primary);">API Key</strong>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;">
@@ -647,8 +655,7 @@ function onTypeChange() {
     document.getElementById('cot-options').style.display     = isCot ? 'block' : 'none';
     const isRangeApi = isJson && document.getElementById('modal-json-mode').value === 'range_api';
     document.getElementById('adsb-direct-alt-section').style.display = isAdsbDirect ? 'block' : 'none';
-    const urlWrap = document.getElementById('adsb-direct-url-wrap');
-    if (urlWrap) urlWrap.style.display = isAdsbDirect ? 'block' : 'none';
+    updateAdsbDirectUrlDisplay(window._outputModalOutput, '');
     document.getElementById('filter-range-section').style.display = (isRangeApi || isAdsbDirect) ? 'none' : 'block';
     document.getElementById('filter-elevation-section').style.display = (isRangeApi || isAdsbDirect) ? 'none' : 'block';
     const mode = document.getElementById('modal-mode').value;
@@ -729,6 +736,12 @@ async function copyApiKeyDetail() {
     }
 }
 
+// ADSBExchange RapidAPI-style base: the client appends /lat/<lat>/lon/<lon>/dist/<nm>/
+// and sends the key in the X-RapidAPI-Key header.
+function adsbDirectBaseUrl() {
+    return window.location.origin + '/api/outputs/direct/v2';
+}
+
 function updateAdsbDirectUrlDisplay(outputObj, apiKeyOverride) {
     const wrap = document.getElementById('adsb-direct-url-wrap');
     const val = document.getElementById('adsb-direct-url-val');
@@ -747,8 +760,7 @@ function updateAdsbDirectUrlDisplay(outputObj, apiKeyOverride) {
         val.textContent = '';
         return;
     }
-    const base = window.location.origin + '/api/outputs/direct/' + key + '/point';
-    val.textContent = base;
+    val.textContent = adsbDirectBaseUrl();
     wrap.style.display = 'block';
 }
 
@@ -871,6 +883,7 @@ async function toggleOutputEnabled(outputId, enable) {
 }
 
 function openCreateModal() {
+    window._outputModalOutput = null;  // don't carry the last edited output's key into a new one
     document.getElementById('modal-title').textContent = 'Add Output';
     document.getElementById('modal-output-id').value = '';
     document.getElementById('modal-name').value = '';
@@ -1275,10 +1288,9 @@ function buildConnectionInstructionsHtml(outputType, jsonMode, key) {
             <code style="display:block;margin:0;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">https://adsb.tak-solutions.com/api/outputs/json/${key}/v2/all</code>`;
     } else if (outputType === 'adsb_direct') {
         return `
-            <p style="margin:0 0 10px;"><strong>What this is:</strong> ADSB Direct endpoint with the key embedded in the URL path (unique per output config).</p>
-            <p style="margin:0 0 6px;"><strong>How to call it:</strong></p>
-            <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">GET https://adsb.tak-solutions.com/api/outputs/direct/${key}/point</code>
-            <p style="margin:0;font-size:12px;color:var(--text-muted);">Base URL only; the ADSB Direct plugin appends center/range values after <code>/point</code>.</p>`;
+            <p style="margin:0 0 6px;"><strong>Base URL</strong></p>
+            <code style="display:block;margin:0 0 12px;padding:8px 12px;background:var(--bg-primary);border-radius:4px;font-size:12px;word-break:break-all;color:var(--green);">${adsbDirectBaseUrl()}</code>
+            <p style="margin:0;font-size:12px;color:var(--text-muted);">In the plugin, choose Server Mode <strong>ADSBEx RapidApi</strong>, then enter the Base URL as the API URL and the key as the API Key.</p>`;
     } else {
         return `
             <p style="margin:0 0 10px;"><strong>What this is:</strong> A JSON endpoint that returns the current list of aircraft being tracked by this aggregator — the same data that feeds the live map.</p>
